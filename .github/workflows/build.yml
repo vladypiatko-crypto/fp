@@ -1,0 +1,71 @@
+name: Build Geode Mod
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "**"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+        - name: Windows
+          os: windows-latest
+
+        - name: macOS
+          os: macos-latest
+
+        - name: iOS
+          os: macos-latest
+          target: iOS
+
+        - name: Android32
+          os: ubuntu-latest
+          target: Android32
+
+        - name: Android64
+          os: ubuntu-latest
+          target: Android64
+
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the mod
+        uses: geode-sdk/build-geode-mod@main
+        with:
+          combine: true
+          target: ${{ matrix.config.target }}
+
+  package:
+    name: Package builds
+    runs-on: ubuntu-latest
+    needs: ['build']
+    permissions:
+      contents: write
+
+    steps:
+      - uses: geode-sdk/build-geode-mod/combine@main
+        id: build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FP-Counter
+          path: ${{ steps.build.outputs.build-output }}
+
+      # A fixed pre-release so there's always a direct .geode download link
+      # (easier on a phone than unzipping workflow artifacts).
+      - name: Publish dev build
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dev-build
+          name: FP Counter (latest dev build)
+          prerelease: true
+          make_latest: false
+          body: "Latest build from `${{ github.ref_name }}` (${{ github.sha }}). Download the .geode file below."
+          files: ${{ steps.build.outputs.build-output }}/*.geode

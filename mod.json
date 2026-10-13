@@ -1,0 +1,75 @@
+{
+	"geode": "5.10.0",
+	"gd": {
+		"win": "2.2081",
+		"android": "2.2081",
+		"mac": "2.2081",
+		"ios": "2.2081"
+	},
+	"id": "vladypiatko.fp-counter",
+	"name": "FP Counter",
+	"version": "v0.1.0",
+	"developer": "vladypiatko",
+	"description": "Record a run and automatically find and mark every frame perfect click.",
+	"tags": ["utility", "gameplay"],
+	"links": {
+		"source": "https://github.com/vladypiatko-crypto/fp"
+	},
+	"settings": {
+		"min-fps": {
+			"type": "int",
+			"name": "Lowest FPS to mark",
+			"description": "Clicks whose window is this tight or tighter get a circle. 60 marks 60, 80, 120 and 240 fps frame perfects. Lower values (e.g. 30) also mark looser clicks but make analysis slower.",
+			"default": 60,
+			"min": 30,
+			"max": 240
+		},
+		"horizon": {
+			"type": "int",
+			"name": "Survival check (ticks)",
+			"description": "How long (in 1/240 s physics ticks) the player must survive after a shifted click for that timing to count as OK. 120 = half a second.",
+			"default": 120,
+			"min": 24,
+			"max": 960
+		},
+		"analyze-releases": {
+			"type": "bool",
+			"name": "Analyze releases",
+			"description": "Also check how precise each release is (matters for ship, wave, swing and UFO holds). Doubles the work.",
+			"default": true
+		},
+		"fast-converge": {
+			"type": "bool",
+			"name": "Fast mode",
+			"description": "Stop a test early once the player is back in exactly the same state as the original run. Much faster; turn off if results look wrong.",
+			"default": true
+		},
+		"budget-ms": {
+			"type": "int",
+			"name": "Analysis speed (ms per frame)",
+			"description": "How much of each frame the analyser may use. Higher is faster but the game gets choppier while analysing.",
+			"default": 14,
+			"min": 4,
+			"max": 100
+		},
+		"show-markers": {
+			"type": "bool",
+			"name": "Show markers",
+			"description": "Draw a circle with the FPS value at every frame perfect click.",
+			"default": true
+		},
+		"marker-scale": {
+			"type": "float",
+			"name": "Marker size",
+			"default": 1.0,
+			"min": 0.3,
+			"max": 3.0
+		},
+		"show-hud": {
+			"type": "bool",
+			"name": "Show FP counter",
+			"description": "Show the number of frame perfects per FPS tier in the top-left corner.",
+			"default": true
+		}
+	}
+}
