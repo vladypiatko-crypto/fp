@@ -158,7 +158,9 @@ class GameScene {
     if (acts.start && this.state === 'play') { this.pause(); return; }
     this.handlePointers();
     this.ui.update(dt, null);
-    if (this.state === 'play' && choosing()) { updateLevelUp(dt); this.tickCosmetics(dt); this.netPump(dt); return; }
+    for (const p of this.players) tickPicked(p, dt);
+    if (choosing()) updateLevelUp(dt, cardsPauseAll());
+    if (cardsPauseAll()) { this.tickCosmetics(dt); this.netPump(dt); return; } // everyone is picking: hold the world still
     if (Impact.stop > 0) { this.netPump(dt); return; } // impact frame: the world holds still for a moment
     if (this.state === 'dying' || this.state === 'clear') {
       this.stateT += dt;
@@ -195,9 +197,9 @@ class GameScene {
       if (ev.type === 'down') {
         if (this.ui.hitTest(ev.x, ev.y)) continue;
         if (this.state !== 'play') continue;
-        if (choosing()) { cardTap(ev); continue; }
         const v = viewAt(ev.x, ev.y); if (!v) continue;
         const pid = v.pid, p = this.players[pid];
+        if (p.choice) { cardTap(ev); continue; } // this screen's duck is picking a card
         if (Input.touch && d2(ev.x, ev.y, dashBtn(v).x, dashBtn(v).y) < 20 * 20) { this.dashFor(pid); continue; }
         if (!this.sticks[pid]) this.sticks[pid] = { id: ev.id, bx: ev.x, by: ev.y, x: ev.x, y: ev.y };
         else this.dashFor(pid);
@@ -280,7 +282,7 @@ class GameScene {
     if (this.views.length === 2) { ctx.fillStyle = OUT; if (W >= H) ctx.fillRect(this.views[0].w, 0, 2, H); else ctx.fillRect(0, this.views[1].h, W, 2); }
     this.ui.begin();
     drawTopBar();
-    if (this.state === 'play' && choosing()) for (const v of this.views) drawLevelUp(v);
+    if (this.state === 'play') for (const v of this.views) drawLevelUp(v);
     if (this.state === 'dialog') this.dialog.draw();
     if (this.state === 'paused') this.drawPause();
     if (this.state === 'results') this.drawResults();
@@ -509,7 +511,7 @@ function explode(x, y, r, dmg, owner, hurtsPlayers) {
   if (hurtsPlayers) for (const p of alivePlayers()) if (d2(x, y, p.x, p.y) < (r + p.r) ** 2) hurtPlayer(p, dmg);
 }
 function hurtPlayer(p, dmg) {
-  if (p.down || p.iframes > 0 || p.dashT > 0 || R.state === 'clear') return;
+  if (p.down || p.iframes > 0 || p.dashT > 0 || R.state === 'clear' || picking(p)) return;
   p.hp -= dmg; p.iframes = 0.6; p.hurtFlash = 0.25; p.squash = 0.2;
   sfx.hurt(); shakeFor(p, 4);
   floatText(p.x, p.y - 16, '-' + Math.round(dmg), C.red, 0.7);
@@ -545,20 +547,22 @@ function updatePlayer(p, dt) {
     return;
   }
   // movement input: keys + pads + touch stick
-  const mv = R.state === 'clear' ? { x: 0, y: 0 } : Input.move(p.id, R.np);
-  const s = R.sticks[p.id];
+  const busy = picking(p); // picking a card: stand still inside a shield bubble
+  const mv = R.state === 'clear' || busy ? { x: 0, y: 0 } : Input.move(p.id, R.np);
+  const s = busy ? null : R.sticks[p.id];
   if (s) { const dx = s.x - s.bx, dy = s.y - s.by, dl = Math.hypot(dx, dy); if (dl > 2) { const m = Math.min(1, dl / STICK_R); mv.x += dx / dl * m; mv.y += dy / dl * m; } }
   const ml = Math.hypot(mv.x, mv.y);
   if (ml > 1) { mv.x /= ml; mv.y /= ml; }
   p.moving = ml > 0.1; p.mvx = mv.x; p.mvy = mv.y;
   if (p.moving) p.moved = true;
+  dustFor(p, dt); heartbeatFor(p, dt);
   p.iframes = Math.max(0, p.iframes - dt);
   p.dashCd = Math.max(0, p.dashCd - dt);
   const rg = lvl(p, 'regen');
   if (rg && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + rg * 0.6 * dt);
 
   // dash
-  if ((p.dashReq || Input.dash(p.id, R.np)) && p.dashCd <= 0 && R.state === 'play') {
+  if (!busy && (p.dashReq || Input.dash(p.id, R.np)) && p.dashCd <= 0 && R.state === 'play') {
     let dx = mv.x, dy = mv.y, l = Math.hypot(dx, dy);
     if (l < 0.1) { dx = p.facing === 'left' ? -1 : p.facing === 'right' ? 1 : 0; dy = p.facing === 'up' ? -1 : p.facing === 'down' ? 1 : 0; l = 1; }
     const sp = pSpeed(p) * 3.6;
@@ -702,6 +706,7 @@ function fireMain(p, tgt, wd) {
   const col = wd.col || PCOL[p.id];
   sfx.shoot(p.weapon, p.id);
   p.recoil = 0.08;
+  R.fx.push({ k: 'muzzle', x: mx, y: my, t: 0, dur: 0.07, col });
   if (p.weapon === 'laser') {
     for (let i = 0; i < n; i++) {
       const a = base + (i - (n - 1) / 2) * wd.spread, cx = Math.cos(a), cy = Math.sin(a);
@@ -787,6 +792,7 @@ function gainXp(p, v) {
   while (p.xp >= p.xpNext) {
     p.xp -= p.xpNext; p.level++; p.xpNext = xpFor(p.level); p.pending++;
     sfx.level(); floatText(p.x, p.y - 20, 'LEVEL UP!', C.gold, 1.2);
+    R.fx.push({ k: 'ring', x: p.x, y: p.y - 4, r: 28, t: 0, dur: 0.4, col: C.gold });
     burst(p.x, p.y - 4, ['#ffd23f', '#fff8e7', PCOL[p.id]], 18, 80, 0.6);
   }
 }
@@ -804,7 +810,7 @@ function updateDrops(dt) {
       g.x += dx / d * st; g.y += dy / d * st;
       if (d < 6) {
         g.done = true;
-        if (g.k === 'coin') { R.coins += g.v; sfx.coin(); floatText(p.x + 6, p.y - 14, '+' + g.v, C.gold, 0.5); }
+        if (g.k === 'coin') { R.coins += g.v; sfx.coin(); floatText(p.x + 6, p.y - 14, '+' + g.v, C.gold, 0.5); burst(p.x, p.y - 6, ['#ffd23f', '#fff3b0'], 4, 40, 0.3); }
         else { gainXp(p, g.v); R.gemCombo++; R.gemComboT = 0.4; sfx.gem(R.gemCombo); }
       }
     }
@@ -973,7 +979,21 @@ function updateBoss(e, tgt, dx, dy, dist, dt) {
 }
 
 // ================================================================ level-up cards
-function choosing() { return R.state === 'play' && R.players.some(p => p.pending > 0 && !p.down); }
+// A duck that levels up gets three cards. The world only stops when every duck is picking at once
+// (so in single player); otherwise the picker stands still in a shield bubble while the others play on.
+const CARD_IN = 0.14, CARD_FLIP = 0.3, CARD_STAGGER = 0.12;
+const CARD_READY = CARD_IN + CARD_STAGGER * 2 + CARD_FLIP; // all three cards are face up
+const CARD_TIME = 12;                                       // auto-pick while the game keeps running
+const CARD_STYLE = { weapon: ['#ff6fae', 'WEAPON'], main: ['#ffd23f', 'GUN'], stat: ['#5ec8ff', 'DUCK'], snack: ['#51cf66', 'SNACK'] };
+const cardKind = k => (SIDE_WEAPONS.includes(k) ? 'weapon' : ['rapid', 'power', 'spread', 'pierce'].includes(k) ? 'main' : k === 'snack' ? 'snack' : 'stat');
+const picking = p => p.pending > 0 && !p.down && !p.gone;
+function choosing() { return R.state === 'play' && R.players.some(picking); }
+function cardsPauseAll() {
+  if (R.state !== 'play') return false;
+  const alive = R.players.filter(p => !p.down && !p.gone);
+  return alive.length > 0 && alive.every(picking);
+}
+function tickPicked(p, dt) { if (p.picked) { p.picked.t += dt; if (p.picked.t > 0.45) p.picked = null; } }
 function rollChoices(p) {
   const pool = UPGRADES.filter(u => lvl(p, u.k) < u.max);
   const opts = [];
@@ -990,33 +1010,32 @@ function applyUpgrade(p, u) {
   if (u.k === 'snack') p.hp = Math.min(p.maxHp, p.hp + 40);
   else { p.up[u.k] = lvl(p, u.k) + 1; if (u.k === 'heart') { p.maxHp += 20; p.hp = Math.min(p.maxHp, p.hp + 30); } }
   floatText(p.x, p.y - 18, u.name + '!', PCOL[p.id], 1.1);
+  if (p.choice) p.picked = { choice: p.choice, sel: Math.max(0, p.choice.indexOf(u)), t: 0 };
   p.pending--; p.choice = null; p.squash = 0.25;
 }
-function updateLevelUp(dt) {
+function updateLevelUp(dt, paused) {
   for (const p of R.players) {
-    if (p.pending > 0 && !p.down) {
-      if (!p.choice) { p.choice = rollChoices(p); p.sel = 1; p.choiceT = 0; }
-      p.choiceT += dt;
-      if (p.choiceT > 0.4) {
-        const a = Input.menuFor(p.id, R.np);
-        if (a.left) { p.sel = (p.sel + 2) % 3; sfx.uiMove(); }
-        if (a.right) { p.sel = (p.sel + 1) % 3; sfx.uiMove(); }
-        if (a.ok) applyUpgrade(p, p.choice[p.sel]);
-      }
-    }
+    if (!picking(p)) continue;
+    if (!p.choice) { p.choice = rollChoices(p); p.sel = 1; p.choiceT = 0; p.cardSnd = 0; }
+    p.choiceT += dt;
+    if (p.choiceT < CARD_READY) continue;
+    const a = Input.menuFor(p.id, R.np);
+    if (a.left) { p.sel = (p.sel + 2) % 3; sfx.uiMove(); }
+    if (a.right) { p.sel = (p.sel + 1) % 3; sfx.uiMove(); }
+    if (a.ok || (!paused && p.choiceT > CARD_TIME)) applyUpgrade(p, p.choice[p.sel]);
   }
-  for (const v of R.views) v.shake = 0;
+  if (paused) for (const v of R.views) v.shake = 0;
 }
 function cardRects(v) {
-  const gap = 5, cw = Math.min(70, Math.floor((v.w - 16 - gap * 2) / 3)), ch = Math.min(84, v.h - 60);
+  const gap = 6, cw = Math.min(70, Math.floor((v.w - 16 - gap * 2) / 3)), ch = Math.min(86, v.h - 62);
   const total = cw * 3 + gap * 2;
-  const x0 = v.x + Math.floor((v.w - total) / 2), y0 = v.y + Math.floor((v.h - ch) / 2) + 12;
+  const x0 = v.x + Math.floor((v.w - total) / 2), y0 = v.y + Math.floor((v.h - ch) / 2) + 10;
   return [0, 1, 2].map(i => ({ x: x0 + i * (cw + gap), y: y0, w: cw, h: ch }));
 }
 function cardTap(ev) {
   const v = viewAt(ev.x, ev.y); if (!v) return;
   const p = R.players[v.pid];
-  if (!p.choice || p.choiceT < 0.4) return;
+  if (!p.choice || p.choiceT < CARD_READY) return;
   cardRects(v).forEach((r, i) => {
     if (ev.x >= r.x && ev.x < r.x + r.w && ev.y >= r.y && ev.y < r.y + r.h) {
       p.sel = i;
@@ -1024,6 +1043,23 @@ function cardTap(ev) {
       else applyUpgrade(p, p.choice[i]);
     }
   });
+}
+// little things that make moving feel good
+function dustFor(p, dt) {
+  if (!p.moving || p.dashT > 0 || p.down) return;
+  p.dustT = (p.dustT || 0) - dt;
+  if (p.dustT > 0) return;
+  p.dustT = 0.2;
+  const st = R.theme.style, col = st === 'snow' ? '#ffffff' : st === 'grass' ? '#c9e4a6' : '#8b8aa0';
+  R.tparts.push({ x: p.x + rand(-3, 3), y: p.y - 1, vx: -(p.mvx || 0) * 12 + rand(-4, 4), vy: rand(-8, -3), life: 0.35, max: 0.35, col, size: 2 });
+}
+// low health: a heartbeat only this device hears
+function heartbeatFor(p, dt) {
+  if (p.down || p.hp >= p.maxHp * 0.3 || !R.viewPids.includes(p.id)) return;
+  p.beatT = (p.beatT || 0) - dt;
+  if (p.beatT > 0) return;
+  p.beatT = 0.9;
+  tone(70, 0.12, 'sine', 0.18, 45); tone(62, 0.12, 'sine', 0.14, 40, atime(0.16));
 }
 
 // ================================================================ touch controls
@@ -1131,6 +1167,7 @@ function drawView(v) {
     const k = f.t / f.dur;
     if (f.k === 'boom') { pcirc(f.x, f.y, f.r * (0.4 + k * 0.6), k < 0.3 ? '#fff8e7' : k < 0.6 ? '#ffd23f' : 'rgba(255,140,26,0.6)'); pring(f.x, f.y, f.r * (0.5 + k * 0.6), '#e8343b'); }
     else if (f.k === 'pop') { pring(f.x, f.y, f.r * (0.6 + k), '#fff8e7'); }
+    else if (f.k === 'muzzle') { pcirc(f.x, f.y, 3 - k * 2, '#fff8e7'); pring(f.x, f.y, 2 + k * 3, f.col); }
     else if (f.k === 'ring') { pring(f.x, f.y, f.r * (0.2 + k * 0.8), f.col, 2); pring(f.x, f.y, f.r * (0.15 + k * 0.7), '#fff8e7', 1); }
     else if (f.k === 'zap') {
       for (let i = 0; i < f.pts.length - 1; i++) {
@@ -1160,6 +1197,10 @@ function drawView(v) {
   ctx.save();
   ctx.beginPath(); ctx.rect(v.x, v.y, v.w, v.h); ctx.clip();
   if (p.hurtFlash > 0) { ctx.globalAlpha = p.hurtFlash * 1.6; ctx.fillStyle = '#e8343b'; ctx.fillRect(v.x, v.y, v.w, 3); ctx.fillRect(v.x, v.y + v.h - 3, v.w, 3); ctx.fillRect(v.x, v.y, 3, v.h); ctx.fillRect(v.x + v.w - 3, v.y, 3, v.h); ctx.globalAlpha = 1; }
+  if (!p.down && p.hp < p.maxHp * 0.3 && R.state === 'play') { // low health: the screen edge pulses red
+    ctx.fillStyle = `rgba(232,52,59,${(0.2 + Math.sin(R.t * 7) * 0.1).toFixed(2)})`;
+    ctx.fillRect(v.x, v.y, v.w, 4); ctx.fillRect(v.x, v.y + v.h - 4, v.w, 4); ctx.fillRect(v.x, v.y, 4, v.h); ctx.fillRect(v.x + v.w - 4, v.y, 4, v.h);
+  }
   for (const f of R.fx) if (f.k === 'flash' && (R.views.length === 1 || f.pid === v.pid)) { ctx.globalAlpha = 1 - f.t / f.dur; ctx.fillStyle = '#ffeedd'; ctx.fillRect(v.x, v.y, v.w, v.h); ctx.globalAlpha = 1; }
   if (R.state !== 'results') drawHud(v, p, cx, cy);
   ctx.restore();
@@ -1206,7 +1247,7 @@ function drawEnemy(e) {
   if (e.d.fx === 'goo') { const q = Math.sin(e.anim * 8); sx = 1 + q * 0.12; sy = 1 - q * 0.12; }
   else if (e.d.fly) bob = -6 + Math.round(Math.sin(e.anim * 5) * 2);
   else bob = -Math.round(Math.abs(Math.sin(e.anim * 10)) * 1.5);
-  if (e.boss && e.bs === 'wind') { sx = 1.1; sy = 0.9; }
+  if (e.boss && e.bs === 'wind') { sx = 1.1; sy = 0.9; } else if (e.flash > 0) { sx *= 1.14; sy *= 0.88; } // squash when hit
   const fuse = e.fuse >= 0;
   if (e.d.ai === 'charger') drawSprX(s, e.x, e.y + bob, { rot: e.rot, white: e.flash > 0 });
   else drawSprX(s, e.x, e.y + bob - e.z + s.h * sc / 2, { flip: e.flip, white: e.flash > 0, sc, sx, sy, ay: 1 });
@@ -1243,10 +1284,22 @@ function drawPlayer(p) {
     ember: (x, y) => R.tparts.push({ x, y, vx: rand(-4, 4), vy: rand(-18, -8), life: 0.4, max: 0.4, col: pick(['#ff8c1a', '#ffd23f']), size: 1 }),
   });
   for (const [x, y] of eggs) if (y >= p.y - 3) drawSpr(ART.eggOrb, x, y);
-  if (R.players.length > 1) text('P' + (p.id + 1), p.x, p.y - 26 - (p.lo.hat === 'wizard' || p.lo.hat === 'viking' ? 6 : 0), PCOL[p.id], 1, 1);
+  if (picking(p) || p.choice) { // shield bubble while picking a card
+    const r = 12 + Math.sin(p.anim * 5) * 0.8, a = p.anim * 3;
+    ctx.globalAlpha = 0.22; pcirc(p.x, p.y - 7, r, PCOL[p.id]); ctx.globalAlpha = 1;
+    pring(p.x, p.y - 7, r, PCOL[p.id]);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(p.x + Math.cos(a) * r), Math.round(p.y - 7 + Math.sin(a) * r), 2, 2);
+  }
+  if (R.players.length > 1) text(R.online ? p.name : 'P' + (p.id + 1), p.x, p.y - 26 - (p.lo.hat === 'wizard' || p.lo.hat === 'viking' ? 6 : 0), PCOL[p.id], 1, 1);
 }
 
 // ---------------------------------------------------------------- HUD
+function ghostBar(x, y, w, h, frac, ghost, col) {
+  panel(x, y, w, h, '#3a2a4f', OUT, null, false);
+  const gw = Math.round((w - 2) * clamp(ghost, 0, 1)), fw = Math.round((w - 2) * clamp(frac, 0, 1));
+  if (gw > fw) { ctx.fillStyle = '#fff8e7'; ctx.fillRect(x + 1 + fw, y + 1, gw - fw, h - 2); }
+  if (fw > 0) { ctx.fillStyle = col; ctx.fillRect(x + 1, y + 1, fw, h - 2); ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(x + 1, y + 1, fw, 1); }
+}
 function drawHud(v, p, cx, cy) {
   let x = v.x + 4, y = v.y + 4;
   const hpW = Math.min(64, Math.floor(v.w * 0.3));
@@ -1254,7 +1307,8 @@ function drawHud(v, p, cx, cy) {
   const mid = Math.floor(W / 2), hudW = hpW + 32, half = R.mode === 'story' && !R.bossSpawned ? 36 : 22;
   if (v.y === 0 && x < mid + half && x + hudW > mid - 90) { if (v.x >= mid - 40) x = mid + half + 4; else y += 22; }
   text('#', x, y + 1, '#ff4d6d', 1, 0);
-  bar(x + 7, y, hpW, 7, p.hp / p.maxHp, p.hp / p.maxHp < 0.3 ? '#ff4d6d' : '#51cf66');
+  p.hpG = p.hpG === undefined || p.hp >= p.hpG ? p.hp : p.hpG + (p.hp - p.hpG) * 0.05; // white "ghost" shows the hit you just took
+  ghostBar(x + 7, y, hpW, 7, p.hp / p.maxHp, p.hpG / p.maxHp, p.hp / p.maxHp < 0.3 ? '#ff4d6d' : '#51cf66');
   text(Math.ceil(p.hp), x + 9, y + 1, C.white, 1, 0, null);
   bar(x, y + 9, hpW + 7, 5, p.xp / p.xpNext, PCOL[p.id]);
   text('LV' + p.level, x + hpW + 11, y + 9, PCOL[p.id], 1, 0);
@@ -1285,7 +1339,8 @@ function drawHud(v, p, cx, cy) {
   const boss = R.boss && !R.boss.dead ? R.boss : null;
   if (boss && boss.spawnT <= 0) {
     const bw = Math.min(170, v.w - 40), bx = v.x + Math.floor((v.w - bw) / 2), by = v.y + v.h - (Input.touch ? 46 : 14);
-    bar(bx, by, bw, 7, boss.hp / boss.maxHp, boss.phase === 2 ? '#e8343b' : '#ff8c1a');
+    boss.hpG = boss.hpG === undefined || boss.hp >= boss.hpG ? boss.hp : boss.hpG + (boss.hp - boss.hpG) * 0.04;
+    ghostBar(bx, by, bw, 7, boss.hp / boss.maxHp, boss.hpG / boss.maxHp, boss.phase === 2 ? '#e8343b' : '#ff8c1a');
     text(boss.d.name, v.x + v.w / 2, by - 7, C.gold, 1, 1);
   }
   // boss intro card
@@ -1300,7 +1355,7 @@ function drawHud(v, p, cx, cy) {
     }
   }
   // banners
-  R.banners.forEach((b, i) => {
+  if (!p.choice) R.banners.forEach((b, i) => { // banners step aside while this duck picks a card
     const k = b.t / b.dur, sc = v.w > 260 ? 2 : 1;
     const by = v.y + Math.floor(v.h * 0.24) + i * (sc * 7 + 10);
     const slide = k < 0.12 ? (1 - Ease.outCubic(k / 0.12)) * v.w : 0;
@@ -1326,7 +1381,7 @@ function drawHud(v, p, cx, cy) {
       ctx.globalAlpha = 0.6; pring(hx, hy, STICK_R, '#fff'); pcirc(hx + Math.cos(R.hintT * 3) * 10, hy + Math.sin(R.hintT * 3) * 6, 7, 'rgba(255,255,255,0.6)'); ctx.globalAlpha = 1;
       text('DRAG TO MOVE', hx, hy + STICK_R + 5, C.white, 1, 1);
     }
-  } else if (!p.moved && R.hintT < 10 && !Input.touch && R.state === 'play') {
+  } else if (!p.moved && R.hintT < 10 && !Input.touch && R.state === 'play' && !p.choice) {
     const hint = R.np === 1 ? 'MOVE: WASD / ARROWS / STICK   DASH: SPACE' : (p.id === 0 ? 'MOVE: WASD  DASH: SPACE' : 'MOVE: ARROWS  DASH: ENTER');
     text(hint, v.x + v.w / 2, v.y + v.h - 30, C.white, 1, 1);
     text('YOUR WEAPON AIMS ITSELF!', v.x + v.w / 2, v.y + v.h - 22, C.gold, 1, 1);
@@ -1358,34 +1413,81 @@ function drawTopBar() {
 }
 function drawLevelUp(v) {
   const p = R.players[v.pid];
+  if (!p || (!p.choice && !p.picked)) return;
+  const paused = cardsPauseAll(), showing = !!p.choice, t = showing ? p.choiceT : CARD_READY;
   ctx.save(); ctx.beginPath(); ctx.rect(v.x, v.y, v.w, v.h); ctx.clip();
-  ctx.fillStyle = 'rgba(15,10,26,0.72)'; ctx.fillRect(v.x, v.y, v.w, v.h);
-  if (!p.choice) {
-    const who = R.players.filter(q => q.choice).map(q => 'P' + (q.id + 1)).join(' & ');
-    text('WAITING FOR ' + who + '...', v.x + v.w / 2, v.y + v.h / 2 - 3, C.white, 1, 1);
-    ctx.restore(); return;
+  // dim the screen (less when the game keeps running, so you can still see the fight)
+  const dim = showing ? (paused ? 0.62 : 0.38) * Math.min(1, t / 0.15) : 0.38 * Math.max(0, 1 - p.picked.t / 0.3);
+  ctx.fillStyle = `rgba(15,10,26,${dim.toFixed(2)})`; ctx.fillRect(v.x, v.y, v.w, v.h);
+  const rects = cardRects(v), choice = showing ? p.choice : p.picked.choice;
+  if (showing) {
+    const sc = v.w > 250 ? 2 : 1, k = Ease.outBack(Math.min(1, t / 0.25));
+    drawZoomText('LEVEL UP!', v.x + v.w / 2, rects[0].y - 13 - sc * 4, lerp(sc * 3, sc, k), PCOL[p.id]);
+    text(paused ? 'PICK AN UPGRADE' : 'PICK ONE - YOU ARE SHIELDED', v.x + v.w / 2, rects[0].y - 9, C.white, 1, 1);
   }
-  const sc = v.w > 250 ? 2 : 1, rects = cardRects(v), t = p.choiceT;
-  text('LEVEL UP!', v.x + v.w / 2, rects[0].y - 16 - sc * 6 + Math.round(Math.sin(t * 5) * 1), PCOL[p.id], sc, 1, 'outline');
-  text('PICK AN UPGRADE', v.x + v.w / 2, rects[0].y - 10, C.white, 1, 1);
-  rects.forEach((r, i) => {
-    const k = clamp((t - i * 0.08) / 0.3, 0, 1);
-    if (k <= 0) return;
-    const flip = Ease.outBack(k), u = p.choice[i], l = lvl(p, u.k), sel = i === p.sel && !Input.touch;
-    const lift = sel ? -3 + Math.round(Math.sin(t * 6)) : 0;
-    const w = Math.max(2, Math.round(r.w * flip)), x = r.x + Math.round((r.w - w) / 2);
-    panel(x, r.y + lift, w, r.h, sel ? C.uiSel : C.ui, sel ? PCOL[p.id] : OUT, C.uiL);
-    if (k < 0.6) return;
-    const isWeap = SIDE_WEAPONS.includes(u.k);
-    if (isWeap && !l) { ctx.fillStyle = 'rgba(255,111,174,0.15)'; ctx.fillRect(r.x + 1, r.y + lift + 1, r.w - 2, 22); }
-    drawSpr(ICON[u.k] || ART.heart, r.x + r.w / 2, r.y + 12 + lift + Math.round(Math.sin(t * 4 + i)), false, false, 2);
-    let ty = r.y + 26 + lift;
-    for (const ln of wrapText(u.name, r.w - 6)) { text(ln, r.x + r.w / 2, ty, C.gold, 1, 1); ty += 7; }
-    text(u.k === 'snack' ? '' : (l ? 'LV ' + l + ' > ' + (l + 1) : 'NEW!'), r.x + r.w / 2, ty, l ? C.blue : C.pink, 1, 1);
-    ty += 9;
-    for (const ln of wrapText(u.d(l), r.w - 6)) { if (ty < r.y + r.h - 6 + lift) text(ln, r.x + r.w / 2, ty, C.white, 1, 1, null); ty += 7; }
-  });
-  const hint = Input.touch ? 'TAP A CARD' : (R.np === 1 || p.id === 0 ? '< > TO PICK, DASH TO CHOOSE' : '< > TO PICK, ENTER TO CHOOSE');
-  text(hint, v.x + v.w / 2, rects[0].y + rects[0].h + 6, C.gray, 1, 1);
+  rects.forEach((r, i) => drawCard(r, choice[i], p, i, t, showing ? p.sel : p.picked.sel, showing ? null : p.picked));
+  if (showing) {
+    const by = rects[0].y + rects[0].h + 5;
+    text(Input.touch ? 'TAP A CARD' : (R.views.length === 1 || p.id === 0 ? '< > TO PICK, DASH TO CHOOSE' : '< > TO PICK, ENTER TO CHOOSE'), v.x + v.w / 2, by, C.gray, 1, 1);
+    if (!paused && t > CARD_READY) bar(rects[0].x, by + 8, rects[2].x + rects[2].w - rects[0].x, 4, Math.max(0, 1 - t / CARD_TIME), PCOL[p.id]);
+  }
   ctx.restore();
+}
+// a card slides in face down, turns over, and after the pick the chosen one pops while the others flip back
+function drawCard(r, u, p, i, t, sel, picked) {
+  let y = r.y, sx = 1, front = true, alpha = 1, lift = 0, grow = 1;
+  if (!picked) {
+    const kin = clamp((t - i * 0.05) / CARD_IN, 0, 1);
+    if (kin <= 0) return;
+    y += Math.round((1 - Ease.outBack(kin)) * 36);
+    const kf = clamp((t - CARD_IN - i * CARD_STAGGER) / CARD_FLIP, 0, 1);
+    front = kf >= 0.5; sx = Math.abs(Math.cos(kf * Math.PI)); lift = -Math.round(Math.sin(kf * Math.PI) * 6);
+    if (front && !((p.cardSnd || 0) & (1 << i))) { p.cardSnd = (p.cardSnd || 0) | (1 << i); tone(1100 + i * 140, 0.05, 'square', 0.035, 1500 + i * 160); }
+    if (kf >= 1 && i === sel && !Input.touch) lift = -3 + Math.round(Math.sin(t * 6));
+  } else {
+    const k = picked.t / 0.45;
+    if (i === picked.sel) { grow = 1 + Ease.outCubic(k) * 0.3; alpha = 1 - k; lift = -Math.round(k * 14); }
+    else { const kf = Math.min(1, k * 2.2); front = kf < 0.5; sx = Math.abs(Math.cos(kf * Math.PI)); y += Math.round(Math.max(0, k - 0.45) * 50); alpha = 1 - Math.max(0, k - 0.45) * 1.8; }
+  }
+  if (alpha <= 0) return;
+  const w = Math.max(2, Math.round(r.w * sx * grow)), h = Math.round(r.h * grow);
+  const x = Math.round(r.x + r.w / 2 - w / 2), yy = Math.round(y + lift + r.h / 2 - h / 2);
+  const a0 = ctx.globalAlpha; ctx.globalAlpha = a0 * alpha;
+  if (front) drawCardFront(x, yy, w, h, u, p, i, t, !picked && i === sel && !Input.touch, sx > 0.9);
+  else drawCardBack(x, yy, w, h);
+  ctx.globalAlpha = a0;
+}
+function drawCardBack(x, y, w, h) {
+  panel(x, y, w, h, '#3b2a5c', OUT, '#5b3f8f');
+  if (w < 8) return;
+  ctx.fillStyle = 'rgba(255,210,63,0.55)';
+  ctx.fillRect(x + 3, y + 3, w - 6, 1); ctx.fillRect(x + 3, y + h - 4, w - 6, 1); ctx.fillRect(x + 3, y + 3, 1, h - 6); ctx.fillRect(x + w - 4, y + 3, 1, h - 6);
+  ctx.fillStyle = 'rgba(157,92,255,0.4)';
+  for (let yy = y + 6; yy < y + h - 6; yy += 6) for (let xx = x + 6 + ((yy - y) / 6 % 2) * 3; xx < x + w - 6; xx += 6) ctx.fillRect(xx, yy, 2, 2);
+  if (w > 22) drawSpr(ICON.quack, x + w / 2, y + h / 2, false, false, 2);
+}
+function drawCardFront(x, y, w, h, u, p, i, t, selected, full) {
+  const [col, label] = CARD_STYLE[cardKind(u.k)];
+  if (selected) { const a = ctx.globalAlpha; ctx.globalAlpha = a * (0.35 + Math.sin(t * 8) * 0.15); ctx.fillStyle = PCOL[p.id]; ctx.fillRect(x - 2, y - 2, w + 4, h + 4); ctx.globalAlpha = a; }
+  panel(x, y, w, h, selected ? '#3d2f63' : C.ui, selected ? PCOL[p.id] : OUT, C.uiL);
+  if (w < 6) return;
+  ctx.fillStyle = col; ctx.fillRect(x + 1, y + 1, w - 2, 9);
+  ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(x + 1, y + 1, w - 2, 1);
+  if (!full) return;
+  text(label, x + w / 2, y + 3, OUT, 1, 1, null);
+  const cx = x + w / 2, iy = y + 22;
+  pcirc(cx, iy, 10, OUT); pcirc(cx, iy, 9, '#3d3456'); pring(cx, iy, 9, col);
+  drawSpr(ICON[u.k] || ART.heart, cx, iy + Math.round(Math.sin(t * 4 + i)), false, false, 2);
+  let ty = y + 35;
+  for (const ln of wrapText(u.name, w - 6)) { text(ln, cx, ty, C.gold, 1, 1); ty += 7; }
+  const l = lvl(p, u.k);
+  if (u.k !== 'snack') {
+    if (!l) { const nw = textW('NEW!') + 6; panel(Math.round(cx - nw / 2), ty - 1, nw, 8, C.pink, OUT, null, false); text('NEW!', cx, ty, OUT, 1, 1, null); }
+    else { // one pip per level, the level you're about to get blinks
+      const pw = u.max * 4 - 1, px0 = Math.round(cx - pw / 2);
+      for (let j = 0; j < u.max; j++) { ctx.fillStyle = j < l ? col : j === l ? ((t * 4 | 0) % 2 ? '#ffffff' : col) : '#1f1830'; ctx.fillRect(px0 + j * 4, ty + 1, 3, 3); }
+    }
+    ty += 10;
+  }
+  for (const ln of wrapText(u.d(l), w - 6)) { if (ty < y + h - 6) text(ln, cx, ty, C.white, 1, 1, null); ty += 7; }
 }

@@ -52,7 +52,8 @@ class TitleScene {
     Music.play('title');
   }
   layout() {
-    const s = clamp(Math.floor(Math.min(W * 0.62 / textW('ATTACK!'), H * 0.27 / 12)), 2, 7);
+    // each word image is 10 rows: 2 padding, 5 letter, 3 outline + drop shadow
+    const s = clamp(Math.floor(Math.min(W * 0.62 / textW('ATTACK!'), H * 0.36 / 18)), 2, 7);
     return { s, ty: Math.floor(H * 0.05) + 2 };
   }
   update(dt) {
@@ -141,7 +142,7 @@ class TitleScene {
       const e = Ease.outBack(k), sc = lerp(s * 7, s, e), rot = lerp(-0.35, 0, Ease.outCubic(k));
       ctx.globalAlpha = Math.min(1, k * 3);
       drawScaled(this.words[0].whole, W / 2, ty + s * 5, sc, rot);
-      drawScaled(this.words[1].whole, W / 2, ty + s * 11 + 2, sc, rot);
+      drawScaled(this.words[1].whole, W / 2, ty + s * 14, sc, rot);
       ctx.globalAlpha = 1;
     } else {
       // each letter is a vertical slice of the word image, bobbing on its own wave
@@ -150,10 +151,10 @@ class TitleScene {
         let cum = 0;
         chars.forEach((ch, i) => { if (i) edges.push(2 + cum); cum += glyphOf(ch).w + 1; });
         edges.push(c.width);
-        const x0 = Math.round(W / 2 - c.width * s / 2), top = ty + wi * (s * 6 + 2);
+        const x0 = Math.round(W / 2 - c.width * s / 2), top = ty + wi * s * 9;
         for (let i = 0; i < chars.length; i++) {
           const a = edges[i], b = edges[i + 1];
-          const wave = Math.round(Math.sin(this.T * 3 + i * 0.6 + wi * 1.5) * s * 0.5);
+          const wave = Math.round(Math.sin(this.T * 3 + i * 0.6 + wi * 1.5) * s * 0.35);
           ctx.drawImage(c, a, 0, b - a, c.height, x0 + a * s, top + wave, (b - a) * s, c.height * s);
           const shine = ((this.T * 1.2) % 4) * 9 - (i + wi * 3) * 1.5;
           if (shine > 0 && shine < 1.5) { ctx.globalAlpha = 0.7; ctx.drawImage(wd.white, a, 0, b - a, c.height, x0 + a * s, top + wave, (b - a) * s, c.height * s); ctx.globalAlpha = 1; }
@@ -166,7 +167,7 @@ class TitleScene {
     this.ui.begin();
     if (this.t < 1.2) return;
     const sub = 'DUCKS WITH AUTO-AIM BLASTERS VS. DR. HONK\'S ROBOTS';
-    const subY = ty + s * 13 + 6;
+    const subY = ty + s * 18 + 4 + Math.ceil(s * 0.35); // below ATTACK!'s shadow and its wave
     ctx.globalAlpha = clamp((this.t - 1.2) / 0.3, 0, 1);
     text(textW(sub) < W - 10 ? sub : 'DUCKS VS. ROBOTS', W / 2, subY, C.white, 1, 1, 'outline');
     ctx.globalAlpha = 1;

@@ -330,7 +330,10 @@ GameScene.prototype.applySnapshot = function (s) {
     p.aim = a[3]; p.facing = NET_FACE[a[2]] || p.facing; p.spd = a[19];
     p.hurtFlash = a[17]; p.squash = a[18];
     const sig = a[16].join();
-    if (sig !== p.choiceSig) { p.choiceSig = sig; p.choice = a[16].length ? a[16].map(findUpgrade) : null; p.choiceT = 0; p.sel = 1; }
+    if (sig !== p.choiceSig) {
+      if (p.choice && !a[16].length) p.picked = { choice: p.choice, sel: p.sel, t: 0 }; // the host took our pick: play the pick animation
+      p.choiceSig = sig; p.choice = a[16].length ? a[16].map(findUpgrade) : null; p.choiceT = 0; p.sel = 1; p.cardSnd = 0;
+    }
     if (i === this.localPid) {
       // our own duck: keep moving locally, and only pull back to the host's position when we're far off
       const dx = a[0] - p.x, dy = a[1] - p.y;
@@ -413,7 +416,7 @@ GameScene.prototype.clientUpdate = function (dt) {
   this.clientTick(dt);
   const mv = this.localMove();
   const me = this.players[this.localPid];
-  if (me && !me.down && this.state === 'play') {
+  if (me && !me.down && this.state === 'play' && !picking(me)) {
     const sp = me.spd || 70;
     me.x = clamp(me.x + mv.x * sp * dt, 8, WORLD_SIZE - 8); me.y = clamp(me.y + mv.y * sp * dt, 10, WORLD_SIZE - 6);
     me.moving = Math.hypot(mv.x, mv.y) > 0.1; me.mvx = mv.x; me.mvy = mv.y;
@@ -423,7 +426,7 @@ GameScene.prototype.clientUpdate = function (dt) {
     const menu = Input.menuFor(0, 1);
     if (menu.left) { me.sel = (me.sel + 2) % 3; sfx.uiMove(); }
     if (menu.right) { me.sel = (me.sel + 1) % 3; sfx.uiMove(); }
-    if (menu.ok && me.choiceT > 0.4) this.pendOk = true;
+    if (menu.ok && me.choiceT > CARD_READY) this.pendOk = true;
   }
   this.pendDash = this.pendDash || Input.dash(0, 1);
   this.inAcc += dt;
@@ -443,6 +446,7 @@ GameScene.prototype.clientTick = function (dt) {
     if (p.choice) p.choiceT += dt;
     if (p.id !== this.localPid && p.tx !== undefined) { p.x += (p.tx - p.x) * Math.min(1, dt * 12); p.y += (p.ty - p.y) * Math.min(1, dt * 12); }
     if (p.mvx === undefined) { p.mvx = 0; p.mvy = 0; }
+    tickPicked(p, dt); dustFor(p, dt); heartbeatFor(p, dt);
     updateTrail(p, dt);
   }
   for (const e of this.enemies) {
