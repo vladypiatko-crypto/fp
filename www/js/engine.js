@@ -622,6 +622,21 @@ function drawButton(ui, id, x, y, w, h, label, opts = {}) {
   if (label) text(label, left + iw, y + lift + Math.floor(h / 2 - 2.5 * sc), opts.disabled ? C.gray : opts.tcol || C.white, sc, 0);
   return ui.add(id, x, y, w, h, opts.on, { def: opts.def, disabled: opts.disabled, silent: opts.silent });
 }
+// red tag for something you haven't looked at yet: hops, squashes when it lands, rests, repeats
+const NEW_RED = '#e8343b';
+function drawNewTag(x, y, t, label = 'NEW!') {
+  const ph = (t * 1.6) % 1;
+  const up = ph < 0.4 ? Math.sin(ph / 0.4 * Math.PI) * 4 : 0, squash = ph >= 0.4 && ph < 0.5 ? 1 : 0;
+  const w = textW(label) + 6 + squash * 2, h = 9 - squash;
+  const px = Math.round(x - w / 2), py = Math.round(y - 4 - up + squash);
+  panel(px, py, w, h, NEW_RED, OUT, '#ff7a7a');
+  text(label, x, py + 2, C.white, 1, 1, null);
+}
+function drawNewDot(x, y, t) {
+  const up = Math.round(Math.abs(Math.sin(t * 6)) * 2);
+  panel(x - 3, y - 4 - up, 7, 9, NEW_RED, OUT, '#ff7a7a', false);
+  ctx.fillStyle = C.white; ctx.fillRect(x, y - 2 - up, 1, 3); ctx.fillRect(x, y + 2 - up, 1, 1);
+}
 
 // ================================================================ transitions (diamond wipe)
 const Trans = {
@@ -708,6 +723,9 @@ const Save = {
   },
   write() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.data)); } catch (e) { /* storage blocked */ } },
   has(cat, id) { return this.data.unlocked.includes(cat + ':' + id); },
-  unlock(cat, id) { if (!this.has(cat, id)) { this.data.unlocked.push(cat + ':' + id); this.write(); return true; } return false; },
+  unlock(cat, id) { if (!this.has(cat, id)) { this.data.unlocked.push(cat + ':' + id); this.data.newItems.push(cat + ':' + id); this.write(); return true; } return false; },
+  isNew(cat, id) { return this.data.newItems.includes(cat + ':' + id); },
+  anyNew(cat) { return this.data.newItems.some(k => !cat || k.startsWith(cat + ':')); },
+  seen(cat, id) { const i = this.data.newItems.indexOf(cat + ':' + id); if (i >= 0) { this.data.newItems.splice(i, 1); this.write(); } },
   addCoins(n) { this.data.coins = Math.max(0, this.data.coins + Math.round(n)); this.write(); },
 };

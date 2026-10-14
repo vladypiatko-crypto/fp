@@ -78,6 +78,7 @@ function defaultSave() {
       { skin: 'snowy', hat: 'bandana_b', halo: 'none', trail: 'none', weapon: 'blaster' },
     ],
     story: { reached: 1, cleared: {} }, best: { e1: 0, e2: 0 }, muted: false, introSeen: false, wizardSeen: false,
+    newItems: [], // unlocked cosmetics nobody has clicked in the locker yet
   };
 }
 const CHESTS = {

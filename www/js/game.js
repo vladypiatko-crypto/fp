@@ -300,7 +300,10 @@ class GameScene {
     const px = Math.floor(W / 2 - bw / 2 - 8), py = Math.floor(H / 2 - total / 2);
     panel(px, py, bw + 16, total + 12, C.uiD, OUT, C.uiL);
     text('PAUSED', W / 2, py + 6, C.gold, 2, 1, 'outline');
-    labels.forEach(([id, label, on], i) => drawButton(ui, id, px + 8, py + 26 + i * (bh + gap), bw, bh, label, { on, def: i === 0 }));
+    labels.forEach(([id, label, on], i) => {
+      drawButton(ui, id, px + 8, py + 26 + i * (bh + gap), bw, bh, label, { on, def: i === 0 });
+      if (id === 'locker' && Save.anyNew()) drawNewTag(px + bw - 6, py + 26 + i * (bh + gap), performance.now() / 1000);
+    });
     // the ducks dance a little while you wait
     this.players.forEach((p, i) => {
       const x = px - 22 + (i ? bw + 60 : 0), y = py + total / 2 + 12;
@@ -360,7 +363,11 @@ class GameScene {
         ['menu', 'MENU', () => Trans.go(() => Scenes.set(new TitleScene(true)))]];
     }
     const tw = btns.length * bw + (btns.length - 1) * 5;
-    btns.forEach(([id, label, on], i) => drawButton(ui, id, Math.floor(W / 2 - tw / 2) + i * (bw + 5), by, bw, bh, label, { on, def: i === 0 }));
+    btns.forEach(([id, label, on], i) => {
+      const x = Math.floor(W / 2 - tw / 2) + i * (bw + 5);
+      drawButton(ui, id, x, by, bw, bh, label, { on, def: i === 0 });
+      if (id === 'locker' && Save.anyNew()) drawNewTag(x + bw - 8, by, this.stateT);
+    });
   }
 }
 

@@ -173,7 +173,7 @@ class TitleScene {
     ctx.globalAlpha = 1;
     // main buttons slide up one after another
     const labels = [['story', 'STORY', ICON.play, () => this.openModal('story')], ['endless', 'ENDLESS', null, () => this.openModal('endless')],
-      ['online', 'ONLINE', null, () => Trans.go(() => Scenes.set(new OnlineScene()))], ['locker', 'LOCKER', ICON.locker, () => Trans.go(() => Scenes.push(new LockerScene({})))]];
+      ['online', 'ONLINE', null, () => ONLINE_READY ? Trans.go(() => Scenes.set(new OnlineScene())) : this.openModal('online')], ['locker', 'LOCKER', ICON.locker, () => Trans.go(() => Scenes.push(new LockerScene({})))]];
     const stack = W < 300, n = labels.length;
     const bw = stack ? 96 : Math.min(84, Math.floor((W - 40) / n)), bh = 18, gap = 6;
     const rowW = stack ? bw : bw * n + gap * (n - 1);
@@ -182,7 +182,10 @@ class TitleScene {
       const k2 = Ease.outBack(clamp((this.t - 1.3 - i * 0.12) / 0.4, 0, 1));
       const x = stack ? Math.floor(W / 2 - bw / 2) : Math.floor(W / 2 - rowW / 2) + i * (bw + gap);
       const y = (stack ? by0 + i * (bh + 4) : by0) + Math.round((1 - k2) * (H - by0));
-      drawButton(this.modal ? new UI() : this.ui, id, x, y, bw, bh, label, { on, icon, def: i === 0, col: i === 0 ? '#3d2f63' : C.ui });
+      const ui = this.modal ? new UI() : this.ui;
+      if (id === 'online' && !ONLINE_READY) drawWipButton(ui, id, x, y, bw, bh, label, this.T, on);
+      else drawButton(ui, id, x, y, bw, bh, label, { on, icon, def: i === 0, col: i === 0 ? '#3d2f63' : C.ui });
+      if (id === 'locker' && Save.anyNew()) drawNewTag(x + bw - 10, y, this.T);
     });
     // corner widgets
     drawCoins(4, 4, Save.data.coins, this.T);
@@ -192,7 +195,39 @@ class TitleScene {
     const b = Save.data.best;
     if (b.e1 || b.e2) text('BEST ENDLESS  1P ' + fmtTime(b.e1) + '  2P ' + fmtTime(b.e2), W / 2, H - 9, C.white, 1, 1, 'outline');
     if (this.modal === 'settings') this.drawSettings();
+    else if (this.modal === 'online') this.drawWip();
     else if (this.modal) this.drawModal();
+  }
+  // online play isn't ready yet: a construction site with a sign and a duck in a hard hat
+  drawWip() {
+    ctx.fillStyle = 'rgba(15,10,26,0.75)'; ctx.fillRect(0, 0, W, H);
+    const k = Ease.outBack(Math.min(1, this.modalT / 0.35)), T = this.T;
+    const sw = 136, sh = 46, sx = Math.floor(W / 2 - sw / 2), sy = Math.floor(H * 0.2 + (1 - k) * -60);
+    const swing = Math.round(Math.sin(T * 2.2) * 1.5);
+    // posts
+    ctx.fillStyle = OUT; ctx.fillRect(sx + 15, sy + sh - 2, 6, H * 0.62 - sy - sh + 12); ctx.fillRect(sx + sw - 21, sy + sh - 2, 6, H * 0.62 - sy - sh + 12);
+    ctx.fillStyle = '#8a5a34'; ctx.fillRect(sx + 16, sy + sh - 2, 4, H * 0.62 - sy - sh + 12); ctx.fillRect(sx + sw - 20, sy + sh - 2, 4, H * 0.62 - sy - sh + 12);
+    // the sign, swaying a little
+    panel(sx + swing, sy, sw, sh, '#ffd23f', OUT, '#fff3b0');
+    hazard(sx + swing + 2, sy + 2, sw - 4, 5, T);
+    hazard(sx + swing + 2, sy + sh - 7, sw - 4, 5, T);
+    text('UNDER', W / 2 + swing, sy + 10, OUT, 2, 1, null);
+    text('CONSTRUCTION', W / 2 + swing, sy + 23, OUT, 1, 1, null);
+    text('ONLINE PLAY', W / 2 + swing, sy + 31, '#8a4b00', 1, 1, null);
+    // little worker duck with a hard hat, hammering
+    const gy = Math.floor(H * 0.62) + 10, hit = (T * 3) % 1 < 0.15;
+    const dx = Math.floor(W / 2 + sw / 2 + 6);
+    shadow(dx, gy, 7);
+    drawDuck(dx, gy - (hit ? 1 : 0), { skin: Save.data.loadout[0].skin, facing: 'left', t: T, sc: 2, blink: T % 3 > 2.85 });
+    const hy = gy - (hit ? 1 : 0) - 29;
+    panel(dx - 8, hy, 15, 6, '#ffd23f', OUT, '#fff3b0', false);
+    ctx.fillStyle = OUT; ctx.fillRect(dx - 11, hy + 5, 20, 3); ctx.fillStyle = '#ffd23f'; ctx.fillRect(dx - 10, hy + 6, 18, 1);
+    if (hit) { ctx.fillStyle = '#fff8e7'; ctx.fillRect(dx - 22, gy - 14, 2, 2); ctx.fillRect(dx - 26, gy - 18, 2, 2); ctx.fillRect(dx - 18, gy - 20, 2, 2); }
+    // cones
+    for (const cx of [W / 2 - sw / 2 - 6, W / 2 - 20]) drawCone(cx, gy);
+    text('COMING SOON!', W / 2, Math.min(H - 40, gy + 8), C.white, 1, 1, 'outline');
+    const ui = this.modalUI; ui.begin();
+    drawButton(ui, 'wip_back', Math.floor(W / 2 - 30), H - 24, 60, 14, 'OK', { on: () => { this.modal = null; }, def: true });
   }
   drawSettings() {
     ctx.fillStyle = 'rgba(15,10,26,0.7)'; ctx.fillRect(0, 0, W, H);
@@ -233,6 +268,38 @@ class TitleScene {
     drawButton(ui, 'back', W / 2 - 30, py + ph - 20, 60, 13, 'BACK', { on: () => { this.modal = null; } });
     if (this.modal === 'story') text('2 DUCKS = SPLIT SCREEN CO-OP!', W / 2, py + ph + 6, C.white, 1, 1, 'outline');
   }
+}
+// yellow and black construction stripes, slowly scrolling
+function hazard(x, y, w, h, t) {
+  x = Math.round(x); y = Math.round(y);
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.fillStyle = '#ffd23f'; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = OUT;
+  const off = Math.floor(t * 6) % 8;
+  for (let sx = x - h - 8 + off; sx < x + w; sx += 8) for (let r = 0; r < h; r++) ctx.fillRect(sx + h - r, y + r, 4, 1);
+  ctx.restore();
+}
+function drawCone(x, y) {
+  x = Math.round(x); y = Math.round(y);
+  ctx.fillStyle = OUT; ctx.fillRect(x - 6, y - 1, 13, 3); ctx.fillRect(x - 4, y - 9, 9, 8); ctx.fillRect(x - 2, y - 13, 5, 4);
+  ctx.fillStyle = '#ff8c1a'; ctx.fillRect(x - 5, y, 11, 1); ctx.fillRect(x - 3, y - 8, 7, 8); ctx.fillRect(x - 1, y - 12, 3, 4);
+  ctx.fillStyle = '#fff8e7'; ctx.fillRect(x - 3, y - 6, 7, 2);
+}
+// a button wrapped in construction tape: still tappable, it just explains it isn't ready
+function drawWipButton(ui, id, x, y, w, h, label, t, on) {
+  const f = ui.isFocus(id), dn = ui.isDown(id), lift = dn ? 1 : f ? -1 : 0;
+  panel(x, y + lift, w, h, '#2a2535', f ? C.gold : OUT, null, !dn);
+  hazard(x + 1, y + lift + 1, w - 2, h - 2, t);
+  const pw = textW(label) + 8, px = Math.round(x + w / 2 - pw / 2);
+  panel(px, y + lift + 3, pw, h - 6, '#2a2535', OUT, null, false);
+  text(label, x + w / 2, y + lift + Math.floor(h / 2 - 2.5), '#a6a3b8', 1, 1, null);
+  drawSoonTag(x + w - 4, y + lift);
+  return ui.add(id, x, y, w, h, on);
+}
+function drawSoonTag(x, y) {
+  const w = textW('SOON') + 5;
+  panel(Math.round(x - w / 2), y - 4, w, 8, '#ff8c1a', OUT, '#ffc06b', false);
+  text('SOON', x, y - 2, OUT, 1, 1, null);
 }
 function drawScaled(c, x, y, sc, rot = 0) {
   const w = c.width * sc, h = c.height * sc;
@@ -308,6 +375,7 @@ class MapScene {
     else text(cleared ? 'CLEARED! @' : 'REWARD ALREADY UNLOCKED', px + 8, py + 24, cleared ? C.gold : C.gray, 1, 0);
     drawButton(this.ui, 'play', px + pw - 58, py + 6, 50, 16, 'PLAY', { on: () => this.play(), icon: ICON.play, col: '#3d2f63' });
     drawButton(this.ui, 'locker', px + pw - 58, py + 25, 50, 13, 'LOCKER', { on: () => Trans.go(() => Scenes.push(new LockerScene({}))) });
+    if (Save.anyNew()) drawNewTag(px + pw - 16, py + 25, T);
     drawButton(this.ui, 'back', 4, 20, 34, 12, 'BACK', { on: () => Trans.go(() => Scenes.set(new TitleScene(true))) });
     drawCoins(W - textW(Save.data.coins) - 22, 20, Save.data.coins, T);
   }
@@ -370,9 +438,10 @@ class LockerScene {
     const port = W < H * 1.15;
     if (port) return { port, dx: Math.floor(W / 2), dy: Math.floor(H * 0.36), sc: 3, gx: 6, gy: Math.floor(H * 0.42), gw: W - 12 };
     const left = Math.floor(W * 0.4);
-    return { port, dx: Math.floor(left / 2) + 2, dy: Math.floor(H * 0.72), sc: H > 200 ? 4 : 3, gx: left + 4, gy: 22, gw: W - left - 10 };
+    return { port, dx: Math.floor(left / 2) + 2, dy: Math.floor(H * 0.72), sc: H > 200 ? 4 : 3, gx: left + 4, gy: 26, gw: W - left - 10 };
   }
   equip(cat, id) {
+    Save.seen(cat, id);
     if (!Save.has(cat, id)) { this.shakeId = cat + id; this.shakeT = 0.3; sfx.uiBack(); return; }
     Save.data.loadout[this.pid][cat] = id; Save.write();
     this.hop = 0.4; sfx.pickup();
@@ -434,6 +503,10 @@ class LockerScene {
       drawSpr(tabIcons[c], x + tw / 2, y + 8 + (sel ? 0 : 1));
       this.ui.add(id, x, y, tw, 15, () => { this.cat = c; });
     });
+    // NEW! tags go on top of all the tabs so a neighbour can't cover one
+    CATS.forEach((c, i) => {
+      if (Save.anyNew(c)) drawNewTag(L.gx + i * (tw + 2) + tw / 2, L.gy - (L.port ? 0 : 16) - 1, T + i * 0.13);
+    });
     const catLabelY = L.gy - (L.port ? 0 : 16) + 17;
     text(CAT_NAME[this.cat] + 'S', L.gx + 2, catLabelY, C.gold, 1, 0);
     const owned = COSMETICS[this.cat].filter(it => Save.has(this.cat, it.id)).length;
@@ -443,6 +516,7 @@ class LockerScene {
     const gy0 = catLabelY + 8;
     const items = COSMETICS[this.cat];
     let focusItem = null;
+    const newDots = [];
     items.forEach((it, i) => {
       const cx = L.gx + (i % cols) * (cs + 2), cy = gy0 + Math.floor(i / cols) * (cs + 2), id = 'it' + it.id;
       const has = Save.has(this.cat, it.id), eq = lo[this.cat] === it.id, f = this.ui.isFocus(id), rc = RARITY[it.rarity].col;
@@ -457,9 +531,11 @@ class LockerScene {
       if (eq) { ctx.fillStyle = PCOL[this.pid]; ctx.fillRect(cx + 2, cy + 2, 3, 3); }
       const other = Save.data.loadout[1 - this.pid];
       if (other[this.cat] === it.id) { ctx.fillStyle = PCOL[1 - this.pid]; ctx.fillRect(cx + cs - 5, cy + 2, 3, 3); }
-        this.ui.add(id, cx, cy, cs, cs, () => this.equip(this.cat, it.id), { def: eq, silent: true });
+      if (has && Save.isNew(this.cat, it.id)) newDots.push([cx + cs - 3, cy + 3, T + i * 0.21]);
+      this.ui.add(id, cx, cy, cs, cs, () => this.equip(this.cat, it.id), { def: eq, silent: true });
       if (this.ui.focus === id) focusItem = it;
     });
+    for (const [x, y, t] of newDots) drawNewDot(x, y, t); // drawn last so the next cell doesn't cover them
     // info box for the focused item
     const rows = Math.ceil(items.length / cols);
     const iy = Math.min(gy0 + rows * (cs + 2) + 2, H - 40);

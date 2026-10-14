@@ -18,14 +18,14 @@ The story has an animated intro and ending. **Endless** mode is a pure survival 
 
 ## Features
 
-- **Online lobbies**: create a public or private lobby, join a friend with their 4-letter code, or pick one from the public list. Up to 4 ducks, each on their own device. Pick story or endless, ready up, and start.
+- **Online lobbies** *(under construction: the ONLINE button shows a "coming soon" sign until a server is deployed)*: create a public or private lobby, join a friend with their 4-letter code, or pick one from the public list. Up to 4 ducks, each on their own device. Pick story or endless, ready up, and start.
 - **6 weapons**: Blaster, Quackshot, Bubble Gun, Feather-rang, Beak Beam laser, Quackinator minigun
 - **Level-up cards** (13 upgrades): multi shot, piercing, egg orbit, bread bombs, chain lightning, mega quack shockwave, dash attack…
 - **Robot army**: Bolt Bots, Boom Bots, Goo Blobs, Tank Bots, Zap Drones and Saw Bots, each with its own behaviour. Bosses telegraph charges, jumps, bullet rings and missile strikes.
 - **Impact frames**: big hits freeze the world for a moment, flash white and throw speed lines.
 - **Honks and quacks**: Dr. Honk honks, the ducks quack. Both are synthesised in the browser, no sound files.
 - **Locker**: customise each duck's **skin, hat, halo, trail and weapon**. Every hat sways, sparkles and has its own little extras (twinkling crown, floating notes, chef steam).
-- **Chests**: spend the coins you earn on Duck Chests or Royal Chests. **Unlocks are shared by both players.**
+- **Chests**: spend the coins you earn on Duck Chests or Royal Chests. **Unlocks are shared by both players.** New items get a bouncing red NEW! on their locker tab and a red ! on the item until you tap it.
 - **Settings** (gear icon): turn off screen shake, impact flashes or music.
 - Ducks turn in 4 directions, blink, squash & stretch and leave afterimages when dashing.
 
@@ -60,6 +60,8 @@ npm start          # http://localhost:8080  (set PORT to change it)
 ```
 
 Open `http://localhost:8080` in two browser windows. Choose **ONLINE**, create a lobby in one and join it from the other.
+
+Online play is switched off in the builds for now. Set `ONLINE_READY = true` in `www/js/online.js` to bring the lobbies back.
 
 ### Put it on the internet
 

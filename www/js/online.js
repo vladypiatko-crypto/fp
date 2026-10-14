@@ -7,6 +7,8 @@
 // Where the server lives when the game isn't served by it (the Windows / Android apps, or a file opened locally).
 // After you deploy server/ somewhere, put its address here, e.g. 'wss://quack.example.com/ws'.
 const DEFAULT_SERVER = '';
+// false: the title screen's ONLINE button shows an "under construction" sign instead of the lobbies
+const ONLINE_READY = false;
 
 const NAMES = ['QUACKER', 'PUDDLE', 'WADDLE', 'FEATHER', 'MALLARD', 'SPLASH', 'NUGGET', 'BISCUIT', 'WIGGLE', 'SNORKEL'];
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
