@@ -1,0 +1,8 @@
+{
+  "appId": "com.quackattack.game",
+  "appName": "Quack Attack",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#1b1325"
+  }
+}

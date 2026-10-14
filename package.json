@@ -1,0 +1,32 @@
+{
+  "name": "quack-attack",
+  "version": "1.0.0",
+  "description": "Quack Attack! A pixel-art survival shooter for 1-2 players: ducks with auto-aiming blasters vs. evil veggies.",
+  "main": "main.js",
+  "author": "vladypiatko",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "build:html": "node scripts/build-single-html.js",
+    "build:win": "electron-builder --win portable --x64 --publish never",
+    "android:sync": "cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.2",
+    "@capacitor/core": "8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2",
+    "electron": "44.4.5",
+    "electron-builder": "26.16.1"
+  },
+  "build": {
+    "appId": "com.quackattack.game",
+    "productName": "Quack Attack",
+    "files": ["main.js", "www/**/*", "build/icon.png"],
+    "directories": { "output": "dist", "buildResources": "build" },
+    "win": { "target": [{ "target": "portable", "arch": ["x64"] }], "icon": "build/icon.png" },
+    "portable": { "artifactName": "QuackAttack-Windows.exe" }
+  }
+}

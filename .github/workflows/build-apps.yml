@@ -1,0 +1,89 @@
+name: Build game apps
+
+on:
+  push:
+    branches: ['**']
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install dependencies
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - name: Copy web game into the Android project
+        run: npx cap sync android
+      - name: Build APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+      - run: cp android/app/build/outputs/apk/debug/app-debug.apk QuackAttack-Android.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QuackAttack-Android
+          path: QuackAttack-Android.apk
+
+  windows:
+    name: Windows EXE
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build portable EXE
+        run: npm run build:win
+      - name: Build single-file HTML
+        run: npm run build:html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QuackAttack-Windows
+          path: |
+            dist/QuackAttack-Windows.exe
+            dist/QuackAttack.html
+
+  release:
+    name: Publish release
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: Quack Attack (build ${{ github.run_number }})
+          make_latest: true
+          body: |
+            **Quack Attack!** — pixel survival shooter for 1–2 players.
+
+            - **QuackAttack-Windows.exe** — Windows 10/11, just double-click (no install). If SmartScreen warns, click *More info → Run anyway*.
+            - **QuackAttack-Android.apk** — open it on your phone/tablet and allow "install unknown apps" when asked.
+            - **QuackAttack.html** — plays in any web browser.
+          files: |
+            out/QuackAttack-Windows.exe
+            out/QuackAttack-Android.apk
+            out/QuackAttack.html
