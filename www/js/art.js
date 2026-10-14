@@ -97,7 +97,7 @@ const HAT_ART = {
     { side: { rows: ['...cwcccc.', 'cccccccccc'], x: 0, y: 1 } }),
   flower: hat({ rows: ['.p.', 'pyp', '.p.'], x: 7, y: 2 }, { p: '#ff6fae', y: '#ffd23f' }, { side: { rows: ['.p.', 'pyp', '.p.'], x: 4, y: 2 } }),
   pirate: hat({ rows: ['...kkkkkk...', '..kkkwwkkk..', '.kkkkwwkkkk.', 'kkkkkkkkkkkk'], x: 0, y: 1 }, { k: '#2b2438', w: '#fff8e7' }),
-  chef: hat({ rows: ['.wwwwww.', 'wwwwwwww', 'wwwwwwww', '.wwwwww.', '.GGGGGG.'], x: 2, y: 1 }, { w: '#ffffff', G: '#d5dbe6' }),
+  chef: hat({ rows: ['.wwwwww.', 'wwwwwwww', 'wwwwwwww', '.wwwwww.', '.GGGGGG.'], x: 2, y: 1 }, { w: '#ffffff', G: '#d5dbe6' }, { fx: 'steam' }),
   viking: hat({ rows: ['h..........h', 'h..........h', 'hh..mmmm..hh', '.hhmmlmmmhh.', '..mmmmmmmm..', '..gggggggg..'], x: 0, y: 1 },
     { h: '#fff3dc', m: '#9aa3b5', l: '#d5dbe6', g: '#ffd23f' }),
   propeller: hat({ rows: ['bbbbrrrr', '...kk...', '.ryyyyb.', 'rryyyybb'], x: 2, y: 1,
@@ -106,7 +106,7 @@ const HAT_ART = {
   catears: hat({ rows: ['c......c', 'cp....pc', 'ccc..ccc'], x: 2, y: 1 }, { c: '#3d3a52', p: '#ff6fae' }),
   bow: hat({ rows: ['pp.pp', 'ppPpp', 'pp.pp'], x: 6, y: 1 }, { p: '#ff6fae', P: '#ffb3d9' }, { side: { rows: ['pp.pp', 'ppPpp', 'pp.pp'], x: 2, y: 1 } }),
   headphones: hat({ rows: ['..kkkkkk..', '.k......k.', 'k........k', 'rr......rr', 'rr......rr'], x: 1, y: 3 }, { k: '#3d3a52', r: '#ff6fae' },
-    { side: { rows: ['.kkkkk.', 'k.....k', '...rr..', '...rr..'], x: 2, y: 3 } }),
+    { fx: 'notes', side: { rows: ['.kkkkk.', 'k.....k', '...rr..', '...rr..'], x: 2, y: 3 } }),
 };
 
 // ================================================================ weapons (pointing right; grip near the left)
@@ -370,8 +370,11 @@ function drawDuck(x, y, o) {
     let hx = hv.x;
     if (flip) hx = body.w - (hv.x + hs.w);
     const hy = hv.y + 1 - hv.rows.length;
-    drawSprX(hs, left + hx * sx, top + hy * sy, { flip, white: o.white, sx, sy, ax: 0, ay: 0 });
-    if (hatInfo.fx === 'wizard' && Math.random() < 0.06 && o.sparkle) o.sparkle(left + (flip ? body.w - hv.x - 3 : hv.x + 3) * sx, top + hy * sy);
+    const mo = hatMotion(o.hat, t); // every hat sways and bobs, like the wizard hat always did
+    const hxp = left + (hx + mo.dx) * sx, hyp = top + (hy + mo.dy) * sy;
+    drawSprX(hs, hxp, hyp, { flip, white: o.white, sx, sy, ax: 0, ay: 0 });
+    if (o.sparkle && !o.white && Math.random() < HAT_SPARKLE) o.sparkle(hxp + hs.w * sx * rand(0.15, 0.85), hyp + rand(0, 2) * sy, hatSpark(o.hat));
+    hatExtras(hatInfo.fx, hxp, hyp, hs.w * sx, t, sc);
   }
   if (o.weapon && view !== 'up') {
     const hx2 = view === 'side' ? x + (flip ? -3 : 3) * sx : x + 4 * sx;
@@ -381,6 +384,32 @@ function drawDuck(x, y, o) {
   if (fx === 'gold' && Math.random() < 0.08 && o.sparkle) o.sparkle(x + rand(-w / 2, w / 2), y - rand(0, h));
   if (fx === 'lava' && Math.random() < 0.1 && o.ember) o.ember(x + rand(-w / 3, w / 3), y - rand(2, h * 0.6));
   ctx.globalAlpha = a0;
+}
+// ---------------------------------------------------------------- hat animation
+const HAT_SPARKLE = 0.05;                     // chance per frame that a hat throws a sparkle
+const HAT_MOTION = {                          // amp / speed / bob of the sway, per hat
+  wizard: { amp: 0.7, sp: 2.2 }, bandana_r: { amp: 0.8, sp: 6 }, bandana_b: { amp: 0.8, sp: 6 }, beanie: { amp: 0.3, sp: 4, bob: 0.6 },
+  party: { amp: 0.9, sp: 5 }, cap: { amp: 0.2, sp: 2 }, tophat: { amp: 0.2, sp: 2.5 }, crown: { amp: 0.2, sp: 2 }, cowboy: { amp: 0.3, sp: 2, bob: 0.4 },
+  flower: { amp: 0.5, sp: 2 }, bow: { amp: 0.6, sp: 7 }, pirate: { amp: 0.3, sp: 3, bob: 0.3 }, chef: { amp: 0.25, sp: 3 }, viking: { amp: 0.25, sp: 2.5 },
+  propeller: { amp: 0, sp: 0 }, catears: { amp: 0.9, sp: 2.4 }, headphones: { amp: 0.4, sp: 3 },
+};
+const HAT_SPARK = {
+  wizard: ['#ffd23f', '#c9a6ff', '#fff8e7'], crown: ['#ffd23f', '#fff8e7'], bandana_r: ['#ff6b6b'], bandana_b: ['#5ec8ff'],
+  beanie: ['#bde6ff'], party: ['#ff6fae', '#ffd23f', '#5ec8ff'], tophat: ['#fff8e7'], cowboy: ['#c9a26b'], pirate: ['#fff8e7'],
+  chef: ['#ffffff'], viking: ['#bde6ff'], propeller: ['#ffffff'], catears: ['#ff6fae'], bow: ['#ffb3d9'], headphones: ['#9d5cff'],
+  cap: ['#fff8e7'], flower: ['#ff6fae', '#fff3b0'],
+};
+function hatMotion(id, t) {
+  const m = HAT_MOTION[id] || { amp: 0.4, sp: 3 };
+  return { dx: Math.sin(t * m.sp) * m.amp, dy: m.bob ? -Math.abs(Math.sin(t * m.sp * 0.5)) * m.bob : 0 };
+}
+function hatSpark(id) { const c = HAT_SPARK[id] || ['#fff8e7']; return pick(c); }
+// signature bits: a twinkling crown gem, floating music notes, chef steam
+function hatExtras(fx, x, y, w, t, sc) {
+  if (!fx) return;
+  if (fx === 'shine') { const gx = x + (Math.floor(t * 5) % 7 + 1) * (w / 8); ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(gx), Math.round(y + 2 * sc), Math.max(1, Math.round(sc)), Math.max(1, Math.round(sc))); }
+  else if (fx === 'notes') { const k = (t % 1.6) / 1.6; drawSprX(ART.note, x + w / 2 + Math.sin(t * 3) * 3 * sc, y - k * 12 * sc - 2, { alpha: 1 - k, sc: sc * 0.9 }); }
+  else if (fx === 'steam') { const k = (t % 1.2) / 1.2; pcirc(x + w / 2 + Math.sin(t * 4) * 2 * sc, y - k * 10 * sc, (1 + k) * sc, `rgba(255,255,255,${(0.5 * (1 - k)).toFixed(2)})`); }
 }
 function drawGun(id, x, y, ang, sc = 1) {
   const s = GUN_ART[id] || GUN_ART.blaster;

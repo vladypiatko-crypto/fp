@@ -36,6 +36,10 @@ function drawFsIcon(x, y) {
   if (document.fullscreenElement) ctx.fillRect(x + 5, y + 5, 3, 3);
 }
 function toggleSound() { setMuted(!AU.muted); Save.data.muted = AU.muted; Save.write(); }
+function drawGearIcon(x, y) {
+  pring(x + 6, y + 6, 3, C.white, 1); pcirc(x + 6, y + 6, 1, C.white);
+  for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; ctx.fillStyle = C.white; ctx.fillRect(Math.round(x + 6 + Math.cos(a) * 4.5), Math.round(y + 6 + Math.sin(a) * 4.5), 2, 2); }
+}
 
 // ================================================================ title screen
 class TitleScene {
@@ -167,11 +171,12 @@ class TitleScene {
     text(textW(sub) < W - 10 ? sub : 'DUCKS VS. ROBOTS', W / 2, subY, C.white, 1, 1, 'outline');
     ctx.globalAlpha = 1;
     // main buttons slide up one after another
-    const labels = [['story', 'STORY', ICON.play, () => this.openModal('story')], ['endless', 'ENDLESS', null, () => this.openModal('endless')], ['locker', 'LOCKER', ICON.locker, () => Trans.go(() => Scenes.push(new LockerScene({})))]];
-    const stack = W < 300;
-    const bw = stack ? 96 : Math.min(84, Math.floor((W - 40) / 3)), bh = 18, gap = 6;
-    const rowW = stack ? bw : bw * 3 + gap * 2;
-    const by0 = Math.min(subY + 12, H * 0.62 - (stack ? 3 * (bh + 4) : bh) - 4);
+    const labels = [['story', 'STORY', ICON.play, () => this.openModal('story')], ['endless', 'ENDLESS', null, () => this.openModal('endless')],
+      ['online', 'ONLINE', null, () => Trans.go(() => Scenes.set(new OnlineScene()))], ['locker', 'LOCKER', ICON.locker, () => Trans.go(() => Scenes.push(new LockerScene({})))]];
+    const stack = W < 300, n = labels.length;
+    const bw = stack ? 96 : Math.min(84, Math.floor((W - 40) / n)), bh = 18, gap = 6;
+    const rowW = stack ? bw : bw * n + gap * (n - 1);
+    const by0 = Math.min(subY + 12, H * 0.62 - (stack ? n * (bh + 4) : bh) - 4);
     labels.forEach(([id, label, icon, on], i) => {
       const k2 = Ease.outBack(clamp((this.t - 1.3 - i * 0.12) / 0.4, 0, 1));
       const x = stack ? Math.floor(W / 2 - bw / 2) : Math.floor(W / 2 - rowW / 2) + i * (bw + gap);
@@ -182,9 +187,27 @@ class TitleScene {
     drawCoins(4, 4, Save.data.coins, this.T);
     iconButton(this.ui, 'snd', W - 17, 4, drawSoundIcon, toggleSound);
     if (fsSupported()) iconButton(this.ui, 'fs', W - 33, 4, drawFsIcon, toggleFullscreen);
+    iconButton(this.ui, 'set', W - (fsSupported() ? 49 : 33), 4, drawGearIcon, () => this.openModal('settings'));
     const b = Save.data.best;
     if (b.e1 || b.e2) text('BEST ENDLESS  1P ' + fmtTime(b.e1) + '  2P ' + fmtTime(b.e2), W / 2, H - 9, C.white, 1, 1, 'outline');
-    if (this.modal) this.drawModal();
+    if (this.modal === 'settings') this.drawSettings();
+    else if (this.modal) this.drawModal();
+  }
+  drawSettings() {
+    ctx.fillStyle = 'rgba(15,10,26,0.7)'; ctx.fillRect(0, 0, W, H);
+    const k = Ease.outBack(Math.min(1, this.modalT / 0.3));
+    const pw = Math.min(W - 20, 190), ph = 112, px = Math.floor(W / 2 - pw / 2), py = Math.floor(H / 2 - ph / 2 + (1 - k) * 30);
+    panel(px, py, pw, ph, C.uiD, OUT, C.uiL);
+    text('SETTINGS', W / 2, py + 7, C.gold, 2, 1, 'outline');
+    const ui = this.modalUI; ui.begin();
+    const st = Save.data.settings;
+    [['shake', 'SCREEN SHAKE'], ['flash', 'IMPACT FLASH'], ['music', 'MUSIC']].forEach(([key, label], i) => {
+      const on = st[key];
+      drawButton(ui, 'set_' + key, px + 10, py + 26 + i * 18, pw - 20, 15, label + ': ' + (on ? 'ON' : 'OFF'),
+        { def: i === 0, col: on ? C.ui : '#2a2535', tcol: on ? C.white : C.gray,
+          on: () => { st[key] = !st[key]; Save.write(); if (key === 'music' && AU.musicBus) AU.musicBus.gain.value = st.music ? 0.42 : 0; } });
+    });
+    drawButton(ui, 'set_back', Math.floor(W / 2 - 30), py + ph - 20, 60, 13, 'BACK', { on: () => { this.modal = null; } });
   }
   drawModal() {
     ctx.fillStyle = 'rgba(15,10,26,0.7)'; ctx.fillRect(0, 0, W, H);
@@ -433,8 +456,7 @@ class LockerScene {
       if (eq) { ctx.fillStyle = PCOL[this.pid]; ctx.fillRect(cx + 2, cy + 2, 3, 3); }
       const other = Save.data.loadout[1 - this.pid];
       if (other[this.cat] === it.id) { ctx.fillStyle = PCOL[1 - this.pid]; ctx.fillRect(cx + cs - 5, cy + 2, 3, 3); }
-      if (it.gift) { panel(cx + 2, cy + cs - 7, cs - 4, 8, C.pink, OUT, null, false); text('GIFT', cx + cs / 2, cy + cs - 6, OUT, 1, 1, null); }
-      this.ui.add(id, cx, cy, cs, cs, () => this.equip(this.cat, it.id), { def: eq, silent: true });
+        this.ui.add(id, cx, cy, cs, cs, () => this.equip(this.cat, it.id), { def: eq, silent: true });
       if (this.ui.focus === id) focusItem = it;
     });
     // info box for the focused item
@@ -598,7 +620,7 @@ class ChestScene {
       drawItemIcon(r.cat, r.it.id, c.x, iy, this.T, lo);
       ctx.restore();
       if (this.t > 0.6) {
-        text(r.dup ? 'DUPLICATE!' : 'NEW ' + CAT_NAME[r.cat] + '!', W / 2, 10, r.dup ? C.gray : C.pink, 1, 1, 'outline');
+        text(r.dup ? 'DUPLICATE!' : 'YOU OBTAINED:', W / 2, 10, r.dup ? C.gray : C.pink, 1, 1, 'outline');
         text(r.it.name, W / 2, 20, rc.col, 2, 1, 'outline');
         text(rc.name, W / 2, 34, rc.col, 1, 1);
         if (r.dup) text('+' + Math.floor(CHESTS[this.kind].price * 0.4) + ' COINS BACK', W / 2, 44, C.gold, 1, 1);

@@ -17,7 +17,7 @@ const COSMETICS = {
   ],
   hat: [
     { id: 'none', name: 'NO HAT', rarity: 'common' },
-    { id: 'wizard', name: 'WIZARD HAT', rarity: 'legendary', gift: true, desc: 'A GIFT, JUST FOR YOU :3' },
+    { id: 'wizard', name: 'WIZARD HAT', rarity: 'legendary', desc: 'SPARKLY AND MAGICAL' },
     { id: 'bandana_r', name: 'RED BANDANA', rarity: 'common' },
     { id: 'bandana_b', name: 'BLUE BANDANA', rarity: 'common' },
     { id: 'beanie', name: 'BEANIE', rarity: 'common' },
@@ -72,7 +72,7 @@ const itemOf = (cat, id) => COSMETICS[cat].find(i => i.id === id);
 const DEFAULT_UNLOCKS = ['skin:classic', 'skin:snowy', 'hat:none', 'hat:wizard', 'hat:bandana_r', 'hat:bandana_b', 'halo:none', 'trail:none', 'weapon:blaster'];
 function defaultSave() {
   return {
-    v: 2, coins: 150, unlocked: DEFAULT_UNLOCKS.slice(),
+    v: 2, coins: 150, name: 'QUACKER', settings: { shake: true, flash: true, music: true }, unlocked: DEFAULT_UNLOCKS.slice(),
     loadout: [
       { skin: 'classic', hat: 'wizard', halo: 'none', trail: 'none', weapon: 'blaster' },
       { skin: 'snowy', hat: 'bandana_b', halo: 'none', trail: 'none', weapon: 'blaster' },

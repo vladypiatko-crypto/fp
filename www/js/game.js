@@ -69,31 +69,39 @@ function splat(x, y, col, n = 10, r = 6) {
   R.decals.push({ x: Math.round(x), y: Math.round(y), col, px, life: 10 });
   if (R.decals.length > 140) R.decals.shift();
 }
-function shakeAt(x, y, amt) { for (const v of R.views) { const p = R.players[v.pid]; if (p && d2(p.x, p.y, x, y) < 170 * 170) v.shake = Math.max(v.shake, amt); } }
-function shakeFor(p, amt) { for (const v of R.views) if (v.pid === p.id) v.shake = Math.max(v.shake, amt); }
+function shakeAt(x, y, amt) { if (Net.role === 'host') Net.evt.push(['shk', amt]); for (const v of R.views) { const p = R.players[v.pid]; if (p && d2(p.x, p.y, x, y) < 170 * 170) v.shake = Math.max(v.shake, amt); } }
+function shakeFor(p, amt) { if (Net.role === 'host') Net.evt.push(['shk', amt]); for (const v of R.views) if (v.pid === p.id) v.shake = Math.max(v.shake, amt); }
 function inAnyView(x, y, m = 0) { return R.views.some(v => x > v.camX - m && x < v.camX + v.w + m && y > v.camY - m && y < v.camY + v.h + m); }
 
 // ================================================================ the scene
 class GameScene {
-  // opts: { mode: 'story' | 'endless', level (LEVELS entry, story only), np: 1 | 2 }
+  // opts: { mode: 'story' | 'endless', level (LEVELS entry, story only), np: 1-4,
+  //         world?, net?: { role: 'host' | 'client', pid, members, seed } for online play }
   constructor(opts) {
     R = this;
     this.mode = opts.mode; this.level = opts.level || null; this.np = opts.np;
-    this.world = this.level ? this.level.world : pick(Object.keys(WORLD_THEME));
+    this.net = opts.net || null; this.online = !!this.net; this.role = this.net ? this.net.role : 'local';
+    this.world = opts.world || (this.level ? this.level.world : pick(Object.keys(WORLD_THEME)));
+    this.rnd = this.net ? mulberry32(this.net.seed) : Math.random; // online: everyone decorates the same world
+    this.localPid = this.net ? this.net.pid : 0;
+    this.viewPids = this.online ? [this.localPid] : (this.np === 1 ? [0] : [0, 1]);
     this.theme = WORLD_THEME[this.world];
     this.t = 0; this.state = 'play'; this.stateT = 0;
     this.enemies = []; this.shots = []; this.eshots = []; this.drops = []; this.items = []; this.parts = []; this.tparts = [];
     this.texts = []; this.fx = []; this.decals = []; this.bombs = []; this.marks = []; this.banners = [];
     this.spawnAcc = 0; this.nextEvent = 40; this.eventN = 0; this.nextBoss = this.mode === 'endless' ? 150 : Infinity;
     this.bossCount = 0; this.boss = null; this.bossSpawned = false; this.kills = 0; this.coins = 0; this.gemCombo = 0; this.gemComboT = 0;
-    this.uid = 1; this.hintT = 0; this.slow = 1; this.sticks = [null, null]; this.ui = new UI(); this.pauseUI = new UI(); this.resUI = new UI();
-    this.results = null; this.dialog = null; this.hitstop = 0;
+    this.uid = 1; this.hintT = 0; this.slow = 1; this.sticks = [null, null, null, null]; this.ui = new UI(); this.pauseUI = new UI(); this.resUI = new UI();
+    this.results = null; this.dialog = null;
+    this.pendDash = false; this.pendOk = false; this.inAcc = 0; this.sndT = 0; this.clientEnemies = new Map();
     this.players = [];
-    for (let i = 0; i < this.np; i++) this.players.push(this.newPlayer(i));
+    const members = this.net ? this.net.members : null;
+    for (let i = 0; i < this.np; i++) this.players.push(this.newPlayer(i, members ? members[i].lo : null, members ? members[i].name : null));
     this.makeDecor();
     this.layout();
     for (const v of this.views) { const p = this.players[v.pid]; v.camX = p.x - v.w / 2; v.camY = p.y - v.h / 2; }
-    if (this.level && this.level.intro.length) { this.state = 'dialog'; this.dialog = new Dialog(this.level.intro, () => this.begin()); }
+    if (this.role === 'client') this.state = 'play'; // the host starts the match and sends us its state
+    else if (this.level && this.level.intro.length && !this.online) { this.state = 'dialog'; this.dialog = new Dialog(this.level.intro, () => this.begin()); }
     else this.begin();
     Music.play(this.state === 'dialog' ? 'calm' : 'battle');
   }
@@ -103,10 +111,11 @@ class GameScene {
     banner(this.level ? 'LEVEL ' + this.level.n + ': ' + this.level.name : 'SURVIVE!', C.gold, 2.4, this.level ? 'SURVIVE UNTIL THE BOSS ARRIVES' : '');
     for (let i = 0; i < 5; i++) spawnEnemy('bolt', spawnPos());
   }
-  newPlayer(id) {
-    const lo = Save.data.loadout[id];
+  newPlayer(id, lo0, name) {
+    const lo = lo0 || Save.data.loadout[id] || Save.data.loadout[0];
+    const ring = this.np > 1 ? [Math.cos(id / this.np * TAU) * 28, Math.sin(id / this.np * TAU) * 28] : [0, 0];
     return {
-      id, lo, weapon: lo.weapon, x: WORLD_SIZE / 2 + (this.np === 2 ? (id ? 16 : -16) : 0), y: WORLD_SIZE / 2, r: 5, hp: 100, maxHp: 100,
+      id, lo, name: name || 'P' + (id + 1), weapon: lo.weapon, x: WORLD_SIZE / 2 + ring[0], y: WORLD_SIZE / 2 + ring[1], r: 5, hp: 100, maxHp: 100, spd: 70, gone: false,
       facing: 'down', turnT: 0, ax: 1, ay: 0, aim: 0, iframes: 0, dashT: 0, dashCd: 0, dvx: 0, dvy: 0, dashHit: new Set(),
       xp: 0, level: 1, xpNext: xpFor(1), kills: 0, down: false, reviveT: 0, up: {}, tm: { main: 0.3, bread: 1, zap: 1.5, quack: 2 },
       pending: 0, choice: null, sel: 1, choiceT: 0, anim: 0, moving: false, eggAng: 0, blinkT: rand(1, 4), hurtFlash: 0, moved: false,
@@ -114,22 +123,24 @@ class GameScene {
     };
   }
   makeDecor() {
-    const th = this.theme;
+    const th = this.theme, r = this.rnd;
+    const pickW = tbl => { let sum = 0; for (const k in tbl) sum += tbl[k]; let x = r() * sum; for (const k in tbl) { x -= tbl[k]; if (x <= 0) return k; } return Object.keys(tbl)[0]; };
     this.decor = []; this.tall = [];
     const mid = WORLD_SIZE / 2;
-    for (let i = 0; i < 650; i++) this.decor.push({ x: rand(16, WORLD_SIZE - 16), y: rand(16, WORLD_SIZE - 16), s: DECO_ART[weighted(th.deco)] });
+    for (let i = 0; i < 650; i++) this.decor.push({ x: 16 + r() * (WORLD_SIZE - 32), y: 16 + r() * (WORLD_SIZE - 32), s: DECO_ART[pickW(th.deco)] });
     for (let i = 0; i < 70; i++) {
-      const x = rand(30, WORLD_SIZE - 30), y = rand(30, WORLD_SIZE - 30);
+      const x = 30 + r() * (WORLD_SIZE - 60), y = 30 + r() * (WORLD_SIZE - 60);
       if (d2(x, y, mid, mid) < 70 * 70) continue;
-      this.tall.push({ x, y, s: DECO_ART[weighted(th.tall)], tall: true });
+      this.tall.push({ x, y, s: DECO_ART[pickW(th.tall)], tall: true });
     }
   }
   layout() {
     const old = this.views || [];
     this.views = [];
-    if (this.np === 1) this.views.push({ pid: 0, x: 0, y: 0, w: W, h: H });
-    else if (W >= H) { const hw = Math.floor(W / 2); this.views.push({ pid: 0, x: 0, y: 0, w: hw - 1, h: H }, { pid: 1, x: hw + 1, y: 0, w: W - hw - 1, h: H }); }
-    else { const hh = Math.floor(H / 2); this.views.push({ pid: 0, x: 0, y: hh + 1, w: W, h: H - hh - 1 }, { pid: 1, x: 0, y: 0, w: W, h: hh - 1 }); }
+    const vp = this.viewPids;
+    if (vp.length === 1) this.views.push({ pid: vp[0], x: 0, y: 0, w: W, h: H });
+    else if (W >= H) { const hw = Math.floor(W / 2); this.views.push({ pid: vp[0], x: 0, y: 0, w: hw - 1, h: H }, { pid: vp[1], x: hw + 1, y: 0, w: W - hw - 1, h: H }); }
+    else { const hh = Math.floor(H / 2); this.views.push({ pid: vp[0], x: 0, y: hh + 1, w: W, h: H - hh - 1 }, { pid: vp[1], x: 0, y: 0, w: W, h: hh - 1 }); }
     for (const v of this.views) {
       const o = old.find(q => q.pid === v.pid), p = this.players[v.pid];
       v.camX = o ? o.camX : p.x - v.w / 2; v.camY = o ? o.camY : p.y - v.h / 2; v.shake = 0;
@@ -139,6 +150,7 @@ class GameScene {
 
   // ------------------------------------------------------------ update
   update(dt) {
+    if (this.role === 'client') { this.clientUpdate(dt); return; }
     const acts = Input.menu();
     if (this.state === 'dialog') { this.dialog.update(dt, acts); this.tickCosmetics(dt); updateParticles(dt); return; }
     if (this.state === 'results') { this.updateResults(dt, acts); return; }
@@ -146,8 +158,8 @@ class GameScene {
     if (acts.start && this.state === 'play') { this.pause(); return; }
     this.handlePointers();
     this.ui.update(dt, null);
-    if (this.state === 'play' && choosing()) { updateLevelUp(dt); this.tickCosmetics(dt); return; }
-    if (this.hitstop > 0) { this.hitstop -= dt; return; }
+    if (this.state === 'play' && choosing()) { updateLevelUp(dt); this.tickCosmetics(dt); this.netPump(dt); return; }
+    if (Impact.stop > 0) { this.netPump(dt); return; } // impact frame: the world holds still for a moment
     if (this.state === 'dying' || this.state === 'clear') {
       this.stateT += dt;
       dt *= this.state === 'dying' ? 0.3 : (this.stateT < 1.2 ? 0.35 : 1);
@@ -175,6 +187,7 @@ class GameScene {
     this.gemComboT -= dt; if (this.gemComboT <= 0) this.gemCombo = 0;
     if (this.state === 'play' && !alivePlayers().length) { this.state = 'dying'; this.stateT = 0; Music.play(null); }
     this.updateCameras(dt);
+    this.netPump(dt);
   }
   tickCosmetics(dt) { for (const p of this.players) { p.anim += dt; p.blinkT -= dt; if (p.blinkT < -0.12) p.blinkT = rand(2, 5); } }
   handlePointers() {
@@ -185,9 +198,9 @@ class GameScene {
         if (choosing()) { cardTap(ev); continue; }
         const v = viewAt(ev.x, ev.y); if (!v) continue;
         const pid = v.pid, p = this.players[pid];
-        if (Input.touch && d2(ev.x, ev.y, dashBtn(v).x, dashBtn(v).y) < 20 * 20) { p.dashReq = true; continue; }
+        if (Input.touch && d2(ev.x, ev.y, dashBtn(v).x, dashBtn(v).y) < 20 * 20) { this.dashFor(pid); continue; }
         if (!this.sticks[pid]) this.sticks[pid] = { id: ev.id, bx: ev.x, by: ev.y, x: ev.x, y: ev.y };
-        else p.dashReq = true;
+        else this.dashFor(pid);
       } else if (ev.type === 'move') {
         for (const s of this.sticks) if (s && s.id === ev.id) {
           s.x = ev.x; s.y = ev.y;
@@ -195,7 +208,7 @@ class GameScene {
           if (dl > lim) { s.bx = s.x - dx / dl * lim; s.by = s.y - dy / dl * lim; }
         }
       } else if (ev.type === 'up') {
-        for (let i = 0; i < 2; i++) if (this.sticks[i] && this.sticks[i].id === ev.id) this.sticks[i] = null;
+        for (let i = 0; i < this.sticks.length; i++) if (this.sticks[i] && this.sticks[i].id === ev.id) this.sticks[i] = null;
       }
     }
   }
@@ -216,12 +229,12 @@ class GameScene {
     }
     if (Math.random() < 0.3) { const p = pick(this.players); burst(p.x + rand(-60, 60), p.y + rand(-50, 20), RAINBOW, 10, 70, 0.8); }
     if (this.stateT > 3.2) {
-      const outro = this.level && this.level.outro;
+      const outro = this.level && this.level.outro && !this.online;
       if (outro && outro.length && !this.outroDone) { this.outroDone = true; this.state = 'dialog'; this.dialog = new Dialog(outro, () => this.finish(true)); Music.play('calm'); }
       else this.finish(true);
     }
   }
-  pause() { this.state = 'paused'; this.sticks = [null, null]; Music.paused = true; sfx.uiBack(); }
+  pause() { this.state = 'paused'; this.sticks = [null, null, null, null]; Music.paused = true; sfx.uiBack(); }
   resume() { this.state = 'play'; Music.paused = false; }
   updatePause(dt, acts) {
     if (acts.start || acts.back) { this.resume(); return; }
@@ -251,6 +264,7 @@ class GameScene {
   }
   updateResults(dt, acts) {
     this.stateT += dt;
+    this.netPump(dt);
     const r = this.results;
     const total = r.coins + r.bonus;
     if (r.shown < total) { r.shown = Math.min(total, r.shown + Math.max(1, total * dt * 0.9)); if (Math.random() < 0.5) sfx.coin(); }
@@ -263,7 +277,7 @@ class GameScene {
   draw() {
     ctx.fillStyle = OUT; ctx.fillRect(0, 0, W, H);
     for (const v of this.views) drawView(v);
-    if (this.np === 2) { ctx.fillStyle = OUT; if (W >= H) ctx.fillRect(this.views[0].w, 0, 2, H); else ctx.fillRect(0, this.views[1].h, W, 2); }
+    if (this.views.length === 2) { ctx.fillStyle = OUT; if (W >= H) ctx.fillRect(this.views[0].w, 0, 2, H); else ctx.fillRect(0, this.views[1].h, W, 2); }
     this.ui.begin();
     drawTopBar();
     if (this.state === 'play' && choosing()) for (const v of this.views) drawLevelUp(v);
@@ -278,7 +292,8 @@ class GameScene {
     const labels = [['resume', 'RESUME', () => this.resume()], ['locker', 'LOCKER', () => Trans.go(() => Scenes.push(new LockerScene({ fromPause: true })))],
       ['sound', AU.muted ? 'SOUND: OFF' : 'SOUND: ON', () => { setMuted(!AU.muted); Save.data.muted = AU.muted; Save.write(); }]];
     if (fsSupported()) labels.push(['fs', document.fullscreenElement ? 'EXIT FULLSCREEN' : 'FULLSCREEN', toggleFullscreen]);
-    labels.push(['quit', this.mode === 'story' ? 'QUIT TO MAP' : 'QUIT TO MENU', () => Trans.go(() => { Music.paused = false; Scenes.set(this.mode === 'story' ? new MapScene(this.np) : new TitleScene(true)); })]);
+    labels.push(['quit', this.online ? 'LEAVE GAME' : this.mode === 'story' ? 'QUIT TO MAP' : 'QUIT TO MENU',
+      () => (this.online ? this.quitOnline() : Trans.go(() => { Music.paused = false; Scenes.set(this.mode === 'story' ? new MapScene(this.np) : new TitleScene(true)); }))]);
     const total = labels.length * (bh + gap) - gap + 26;
     const px = Math.floor(W / 2 - bw / 2 - 8), py = Math.floor(H / 2 - total / 2);
     panel(px, py, bw + 16, total + 12, C.uiD, OUT, C.uiL);
@@ -330,7 +345,8 @@ class GameScene {
     const ui = this.resUI; ui.begin();
     const bw = Math.min(70, Math.floor((pw - 40) / 3)), bh = 15, by = py + ph - bh - 7;
     let btns;
-    if (this.mode === 'story') {
+    if (this.online) btns = this.onlineResultButtons();
+    else if (this.mode === 'story') {
       btns = r.won
         ? [['next', this.level.n < LEVELS.length ? 'NEXT' : 'ENDING', () => Trans.go(() => this.level.n < LEVELS.length ? Scenes.set(new MapScene(this.np)) : Scenes.set(new CutsceneScene('ending', () => Scenes.set(new TitleScene(true)))))],
           ['locker', 'LOCKER', () => Trans.go(() => Scenes.push(new LockerScene({})))]]
@@ -362,7 +378,7 @@ function spawnEnemy(type, pos, opts = {}) {
 function spawnBoss(id) {
   const b = BOSSES[id];
   const pos = spawnPos();
-  let hp = b.hp * (R.np === 2 ? 1.6 : 1);
+  let hp = b.hp * (1 + 0.6 * (R.np - 1));
   if (R.mode === 'endless') hp *= (1 + R.bossCount * 0.6) * (1 + R.t / 600);
   const e = {
     id: R.uid++, type: id, d: Object.assign({ xp: 0, fx: b.fx || 'metal', heavy: 0.05 }, b), boss: true, x: pos.x, y: pos.y, kx: 0, ky: 0,
@@ -372,7 +388,7 @@ function spawnBoss(id) {
   R.enemies.push(e);
   R.boss = e; R.bossCount++;
   R.bossIntro = { t: 0, name: b.name };
-  Music.play('boss'); sfx.bossIntro(); sfx.warn();
+  Music.play('boss'); sfx.bossIntro(); sfx.honk(b.final ? 0.8 : 1.15); sfx.warn(); Impact.trigger('big');
   return e;
 }
 function spawnPos() {
@@ -400,10 +416,10 @@ function director(dt) {
   let rate;
   if (R.mode === 'story') rate = Math.min(9, 0.9 + (R.level.n - 1) * 0.15 + t * 0.02);
   else rate = Math.min(11, 0.9 + t * 0.024 + Math.max(0, t - 180) * 0.02);
-  rate *= R.np === 2 ? 1.5 : 1;
+  rate *= 1 + 0.5 * (R.np - 1);
   if (R.boss && !R.boss.dead) rate *= 0.4;
   R.spawnAcc += rate * dt;
-  const cap = R.np === 2 ? 360 : 260;
+  const cap = R.np >= 2 ? 360 : 260;
   while (R.spawnAcc >= 1) { R.spawnAcc -= 1; if (R.enemies.length < cap) spawnEnemy(rollType(), spawnPos()); }
   // swarm events
   if (t >= R.nextEvent && !(R.boss && !R.boss.dead)) {
@@ -435,6 +451,7 @@ function hurtEnemy(e, dmg, kx, ky, kb, owner) {
   const res = e.d.heavy || 1;
   e.kx += kx * kb * res; e.ky += ky * kb * res;
   floatText(e.x + rand(-3, 3), e.y - e.r - 6 - e.z, Math.round(dmg), dmg >= 40 ? C.gold : C.white, 0.45);
+  if (e.boss && dmg > e.maxHp * 0.015) Impact.trigger('small');
   if (e.hp <= 0) killEnemy(e, owner); else if (e.d.fx === 'goo') sfx.squish(); else sfx.hit();
 }
 function killEnemy(e, owner, quiet) {
@@ -460,11 +477,12 @@ function killEnemy(e, owner, quiet) {
   else if (luck < 0.018) R.items.push({ k: 'sauce', x: e.x, y: e.y, t: 0 });
   if (e.d.ai === 'bomber') explode(e.x, e.y, 24, 22 * hpMul(), owner, false);
   if (e.d.split) for (let i = 0; i < 3; i++) { const m = spawnEnemy(e.d.split, { x: e.x + rand(-4, 4), y: e.y + rand(-4, 4) }, { instant: true }); m.kx = rand(-80, 80); m.ky = rand(-80, 80); }
+  if (e.type === 'tank') Impact.trigger('big');
   if (e.boss) bossDefeated(e);
 }
 function bossDefeated(e) {
   sfx.bigBoom(); shakeAt(e.x, e.y, 9);
-  R.hitstop = 0.12;
+  Impact.trigger('huge');
   for (let i = 0; i < 6; i++) R.fx.push({ k: 'boom', x: e.x + rand(-20, 20), y: e.y + rand(-20, 20), r: rand(14, 26), t: -i * 0.12, dur: 0.35 });
   for (let i = 0; i < 25; i++) dropAt(e.x + rand(-24, 24), e.y + rand(-24, 24), 'xp', 5);
   for (let i = 0; i < 18; i++) dropAt(e.x + rand(-24, 24), e.y + rand(-24, 24), 'coin', 2);
@@ -497,7 +515,7 @@ function hurtPlayer(p, dmg) {
   floatText(p.x, p.y - 16, '-' + Math.round(dmg), C.red, 0.7);
   burst(p.x, p.y - 4, ['#fff8e7', PCOL[p.id]], 6, 50, 0.4);
   if (p.hp <= 0) {
-    p.hp = 0; p.down = true; p.reviveT = 0;
+    p.hp = 0; p.down = true; p.reviveT = 0; Impact.trigger('huge');
     burst(p.x, p.y, ['#fff8e7', '#ffd23f'], 20, 90, 0.7);
     if (alivePlayers().length) banner('P' + (p.id + 1) + ' IS DOWN!', PCOL[p.id], 2, 'STAND NEXT TO THEIR EGG TO REVIVE');
   }
@@ -505,6 +523,7 @@ function hurtPlayer(p, dmg) {
 
 // ================================================================ players
 function updatePlayer(p, dt) {
+  if (p.gone) return; // a friend who left the online game
   p.anim += dt;
   p.hurtFlash = Math.max(0, p.hurtFlash - dt);
   p.turnT = Math.max(0, p.turnT - dt);
@@ -518,7 +537,7 @@ function updatePlayer(p, dt) {
       p.reviveT += dt;
       if (p.reviveT >= 2.5) {
         p.down = false; p.hp = Math.round(p.maxHp * 0.5); p.iframes = 2; p.reviveT = 0; p.squash = 0.3;
-        sfx.revive(); burst(p.x, p.y, ['#51cf66', '#fff8e7', PCOL[p.id]], 24, 90, 0.7);
+        sfx.revive(); sfx.quack(1.2); Impact.trigger('big'); burst(p.x, p.y, ['#51cf66', '#fff8e7', PCOL[p.id]], 24, 90, 0.7);
         floatText(p.x, p.y - 18, 'REVIVED!', C.green, 1.2);
       }
     } else p.reviveT = Math.max(0, p.reviveT - dt * 0.5);
@@ -876,7 +895,7 @@ function updateEnemies(dt) {
 // bosses pick from a set of telegraphed attacks
 function updateBoss(e, tgt, dx, dy, dist, dt) {
   const B = e.d;
-  if (e.phase === 1 && B.final && e.hp < e.maxHp * 0.5) { e.phase = 2; banner('HONK RAGE MODE!', C.red, 2.4, 'HE IS REALLY ANGRY NOW'); sfx.honk(); e.bt = 0.6; }
+  if (e.phase === 1 && B.final && e.hp < e.maxHp * 0.5) { e.phase = 2; banner('HONK RAGE MODE!', C.red, 2.4, 'HE IS REALLY ANGRY NOW'); sfx.honk(0.7); Impact.trigger('big'); e.bt = 0.6; }
   const fast = e.phase === 2 ? 0.65 : 1;
   e.bt -= dt;
   e.flip = tgt.x < e.x;
@@ -998,7 +1017,13 @@ function cardTap(ev) {
   const v = viewAt(ev.x, ev.y); if (!v) return;
   const p = R.players[v.pid];
   if (!p.choice || p.choiceT < 0.4) return;
-  cardRects(v).forEach((r, i) => { if (ev.x >= r.x && ev.x < r.x + r.w && ev.y >= r.y && ev.y < r.y + r.h) { p.sel = i; applyUpgrade(p, p.choice[i]); } });
+  cardRects(v).forEach((r, i) => {
+    if (ev.x >= r.x && ev.x < r.x + r.w && ev.y >= r.y && ev.y < r.y + r.h) {
+      p.sel = i;
+      if (R.role === 'client') R.pendOk = true; // online: the host applies the pick
+      else applyUpgrade(p, p.choice[i]);
+    }
+  });
 }
 
 // ================================================================ touch controls
@@ -1006,7 +1031,7 @@ const STICK_R = 20;
 function viewAt(x, y) { return R.views.find(v => x >= v.x - 1 && x < v.x + v.w + 1 && y >= v.y - 1 && y < v.y + v.h + 1); }
 function dashBtn(v) {
   const r = 15;
-  if (R.np === 1) return { x: v.x + v.w - r - 12, y: v.y + v.h - r - 12, r };
+  if (R.views.length === 1) return { x: v.x + v.w - r - 12, y: v.y + v.h - r - 12, r };
   if (W >= H) return v.pid === 0 ? { x: v.x + r + 10, y: v.y + v.h - r - 12, r } : { x: v.x + v.w - r - 10, y: v.y + v.h - r - 12, r };
   return { x: v.x + v.w - r - 12, y: v.y + v.h - r - 10, r };
 }
@@ -1016,7 +1041,7 @@ function drawView(v) {
   const p = R.players[v.pid];
   ctx.save();
   ctx.beginPath(); ctx.rect(v.x, v.y, v.w, v.h); ctx.clip();
-  const sh = v.shake;
+  const sh = Save.data.settings.shake ? v.shake : 0;
   const cx = Math.round(v.camX + (sh ? rand(-sh, sh) : 0)), cy = Math.round(v.camY + (sh ? rand(-sh, sh) : 0));
   ctx.translate(v.x - cx, v.y - cy);
   drawGround(cx, cy, v.w, v.h);
@@ -1135,7 +1160,7 @@ function drawView(v) {
   ctx.save();
   ctx.beginPath(); ctx.rect(v.x, v.y, v.w, v.h); ctx.clip();
   if (p.hurtFlash > 0) { ctx.globalAlpha = p.hurtFlash * 1.6; ctx.fillStyle = '#e8343b'; ctx.fillRect(v.x, v.y, v.w, 3); ctx.fillRect(v.x, v.y + v.h - 3, v.w, 3); ctx.fillRect(v.x, v.y, 3, v.h); ctx.fillRect(v.x + v.w - 3, v.y, 3, v.h); ctx.globalAlpha = 1; }
-  for (const f of R.fx) if (f.k === 'flash' && (R.np === 1 || f.pid === v.pid)) { ctx.globalAlpha = 1 - f.t / f.dur; ctx.fillStyle = '#ffeedd'; ctx.fillRect(v.x, v.y, v.w, v.h); ctx.globalAlpha = 1; }
+  for (const f of R.fx) if (f.k === 'flash' && (R.views.length === 1 || f.pid === v.pid)) { ctx.globalAlpha = 1 - f.t / f.dur; ctx.fillStyle = '#ffeedd'; ctx.fillRect(v.x, v.y, v.w, v.h); ctx.globalAlpha = 1; }
   if (R.state !== 'results') drawHud(v, p, cx, cy);
   ctx.restore();
 }
@@ -1218,7 +1243,7 @@ function drawPlayer(p) {
     ember: (x, y) => R.tparts.push({ x, y, vx: rand(-4, 4), vy: rand(-18, -8), life: 0.4, max: 0.4, col: pick(['#ff8c1a', '#ffd23f']), size: 1 }),
   });
   for (const [x, y] of eggs) if (y >= p.y - 3) drawSpr(ART.eggOrb, x, y);
-  if (R.np === 2) text('P' + (p.id + 1), p.x, p.y - 26 - (p.lo.hat === 'wizard' || p.lo.hat === 'viking' ? 6 : 0), PCOL[p.id], 1, 1);
+  if (R.players.length > 1) text('P' + (p.id + 1), p.x, p.y - 26 - (p.lo.hat === 'wizard' || p.lo.hat === 'viking' ? 6 : 0), PCOL[p.id], 1, 1);
 }
 
 // ---------------------------------------------------------------- HUD
@@ -1237,7 +1262,7 @@ function drawHud(v, p, cx, cy) {
   // weapons owned
   let ix = v.x + 4;
   const iy = v.y + v.h - 12;
-  const onLeftEdge = Input.touch && R.np === 2 && W >= H && v.pid === 0;
+  const onLeftEdge = Input.touch && R.views.length === 2 && W >= H && v.pid === 0;
   if (!onLeftEdge) {
     panel(ix, iy - 3, 16, 12, C.uiD, OUT, null, false);
     drawSprX(GUN_ART[p.weapon] || GUN_ART.blaster, ix + 8, iy + 3, { ax: 0.5 });
@@ -1245,8 +1270,8 @@ function drawHud(v, p, cx, cy) {
     for (const k of SIDE_WEAPONS) { const l = lvl(p, k); if (!l) continue; drawSpr(ICON[k], ix + 4, iy + 3); text(l, ix + 9, iy + 3, C.white, 1, 0); ix += 16; }
   }
   // partner arrow
-  if (R.np === 2) {
-    const o = R.players[1 - p.id], ox = o.x - cx, oy = o.y - cy;
+  if (R.players.length > 1) {
+    const o = R.players[(p.id + 1) % R.players.length], ox = o.x - cx, oy = o.y - cy;
     if (ox < 0 || oy < 0 || ox > v.w || oy > v.h) {
       const mx = v.w / 2, my = v.h / 2, dx = ox - mx, dy = oy - my;
       const k = Math.min((v.w / 2 - 12) / Math.abs(dx || 1e-6), (v.h / 2 - 12) / Math.abs(dy || 1e-6));

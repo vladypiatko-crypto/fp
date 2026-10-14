@@ -19,6 +19,7 @@ function frame(now) {
   lastFrame = now;
   try {
     Input.poll();
+    Impact.update(dt);
     Trans.update(dt);
     const top = Scenes.top();
     if (Trans.phase === 'out') { Input.ptrEv.length = 0; Input.hit.clear(); }
@@ -26,6 +27,7 @@ function frame(now) {
     ctx.imageSmoothingEnabled = false;
     const cur = Scenes.top();
     if (cur) cur.draw();
+    Impact.draw();
     Trans.draw();
   } catch (err) { console.error(err); }
   Input.endFrame();
@@ -34,4 +36,4 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // hook for automated tests
-window.__quack = { Scenes, Save, Input, GameScene, MapScene, LockerScene, ChestScene, TitleScene, CutsceneScene, get R() { return R; }, updatePlayer, applyUpgrade, spawnBoss };
+window.__quack = { Scenes, Save, Input, Net, GameScene, MapScene, LockerScene, ChestScene, TitleScene, CutsceneScene, OnlineScene, RoomScene, get R() { return R; }, updatePlayer, applyUpgrade, spawnBoss, Impact };

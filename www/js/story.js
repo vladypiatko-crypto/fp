@@ -79,8 +79,15 @@ function drawPortrait(who, x, y, t, talking) {
 class Dialog {
   constructor(lines, done) { this.lines = lines; this.i = 0; this.chars = 0; this.done = done; this.t = 0; this.blipN = 0; }
   get line() { return this.lines[this.i]; }
+  // the speaker's sound: Dr. Honk honks, the ducks quack
+  announce() {
+    const L = this.line; if (!L) return;
+    if (L[0] === 'honk') sfx.honk(1.2);
+    else if (L[0] === 'duck' || L[0] === 'daisy') sfx.quack(L[0] === 'daisy' ? 1.2 : 1);
+  }
   update(dt, acts) {
     this.t += dt;
+    if (this.lastI !== this.i) { this.lastI = this.i; this.announce(); }
     if (!this.line) return;
     const full = this.line[1].length;
     const prev = Math.floor(this.chars);

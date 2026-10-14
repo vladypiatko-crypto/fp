@@ -30,6 +30,12 @@ function weighted(table) {
   return Object.keys(table)[0];
 }
 
+// seeded RNG so every online player builds the same world decoration
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+
 // ================================================================ canvas (rendered at ~216px tall, scaled up crisp)
 const cvs = document.getElementById('game');
 const ctx = cvs.getContext('2d');
@@ -278,7 +284,7 @@ function audioInit() {
   const a = new AC(); AU.ctx = a;
   AU.master = a.createGain(); AU.master.gain.value = AU.muted ? 0 : 0.8; AU.master.connect(a.destination);
   AU.sfxBus = a.createGain(); AU.sfxBus.gain.value = 0.9; AU.sfxBus.connect(AU.master);
-  AU.musicBus = a.createGain(); AU.musicBus.gain.value = 0.42; AU.musicBus.connect(AU.master);
+  AU.musicBus = a.createGain(); AU.musicBus.gain.value = (Save.data && Save.data.settings && !Save.data.settings.music) ? 0 : 0.42; AU.musicBus.connect(AU.master);
   const len = a.sampleRate * 0.6, buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
   for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
   AU.noise = buf;
@@ -314,6 +320,18 @@ function voice(f0, f1, dur, formant, vol = 0.16, when = 0) { // quack / honk
 }
 // throttle very frequent sounds
 function every(key, gap) { const t = atime(); if (t - (AU.last[key] || 0) < gap) return false; AU.last[key] = t; return true; }
+// a goose honk: detuned sawtooth with vibrato, pushed through a nasal bandpass
+function honkVoice(f, dur, vol, when = 0) {
+  const a = AU.ctx; if (!a || AU.muted) return;
+  const t = when || a.currentTime;
+  const o = a.createOscillator(), lfo = a.createOscillator(), lg = a.createGain(), bp = a.createBiquadFilter(), g = a.createGain();
+  o.type = 'sawtooth'; o.frequency.setValueAtTime(f * 1.12, t); o.frequency.exponentialRampToValueAtTime(f * 0.86, t + dur);
+  lfo.type = 'sine'; lfo.frequency.value = 24; lg.gain.value = f * 0.035; lfo.connect(lg); lg.connect(o.frequency);
+  bp.type = 'bandpass'; bp.frequency.value = 950; bp.Q.value = 3.5;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.035); g.gain.setValueAtTime(vol, t + dur - 0.07); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+  o.connect(bp); bp.connect(g); g.connect(AU.sfxBus);
+  o.start(t); lfo.start(t); o.stop(t + dur + 0.05); lfo.stop(t + dur + 0.05);
+}
 const sfx = {
   shoot(kind, pid) {
     if (!every('shoot' + pid, 0.05)) return;
@@ -334,8 +352,9 @@ const sfx = {
   hurt() { tone(220, 0.18, 'sawtooth', 0.08, 60); noise(0.1, 0.06, 1200); },
   boom() { if (!every('boom', 0.05)) return; noise(0.35, 0.16, 900); tone(120, 0.3, 'sine', 0.12, 35); },
   bigBoom() { noise(0.9, 0.22, 600); tone(90, 0.8, 'sine', 0.2, 25); tone(60, 1, 'triangle', 0.15, 20, atime(0.1)); },
-  quack(pitch = 1) { voice(rand(520, 600) * pitch, 330 * pitch, 0.13, 1400 * pitch); },
-  honk() { voice(260, 200, 0.22, 900, 0.2); voice(250, 190, 0.22, 900, 0.2, atime(0.26)); },
+  // a two-syllable "qu-ACK" with a little breath of noise
+  quack(pitch = 1) { voice(520 * pitch, 360 * pitch, 0.1, 1500 * pitch, 0.16); voice(470 * pitch, 260 * pitch, 0.15, 1100 * pitch, 0.14, atime(0.12)); noise(0.1, 0.02, 2600, atime(0.02), null, 'bandpass'); },
+  honk(pitch = 1) { honkVoice(330 * pitch, 0.42, 0.2); honkVoice(312 * pitch, 0.36, 0.16, atime(0.46)); },
   zap() { tone(1600, 0.12, 'sawtooth', 0.04, 200); noise(0.08, 0.04, 6000); },
   pop() { tone(700, 0.06, 'sine', 0.08, 1500); },
   pickup() { tone(660, 0.07, 'square', 0.06); tone(990, 0.1, 'square', 0.06, 0, atime(0.07)); },
@@ -356,6 +375,8 @@ const sfx = {
   title() { noise(0.5, 0.15, 800); tone(110, 0.5, 'sine', 0.18, 40); },
   bossIntro() { tone(110, 0.9, 'sawtooth', 0.08, 55); tone(82, 1.2, 'square', 0.06, 41, atime(0.3)); },
 };
+// every sound the host plays is also sent to the other online players (see online.js)
+for (const k of Object.keys(sfx)) { const f = sfx[k]; sfx[k] = (...a) => { if (Net.role === 'host') Net.evt.push(['sfx', k, ...a]); return f(...a); }; }
 
 // ---------------------------------------------------------------- music: tiny step sequencer with a few songs
 const NOTE = n => 440 * Math.pow(2, (n - 69) / 12);
@@ -422,7 +443,7 @@ const KEYS = {
   },
 };
 const Input = {
-  held: new Set(), hit: new Set(), ptrEv: [], ptrs: new Map(),
+  held: new Set(), hit: new Set(), ptrEv: [], ptrs: new Map(), typed: [],
   pads: [], padPrev: [],
   device: (('ontouchstart' in window) || navigator.maxTouchPoints > 0) ? 'touch' : 'keys',
   get touch() { return this.device === 'touch'; },
@@ -462,6 +483,7 @@ const Input = {
   },
   // per-player menu actions (used for level-up cards in split screen)
   menuFor(pid, np) {
+    if (netRemote(pid)) { const r = Net.inputs[pid], a = { left: false, right: false, ok: !!r.ok }; r.ok = false; return a; }
     const maps = np === 1 ? [KEYS.p1, KEYS.p2] : [pid ? KEYS.p2 : KEYS.p1];
     const a = { left: false, right: false, ok: false };
     for (const m of maps) { a.left = a.left || this.anyHit(m.left); a.right = a.right || this.anyHit(m.right); a.ok = a.ok || this.anyHit(m.dash); }
@@ -470,6 +492,7 @@ const Input = {
     return a;
   },
   move(pid, np) {
+    if (netRemote(pid)) { const r = Net.inputs[pid]; return { x: r.mx || 0, y: r.my || 0 }; }
     let x = 0, y = 0;
     const maps = np === 1 ? [KEYS.p1, KEYS.p2] : [pid ? KEYS.p2 : KEYS.p1];
     for (const m of maps) {
@@ -481,19 +504,24 @@ const Input = {
     return { x, y };
   },
   dash(pid, np) {
+    if (netRemote(pid)) { const r = Net.inputs[pid], d = !!r.dash; r.dash = false; return d; }
     const maps = np === 1 ? [KEYS.p1, KEYS.p2] : [pid ? KEYS.p2 : KEYS.p1];
     for (const m of maps) if (this.anyHit(m.dash)) return true;
     const pads = np === 1 ? this.pads : (this.pads[pid] ? [this.pads[pid]] : []);
     return pads.some(p => p.e.dash);
   },
-  endFrame() { this.hit.clear(); this.ptrEv.length = 0; },
+  endFrame() { this.hit.clear(); this.ptrEv.length = 0; this.typed.length = 0; },
 };
 const toGame = e => ({ x: e.clientX * DPR / SCALE, y: e.clientY * DPR / SCALE });
 window.addEventListener('keydown', e => {
   if (e.code === 'F11' || e.code === 'F12' || (e.ctrlKey && e.code === 'KeyR')) return;
   e.preventDefault(); audioInit();
   Input.device = 'keys';
-  if (!e.repeat) Input.hit.add(e.code);
+  if (!e.repeat) {
+    Input.hit.add(e.code);
+    if (e.key && e.key.length === 1 && !e.ctrlKey && !e.metaKey) Input.typed.push(e.key.toUpperCase());
+    if (e.code === 'Backspace') Input.typed.push('<');
+  }
   Input.held.add(e.code);
 });
 window.addEventListener('keyup', e => Input.held.delete(e.code));
@@ -597,15 +625,16 @@ function drawButton(ui, id, x, y, w, h, label, opts = {}) {
 
 // ================================================================ transitions (diamond wipe)
 const Trans = {
-  phase: null, t: 0, fn: null, dur: 0.32,
-  go(fn) { if (this.phase) return false; this.phase = 'out'; this.t = 0; this.fn = fn; return true; },
+  phase: null, t: 0, fn: null, dur: 0.32, queue: [],
+  // keep = true: a network event must not be lost, so it waits for the current wipe to finish
+  go(fn, keep = false) { if (this.phase) { if (keep) this.queue.push(fn); return false; } this.phase = 'out'; this.t = 0; this.fn = fn; return true; },
   busy() { return !!this.phase; },
   update(dt) {
     if (!this.phase) return;
     this.t += dt / this.dur;
     if (this.t >= 1) {
       if (this.phase === 'out') { this.phase = 'in'; this.t = 0; const f = this.fn; this.fn = null; if (f) f(); }
-      else this.phase = null;
+      else { this.phase = null; if (this.queue.length) this.go(this.queue.shift()); }
     }
   },
   draw() {
@@ -619,6 +648,47 @@ const Trans = {
       if (s <= 0) continue;
       ctx.beginPath(); ctx.moveTo(x, y - s); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s, y); ctx.closePath(); ctx.fill();
     }
+  },
+};
+
+// ================================================================ network state (the functions live in online.js)
+const Net = { role: null, inputs: [{}, {}, {}, {}], idToPid: {}, evt: [], sndT: 0, ws: null, open: false, handlers: {}, room: null, myId: null };
+function netRemote(pid) { return Net.role === 'host' && pid > 0; } // host: this duck is driven by a friend's device
+
+// ================================================================ impact frames
+// Hit-stops, white flashes, speed lines and a frozen copy of the last frame on the big moments.
+const Impact = {
+  stop: 0, flash: 0, lines: 0, snap: null,
+  trigger(kind = 'small') {
+    if (Net.role === 'host') Net.evt.push(['imp', kind]);
+    const cfg = { small: [0.035, 0.12, 0], big: [0.07, 0.4, 0.5], huge: [0.12, 0.7, 1] }[kind] || [0.035, 0.12, 0];
+    this.stop = Math.max(this.stop, cfg[0]);
+    const s = Save.data && Save.data.settings;
+    if (!s || !s.flash) return;
+    this.flash = Math.max(this.flash, cfg[1]);
+    this.lines = Math.max(this.lines, cfg[2]);
+    if (kind !== 'small') {
+      if (!this.snap || this.snap.width !== cvs.width || this.snap.height !== cvs.height) this.snap = mkCanvas(cvs.width, cvs.height);
+      this.snap.getContext('2d').drawImage(cvs, 0, 0);
+    }
+  },
+  update(dt) { this.stop = Math.max(0, this.stop - dt); this.flash = Math.max(0, this.flash - dt * 3); this.lines = Math.max(0, this.lines - dt * 2.2); },
+  draw() {
+    if (this.stop > 0 && this.snap) { // the frozen frame, nudged so it jitters
+      ctx.drawImage(this.snap, Math.round(rand(-2, 2)), Math.round(rand(-1, 1)), W, H);
+      ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fillRect(0, 0, W, H);
+    }
+    if (this.lines > 0.01) {
+      ctx.save(); ctx.translate(W / 2, H / 2); ctx.globalAlpha = Math.min(1, this.lines) * 0.85; ctx.strokeStyle = '#ffffff';
+      const len = Math.max(W, H);
+      for (let i = 0; i < 26; i++) {
+        const a = i / 26 * TAU + this.lines * 0.25;
+        ctx.lineWidth = 1 + (i * 7 % 3);
+        ctx.beginPath(); ctx.moveTo(Math.cos(a) * len * 0.22, Math.sin(a) * len * 0.22); ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    if (this.flash > 0.01) { ctx.globalAlpha = Math.min(1, this.flash); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
   },
 };
 
