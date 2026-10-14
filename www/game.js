@@ -706,8 +706,16 @@ function dashBtn(v) {
 function inCircle(p, c, pad = 4) { return d2(p.x, p.y, c.x, c.y) < (c.r + pad) * (c.r + pad); }
 const topButtons = () => {
   const cx = Math.floor(W / 2);
-  return { pause: { x: cx - 30, y: 3, w: 11, h: 11 }, mute: { x: cx + 19, y: 3, w: 11, h: 11 } };
+  return { pause: { x: cx - 30, y: 3, w: 11, h: 11 }, mute: { x: cx + 19, y: 3, w: 11, h: 11 }, fs: { x: cx + 33, y: 3, w: 11, h: 11 } };
 };
+// Fullscreen works in browsers and the Electron window. The Android app is already full-screen, so hide the button there.
+const fsSupported = () => !!document.fullscreenEnabled && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+function toggleFullscreen() {
+  try {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else document.documentElement.requestFullscreen().catch(() => {});
+  } catch (e) { /* not allowed here */ }
+}
 const inRect = (p, r) => p.x >= r.x - 3 && p.x < r.x + r.w + 3 && p.y >= r.y - 3 && p.y < r.y + r.h + 3;
 
 cvs.addEventListener('pointerdown', e => {
@@ -721,6 +729,7 @@ cvs.addEventListener('pointerdown', e => {
   const tb = topButtons();
   if (inRect(p, tb.pause)) { togglePause(); sfx.click(); return; }
   if (inRect(p, tb.mute)) { setMuted(!AU.muted); sfx.click(); return; }
+  if (fsSupported() && inRect(p, tb.fs)) { toggleFullscreen(); sfx.click(); return; }
   if (G.paused) { pauseClick(p); return; }
   if (choosingActive()) { cardClick(p); return; }
   const v = viewAt(p.x, p.y); if (!v) return;
@@ -800,6 +809,7 @@ function titleButtons() {
 }
 function titleClick(p) {
   if (inRect(p, { x: W - 16, y: 3, w: 11, h: 11 })) { setMuted(!AU.muted); sfx.click(); return; }
+  if (fsSupported() && inRect(p, { x: W - 30, y: 3, w: 11, h: 11 })) { toggleFullscreen(); sfx.click(); return; }
   for (const b of titleButtons()) if (inRect(p, b)) { sfx.click(); startGame(b.np); return; }
 }
 function choosingActive() { return G.mode === 'play' && G.players.some(p => p.pending > 0 && !p.down); }
@@ -1592,6 +1602,17 @@ function drawTopBar() {
   box(tb.pause.x, tb.pause.y, 11, 11, C.ui, OUT, C.uiL);
   ctx.fillStyle = C.white; ctx.fillRect(tb.pause.x + 3, tb.pause.y + 3, 2, 5); ctx.fillRect(tb.pause.x + 6, tb.pause.y + 3, 2, 5);
   drawMute(tb.mute.x, tb.mute.y);
+  if (fsSupported()) drawFsBtn(tb.fs.x, tb.fs.y);
+}
+function drawFsBtn(x, y) {
+  box(x, y, 11, 11, C.ui, OUT, C.uiL);
+  ctx.fillStyle = C.white;
+  // four corner brackets; the centre fills in while the game is full-screen
+  ctx.fillRect(x + 2, y + 2, 3, 1); ctx.fillRect(x + 2, y + 2, 1, 3);
+  ctx.fillRect(x + 6, y + 2, 3, 1); ctx.fillRect(x + 8, y + 2, 1, 3);
+  ctx.fillRect(x + 2, y + 8, 3, 1); ctx.fillRect(x + 2, y + 6, 1, 3);
+  ctx.fillRect(x + 6, y + 8, 3, 1); ctx.fillRect(x + 8, y + 6, 1, 3);
+  if (document.fullscreenElement) ctx.fillRect(x + 4, y + 4, 3, 3);
 }
 function drawMute(x, y) {
   box(x, y, 11, 11, C.ui, OUT, C.uiL);
@@ -1701,6 +1722,7 @@ function drawTitle() {
   const lines = wrap(help, W - 20);
   lines.forEach((ln, i) => text(ln, W / 2, by + 10 + i * 8, C.white, 1, 1));
   drawMute(W - 16, 3);
+  if (fsSupported()) drawFsBtn(W - 30, 3);
 }
 
 // ============================================================ main loop
