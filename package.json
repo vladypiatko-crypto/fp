@@ -1,6 +1,6 @@
 {
   "name": "quack-attack",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Quack Attack! A pixel-art survival shooter for 1-2 players: ducks with auto-aiming blasters vs. evil veggies.",
   "main": "main.js",
   "author": "vladypiatko",

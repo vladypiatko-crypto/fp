@@ -2,9 +2,12 @@
 const fs = require('fs');
 const path = require('path');
 const root = path.join(__dirname, '..');
-const html = fs.readFileSync(path.join(root, 'www', 'index.html'), 'utf8');
-const js = fs.readFileSync(path.join(root, 'www', 'game.js'), 'utf8').replace(/<\/script/gi, '<\\/script');
-const out = html.replace('<script src="game.js"></script>', () => '<script>\n' + js + '\n</script>');
+const www = path.join(root, 'www');
+let html = fs.readFileSync(path.join(www, 'index.html'), 'utf8');
+html = html.replace(/<script src="([^"]+)"><\/script>/g, (tag, src) => {
+  const js = fs.readFileSync(path.join(www, src), 'utf8').replace(/<\/script/gi, '<\\/script');
+  return '<script>\n' + js + '\n</script>';
+});
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
-fs.writeFileSync(path.join(root, 'dist', 'QuackAttack.html'), out);
-console.log('wrote dist/QuackAttack.html');
+fs.writeFileSync(path.join(root, 'dist', 'QuackAttack.html'), html);
+console.log('wrote dist/QuackAttack.html (' + Math.round(html.length / 1024) + ' KB)');
