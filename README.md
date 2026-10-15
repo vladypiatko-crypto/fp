@@ -68,13 +68,13 @@ With Firebase switched on, every player picks a **name** and a **unique username
 Setup (once):
 
 1. Create a project at [console.firebase.google.com](https://console.firebase.google.com), add a **Web app**, turn on **Authentication → Anonymous** and create a **Firestore Database** in production mode.
-2. Put the web app's `firebaseConfig` into `FIREBASE_CONFIG` and the admin's username (lower case) into `ADMIN_USERNAME` in `www/js/cloud.js`.
-3. Put the same username into `adminName()` in `firebase/firestore.rules`, then paste the whole file into **Firestore Database → Rules** and press **Publish**. The rules are what stop anyone else from using admin powers, even with an edited app.
-4. Install the new build and claim the admin username straight away.
+2. Put the web app's `firebaseConfig` into `FIREBASE_CONFIG` in `www/js/cloud.js` and set `ACCOUNTS_ON = true`.
+3. Paste the whole of `firebase/firestore.rules` into **Firestore Database → Rules** and press **Publish**. The rules are what stop anyone else from using admin powers, even with an edited app.
+4. **The first account ever made becomes the admin**, for good. So the admin installs the build and creates their account before anyone else.
 
 Good to know: accounts are anonymous and live in the app's storage. Uninstalling or clearing the app's data starts a new account (the old username stays taken), and a banned player could get a fresh account that way. Without `FIREBASE_CONFIG` the game skips accounts and runs fully offline.
 
-Testing locally: `npx firebase-tools emulators:start --only auth,firestore` in `firebase/` (with the admin name filled in), then open the game with `?emu=1&admin=<name>`.
+Testing locally: `npx firebase-tools emulators:start --only auth,firestore` in `firebase/`, then open the game with `?emu=1` (the first account you make there is the admin).
 
 ## Controls
 

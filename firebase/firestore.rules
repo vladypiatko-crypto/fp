@@ -3,15 +3,24 @@ rules_version = '2';
 // They are what makes accounts safe: they run on Google's side, so editing the app can't get around them.
 //  - every player can only touch their own account, and can't change their own flags, ban, username or reset
 //  - usernames are unique: usernames/{name} can only be created once
-//  - the admin is whoever owns the username below, and only the admin can see other players, ban, flag,
-//    reset or send gifts
+//  - the very first account claims meta/admin and is the admin forever; only the admin can see other
+//    players, ban, flag, reset or send gifts
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function adminName() { return 'ADMIN_USERNAME_HERE'; }
     function isAdmin() {
-      let ref = /databases/$(database)/documents/usernames/$(adminName());
+      let ref = /databases/$(database)/documents/meta/admin;
       return signedIn() && exists(ref) && get(ref).data.uid == request.auth.uid;
+    }
+
+    // who the admin is: claimed once by the first account, then it can never change
+    match /meta/admin {
+      allow get: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+      allow update, delete: if false;
     }
 
     match /usernames/{name} {

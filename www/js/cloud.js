@@ -15,9 +15,8 @@ const FIREBASE_CONFIG = {
   appId: '1:604766249036:web:ea7d894c8a1541dbb5d4e9',
 };
 // Accounts switch on only when this is true (set once Firebase Authentication and Firestore are set up).
-const ACCOUNTS_ON = false;
-// The admin's username in lower case. It must be the same as adminName() in firebase/firestore.rules.
-const ADMIN_USERNAME = '';
+const ACCOUNTS_ON = true;
+// The admin is the very first account ever made: it claims meta/admin in the database (see firebase/firestore.rules).
 const USERNAME_MIN = 3, USERNAME_MAX = 12;
 const MAX_FLAGS = 3;
 
@@ -27,11 +26,20 @@ const withTimeout = (p, ms) => Promise.race([p, new Promise((res, rej) => setTim
 const serverTime = () => firebase.firestore.FieldValue.serverTimestamp();
 
 const Cloud = {
-  enabled: false, auth: null, db: null, uid: null, me: null, live: false, dirty: false,
+  enabled: false, auth: null, db: null, uid: null, me: null, live: false, dirty: false, adminUid: null,
   unsubs: [], popups: [], pushTimer: null,
-  get adminName() { return (CLOUD_EMU && CLOUD_Q.get('admin')) || ADMIN_USERNAME; },
   // only decides whether the admin tab is shown; the database rules decide what really works
-  isAdmin() { return !!(this.me && this.adminName && this.me.usernameLower === this.adminName); },
+  isAdmin() { return !!(this.me && this.adminUid && this.adminUid === this.uid); },
+  // find out who the admin is; if nobody is yet, this account is the first one and becomes it
+  async checkAdmin() {
+    const ref = this.db.doc('meta/admin');
+    try {
+      const s = await withTimeout(ref.get(), 12000);
+      if (s.exists) { this.adminUid = s.data().uid; return; }
+      await withTimeout(ref.set({ uid: this.uid }), 12000);
+      this.adminUid = this.uid;
+    } catch (e) { /* offline, or somebody else just claimed it */ try { const s = await ref.get(); if (s.exists) this.adminUid = s.data().uid; } catch (e2) { /* offline */ } }
+  },
 
   init() {
     const cfg = CLOUD_EMU ? null : ACCOUNTS_ON && FIREBASE_CONFIG;
@@ -63,6 +71,7 @@ const Cloud = {
     if (!snap.exists) return 'need-account';
     this.gotMe(snap.data());
     this.listen();
+    await this.checkAdmin();
     return this.me.banned ? 'banned' : 'ok';
   },
   // claim the username and create the account in one go (fails if somebody has that username)
@@ -80,6 +89,7 @@ const Cloud = {
     Save.data.name = name; Save.write();
     this.gotMe(Object.assign({}, data, { resetAt: 0 }));
     this.listen();
+    await this.checkAdmin();
   },
   gotMe(d) {
     this.me = d;
