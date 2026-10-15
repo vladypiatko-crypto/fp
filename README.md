@@ -4,7 +4,9 @@ A pixel-art **survival shooter** for **1–4 players**: split screen on one devi
 
 ## Story
 
-Princess **Daisy** of Puddle Pond has the legendary **Golden Quack**, a voice so pure it can power any machine. The evil goose scientist **Dr. Honk** swoops in with his airship, kidnaps her to power his **Mega Honk Mech**, and leaves his robot army behind to keep the ducks busy. Chase him across five worlds and bring Daisy home!
+**Chapter 1: Save Princess Daisy.** Princess **Daisy** of Puddle Pond has the legendary **Golden Quack**, a voice so pure it can power any machine. The evil goose scientist **Dr. Honk** swoops in with his airship, kidnaps her to power his **Mega Honk Mech**, and leaves his robot army behind to keep the ducks busy.
+
+**Chapter 2: The Stolen Quack.** A week later, at Daisy's thank-you party, Dr. Honk is back in his giant **Mothership**. This time his tractor beam steals only her voice, leaving Daisy croaking. The ducks chase the ship from the beach to the moon to get the Golden Quack back.
 
 | Level | World | Boss | Reward |
 | --- | --- | --- | --- |
@@ -13,8 +15,13 @@ Princess **Daisy** of Puddle Pond has the legendary **Golden Quack**, a voice so
 | 3 | Frosty Peaks | Yeti-Bot 3000 | Feather-rang |
 | 4 | Lava Factory | Saw Tank | Beak Beam |
 | 5 | Honk Tower | Dr. Honk Mega Mech | Quackinator |
+| 6 | Sunny Beach | Shark-Bot | Sun Hat |
+| 7 | Spooky Swamp | Ghost Goose | Swampy skin |
+| 8 | Cloud Kingdom | Thunder Balloon | Stormy skin |
+| 9 | Moon Base | Robo-Daisy | Space Helmet |
+| 10 | Honk Mothership | Dr. Honk Ultra | Cosmic skin |
 
-The story has an animated intro and ending. **Endless** mode is a pure survival run where bosses keep coming.
+Each chapter has an animated intro and ending, and the map has a page per chapter. Chapter 2 rewards only come from the story, never from chests. **Endless** mode is a pure survival run where all ten bosses take turns.
 
 ## Features
 
@@ -96,7 +103,7 @@ Online, each device controls its own duck with the controls above (keyboard play
 - `www/js/game.js`: gameplay (the host runs this; online friends run the same code path but only draw)
 - `www/js/online.js`: peer-to-peer connections, the host's lobby, online menu and room screen, snapshots and the online game
 - `www/js/vendor/peerjs.min.js`: [PeerJS](https://github.com/peers/peerjs) 1.5.5 (MIT)
-- `www/js/story.js`: dialog boxes and cutscenes
+- `www/js/story.js`: dialog boxes and cutscenes · `www/js/chapter2.js`: chapter 2 (worlds, bosses, levels, cutscenes, rewards)
 - `www/js/scenes.js`: title, map, locker, chests, settings
 - `main.js`: Electron wrapper (Windows) · `android/`: Capacitor project · `scripts/build-single-html.js`: one-file web build
 

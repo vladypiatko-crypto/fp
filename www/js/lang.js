@@ -263,7 +263,8 @@ const PHRASES = [
   ['{0} LEFT THE GAME', '{0} IST GEGANGEN', '{0} ВЫШЕЛ ИЗ ИГРЫ'],
 ];
 const DICT = { de: {}, ru: {} };
-for (const [en, de, ru] of PHRASES) { DICT.de[en] = de; DICT.ru[en] = ru; }
+function addPhrases(list) { for (const [en, de, ru] of list) { DICT.de[en] = de; DICT.ru[en] = ru; } trCache.clear(); }
+addPhrases(PHRASES);
 
 // ================================================================ player names
 const NAME_MAX = 12;

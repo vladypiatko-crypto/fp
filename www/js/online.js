@@ -495,7 +495,7 @@ GameScene.prototype.buildSnapshot = function () {
       r1(e.z || 0), stIdx(e.bs || e.st), r2(e.flash || 0), r2(Math.max(0, e.fuse)), r2(e.rot || 0)]),
     // shots: [kind, x, y, vx, vy, life, max, r, col, ownerPid, weapon, rot, ang, back, sp]
     s: this.shots.map(b => [b.kind, r1(b.x), r1(b.y), r1(b.vx), r1(b.vy), r2(b.life), b.max, b.r, b.col, b.owner.id, b.owner.weapon, r2(b.rot), r2(b.ang || 0), b.back ? 1 : 0, r1(b.sp || 0)]),
-    es: this.eshots.map(b => [r1(b.x), r1(b.y), r1(b.vx), r1(b.vy), r2(b.life), r2(b.wait || 0), b.s === PROJ_ART.snowball ? 'snow' : 'seed', b.r || 2]),
+    es: this.eshots.map(b => [r1(b.x), r1(b.y), r1(b.vx), r1(b.vy), r2(b.life), r2(b.wait || 0), b.sk || 'seed', b.r || 2]),
     dr: this.drops.map(g => [g.k, r1(g.x), r1(g.y), r1(g.z || 0), g.v, r1(g.bob)]),
     it: this.items.map(k => [k.k, r1(k.x), r1(k.y), r1(k.t)]),
     bm: this.bombs.map(b => [r1(b.x0), r1(b.y0), r1(b.x1), r1(b.y1), r2(b.t), b.dur, b.r]),
@@ -558,7 +558,7 @@ GameScene.prototype.applySnapshot = function (s) {
   this.clientEnemies = next; this.enemies = list;
   this.boss = list.find(e => e.boss) || null;
   this.shots = s.s.map(a => ({ kind: a[0], x: a[1], y: a[2], vx: a[3], vy: a[4], life: a[5], max: a[6], r: a[7], col: a[8], owner: { id: a[9], weapon: a[10] }, rot: a[11], ang: a[12], back: !!a[13], sp: a[14] }));
-  this.eshots = s.es.map(a => ({ x: a[0], y: a[1], vx: a[2], vy: a[3], life: a[4], wait: a[5], s: a[6] === 'snow' ? PROJ_ART.snowball : PROJ_ART.seed, r: a[7] }));
+  this.eshots = s.es.map(a => ({ x: a[0], y: a[1], vx: a[2], vy: a[3], life: a[4], wait: a[5], s: PROJ_ART[a[6]] || PROJ_ART.seed, sk: a[6], r: a[7] }));
   this.drops = s.dr.map(a => ({ k: a[0], x: a[1], y: a[2], z: a[3], v: a[4], bob: a[5], tgt: null }));
   this.items = s.it.map(a => ({ k: a[0], x: a[1], y: a[2], t: a[3] }));
   this.bombs = s.bm.map(a => ({ x0: a[0], y0: a[1], x1: a[2], y1: a[3], t: a[4], dur: a[5], r: a[6] }));

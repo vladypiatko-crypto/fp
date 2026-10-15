@@ -3,7 +3,8 @@
  *
  * LORE: Princess Daisy of Puddle Pond has the legendary GOLDEN QUACK, a voice so pure it can
  * power any machine. The evil goose scientist DR. HONK kidnaps her to power his Mega Honk Mech,
- * and sends his robot army to keep the ducks busy. Our heroes chase his airship across five worlds. */
+ * and sends his robot army to keep the ducks busy. Our heroes chase his airship across five worlds.
+ * Chapter 2 (the stolen Golden Quack) lives in chapter2.js. */
 
 // ================================================================ characters
 const HONK_SPR = spr([
@@ -164,9 +165,11 @@ class CutsceneScene {
   constructor(id, done, np = 1) {
     this.id = id; this.done = done; this.np = np; this.beat = 0; this.t = 0; this.T = 0; this.chars = 0;
     this.parts = []; this.ui = new UI(); this.shake = 0;
-    this.beats = id === 'intro' ? INTRO_BEATS : ENDING_BEATS;
-    Music.play(id === 'ending' ? 'title' : 'calm');
+    this.beats = { intro: INTRO_BEATS, ending: ENDING_BEATS, intro2: INTRO2_BEATS, ending2: ENDING2_BEATS }[id] || INTRO_BEATS;
+    Music.play(id.startsWith('ending') ? 'title' : 'calm');
     if (id === 'ending' && !Save.data.endingSeen) { Save.data.endingSeen = true; Save.addCoins(500); this.paid = true; }
+    if (id === 'ending2' && !Save.data.ending2Seen) { Save.data.ending2Seen = true; Save.addCoins(1000); this.paid = true; }
+    if (this.beats[0].enter) this.beats[0].enter(this);
   }
   update(dt) {
     this.t += dt; this.T += dt;
@@ -362,8 +365,8 @@ const ENDING_BEATS = [
       ctx.fillStyle = OUT; ctx.fillRect(0, 0, W, H);
       if (Math.random() < 0.1) cs.burst(rand(0, W), rand(0, H * 0.5), RAINBOW, 20, 50, 1.2, 30);
       const k = Ease.outBack(Math.min(1, t / 0.6));
-      drawZoomText('THE END', W / 2, H * 0.3, lerp(10, 4, k), C.gold);
-      if (t > 0.6) text('THANKS FOR PLAYING QUACK ATTACK!', W / 2, H * 0.5, C.white, 1, 1);
+      drawZoomText('CHAPTER 1 CLEAR!', W / 2, H * 0.3, lerp(10, 3, k), C.gold);
+      if (t > 0.6) text('CHAPTER 2 IS UNLOCKED!', W / 2, H * 0.5, C.white, 1, 1);
       if (t > 1.0 && cs.paid) { const lw = textW('+500 COINS REWARD!'); coinIcon(Math.floor(W / 2 - lw / 2 - 6), Math.floor(H * 0.6), T); text('+500 COINS REWARD!', W / 2 + 4, H * 0.6 + 1, C.gold, 1, 1); }
       drawHeroes(cs, W / 2 - 20, H * 0.88, T, true, 'down');
       drawDaisy(W / 2 + 26, H * 0.88 - Math.abs(Math.sin(T * 7)) * 3, { t: T });

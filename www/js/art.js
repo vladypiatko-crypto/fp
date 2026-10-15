@@ -318,6 +318,20 @@ function groundTile(world) {
       g.fillStyle = light; g.fillRect(x + 3, y + 3, 1, 1); g.fillRect(x + 28, y + 3, 1, 1); g.fillRect(x + 3, y + 20, 1, 1); g.fillRect(x + 28, y + 20, 1, 1);
     }
     for (let i = 0; i < 40; i++) { g.fillStyle = dark; g.fillRect(rint(0, S - 1), rint(0, S - 1), 1, 1); }
+  } else if (th.style === 'sand') {
+    for (let i = 0; i < 300; i++) { g.fillStyle = Math.random() < 0.5 ? dark : light; g.fillRect(rint(0, S - 1), rint(0, S - 1), 1, 1); }
+    for (let i = 0; i < 6; i++) { const x = rint(2, S - 6), y = rint(2, S - 3); g.fillStyle = dark; g.fillRect(x, y, 4, 1); g.fillRect(x + 1, y + 1, 3, 1); } // ripples
+    for (let i = 0; i < 4; i++) { g.fillStyle = Math.random() < 0.5 ? '#fff3dc' : '#ff9ccb'; g.fillRect(rint(0, S - 2), rint(0, S - 2), 2, 1); } // tiny shells
+  } else if (th.style === 'cloud') {
+    for (let i = 0; i < 18; i++) { const x = rint(0, S), y = rint(0, S), r = rint(4, 9); g.fillStyle = light; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); g.fillStyle = dark; g.fillRect(x - r + 2, y + r - 1, r * 2 - 4, 1); }
+    for (let i = 0; i < 6; i++) { g.fillStyle = '#ffe0f0'; g.fillRect(rint(0, S - 1), rint(0, S - 1), 1, 1); }
+  } else if (th.style === 'moon') {
+    for (let i = 0; i < 240; i++) { g.fillStyle = Math.random() < 0.5 ? dark : light; g.fillRect(rint(0, S - 1), rint(0, S - 1), 1, 1); }
+    for (let i = 0; i < 7; i++) { // craters: dark bowl with a lit rim
+      const x = rint(6, S - 6), y = rint(6, S - 6), r = rint(2, 5);
+      g.fillStyle = dark; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
+      g.fillStyle = light; g.fillRect(x - r + 1, y + r, r * 2 - 1, 1);
+    }
   } else if (th.style === 'lab') {
     for (let y = 0; y < S; y += 16) for (let x = 0; x < S; x += 16) {
       g.fillStyle = ((x + y) / 16) % 2 ? dark : base; g.fillRect(x, y, 16, 16);
@@ -336,6 +350,7 @@ function edgeTile(world) {
   g.fillStyle = th.e1; g.fillRect(0, 0, 32, 32);
   g.fillStyle = th.e2;
   if (th.edge === 'void') { for (let i = 0; i < 5; i++) { g.fillStyle = Math.random() < 0.5 ? '#fff8e7' : '#9d5cff'; g.fillRect(rint(0, 31), rint(0, 31), 1, 1); } }
+  else if (th.edge === 'sky') { g.fillStyle = th.e2; g.fillRect(rint(0, 22), rint(4, 26), 8, 2); g.fillRect(rint(0, 24), rint(4, 26), 6, 2); }
   else for (let i = 0; i < 6; i++) g.fillRect(rint(0, 28), rint(0, 30), 4, 1);
   edgeCache.set(world, c);
   return c;

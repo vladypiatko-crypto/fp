@@ -42,6 +42,7 @@ const Cloud = {
   },
 
   init() {
+    if (CLOUD_Q.get('accounts') === '0') return false; // tests: ?accounts=0 plays without accounts (never touches the real database)
     const cfg = CLOUD_EMU ? null : ACCOUNTS_ON && FIREBASE_CONFIG;
     return this.start(cfg || (CLOUD_EMU ? { apiKey: 'demo-key', projectId: 'demo-quack', authDomain: 'demo-quack.firebaseapp.com' } : null));
   },

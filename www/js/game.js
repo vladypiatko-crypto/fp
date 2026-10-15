@@ -40,11 +40,12 @@ const xpFor = lv => Math.round(3 + lv * 4 + lv * lv * 0.45);
 const alivePlayers = () => R.players.filter(p => !p.down);
 const tScale = () => (R.mode === 'story' ? 1 + R.t / 450 : 1 + R.t / 500); // player damage growth over a run
 function hpMul() {
-  if (R.mode === 'story') return (1 + (R.level.n - 1) * 0.15) * (1 + R.t / 150);
+  // story robots toughen up over time, but stop shortly after the boss arrives so a long boss fight can't snowball
+  if (R.mode === 'story') return (1 + (R.level.diff - 1) * 0.15) * (1 + Math.min(R.t, R.level.time + 20) / 150);
   return 1 + R.t / 100 + Math.pow(R.t / 280, 2);
 }
 // later story levels hand out more XP so you level up as fast as in the first ones
-const xpMul = () => (R.mode === 'story' ? 1 + (R.level.n - 1) * 0.3 : 1);
+const xpMul = () => (R.mode === 'story' ? 1 + (R.level.diff - 1) * 0.3 : 1);
 function banner(str, col, dur = 2.2, sub = '') { R.banners.push({ str, col, t: 0, dur, sub }); if (R.banners.length > 2) R.banners.shift(); }
 function floatText(x, y, str, col = C.white, life = 0.6, sc = 1) {
   if (R.texts.length > 90) R.texts.shift();
@@ -252,7 +253,8 @@ class GameScene {
       res.bonus += first ? 120 : 40;
       Save.data.story.cleared[this.level.n] = true;
       Save.data.story.reached = Math.max(Save.data.story.reached, this.level.n + 1);
-      if (Save.unlock('weapon', this.level.reward)) res.reward = { cat: 'weapon', id: this.level.reward };
+      const rw = rewardOf(this.level);
+      if (Save.unlock(rw.cat, rw.id)) res.reward = rw;
     }
     if (this.mode === 'endless') {
       const k = 'e' + this.np;
@@ -336,8 +338,9 @@ class GameScene {
     y += 15;
     if (r.reward) {
       const it = itemOf(r.reward.cat, r.reward.id);
-      drawSprX(GUN_ART[r.reward.id], px + 18, y + 4, { sc: 2 });
-      text(fmt('NEW WEAPON: {0}!', it.name), px + 32, y + 1, RARITY[it.rarity].col, 1, 0);
+      ctx.save(); ctx.beginPath(); ctx.rect(px + 8, y - 6, 22, 18); ctx.clip();
+      drawItemIcon(r.reward.cat, r.reward.id, px + 19, y + 3, this.stateT, this.players[0].lo); ctx.restore();
+      text(fmt(r.reward.cat === 'weapon' ? 'NEW WEAPON: {0}!' : 'NEW ITEM: {0}!', it.name), px + 32, y + 1, RARITY[it.rarity].col, 1, 0);
       y += 13;
     }
     // ducks cheering or crying
@@ -353,7 +356,12 @@ class GameScene {
     if (this.online) btns = this.onlineResultButtons();
     else if (this.mode === 'story') {
       btns = r.won
-        ? [['next', this.level.n < LEVELS.length ? 'NEXT' : 'ENDING', () => Trans.go(() => this.level.n < LEVELS.length ? Scenes.set(new MapScene(this.np)) : Scenes.set(new CutsceneScene('ending', () => Scenes.set(new TitleScene(true)))))],
+        ? [['next', this.level.n === 5 || this.level.n === LEVELS.length ? 'ENDING' : 'NEXT', () => Trans.go(() => {
+          // chapter 1 ends at level 5 (then on to chapter 2), the whole story at the last level
+          if (this.level.n === 5) Scenes.set(new CutsceneScene('ending', () => Scenes.set(new MapScene(this.np)), this.np));
+          else if (this.level.n === LEVELS.length) Scenes.set(new CutsceneScene('ending2', () => Scenes.set(new TitleScene(true)), this.np));
+          else Scenes.set(new MapScene(this.np));
+        })],
           ['locker', 'LOCKER', () => Trans.go(() => Scenes.push(new LockerScene({})))]]
         : [['retry', 'RETRY', () => Trans.go(() => Scenes.set(new GameScene({ mode: 'story', level: this.level, np: this.np })))],
           ['map', 'MAP', () => Trans.go(() => Scenes.set(new MapScene(this.np)))]];
@@ -377,7 +385,7 @@ function spawnEnemy(type, pos, opts = {}) {
   const hp = d.hp * hpMul() * (opts.hpScale || 1);
   const e = {
     id: R.uid++, type, d, x: pos.x, y: pos.y, kx: 0, ky: 0, hp, maxHp: hp, r: d.r, spd: d.spd * rand(0.9, 1.1),
-    dmg: d.dmg * (R.mode === 'story' ? 1 + (R.level.n - 1) * 0.08 : 1 + R.t / 400), flash: 0, anim: rand(0, 10), dead: false, eggCd: 0,
+    dmg: d.dmg * (R.mode === 'story' ? 1 + (R.level.diff - 1) * 0.08 : 1 + R.t / 400), flash: 0, anim: rand(0, 10), dead: false, eggCd: 0,
     spawnT: opts.instant ? 0 : 0.45, flip: false, st: 'move', stT: rand(1, 2), shootT: rand(1.5, 3), fuse: -1, rot: 0, z: 0,
   };
   if (e.spawnT > 0 && inAnyView(e.x, e.y, 10)) sfx.warp();
@@ -423,7 +431,7 @@ function rollType() {
 function director(dt) {
   const t = R.t;
   let rate;
-  if (R.mode === 'story') rate = Math.min(9, 0.9 + (R.level.n - 1) * 0.15 + t * 0.02);
+  if (R.mode === 'story') rate = Math.min(9, 0.9 + (R.level.diff - 1) * 0.15 + t * 0.02);
   else rate = Math.min(11, 0.9 + t * 0.024 + Math.max(0, t - 180) * 0.02);
   rate *= 1 + 0.5 * (R.np - 1);
   if (R.boss && !R.boss.dead) rate *= 0.4;
@@ -913,8 +921,9 @@ function updateBoss(e, tgt, dx, dy, dist, dt) {
   e.bt -= dt;
   e.flip = tgt.x < e.x;
   let mx = 0, my = 0;
-  const shoot = (ang, sp, sprite, wait = 0) => R.eshots.push({ x: e.x, y: e.y - 6, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, life: 4, dmg: e.dmg * 0.6, s: sprite || PROJ_ART.seed, r: 2, wait, src: e });
-  const bullet = e.type === 'yeti' ? PROJ_ART.snowball : PROJ_ART.seed;
+  const bk = B.bullet && PROJ_ART[B.bullet] ? B.bullet : 'seed'; // each boss has its own bullet (sent online by name)
+  const shoot = (ang, sp, sprite, wait = 0) => R.eshots.push({ x: e.x, y: e.y - 6, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, life: 4, dmg: e.dmg * 0.6, s: PROJ_ART[bk], sk: bk, r: 2, wait, src: e });
+  const bullet = PROJ_ART[bk];
   switch (e.bs) {
     case 'walk':
       mx = dx * e.spd; my = dy * e.spd;
@@ -937,7 +946,7 @@ function updateBoss(e, tgt, dx, dy, dist, dt) {
     case 'summon': {
       const n = 6 + (e.phase === 2 ? 4 : 0);
       for (let i = 0; i < n; i++) { const a = i / n * TAU; spawnEnemy(pick(B.summon), { x: e.x + Math.cos(a) * 30, y: e.y + Math.sin(a) * 30 }); }
-      floatText(e.x, e.y - 36, e.type === 'honk' ? 'MINIONS! HONK!' : 'BZZT! REINFORCEMENTS!', C.gold, 1.2);
+      floatText(e.x, e.y - 36, B.final ? 'MINIONS! HONK!' : 'BZZT! REINFORCEMENTS!', C.gold, 1.2);
       e.bs = 'walk'; e.bt = 3 * fast;
       break;
     }

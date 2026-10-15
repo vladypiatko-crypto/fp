@@ -320,76 +320,127 @@ function drawScaled(c, x, y, sc, rot = 0) {
   ctx.restore();
 }
 
-// ================================================================ level map
+// ================================================================ level map: one page per chapter
 class MapScene {
   constructor(np) {
     this.np = np; this.ui = new UI(); this.T = 0;
-    this.sel = Math.min(Save.data.story.reached, LEVELS.length) - 1;
-    this.from = this.sel; this.moveT = 1;
+    this.sel = this.maxSel();
+    this.from = this.sel; this.moveT = 1; this.flip = 0;
+    this.page = chapterOf(this.sel + 1) - 1;
     Music.play('calm');
   }
+  maxSel() { return Math.min(Save.data.story.reached, LEVELS.length) - 1; }
+  pageOpen(p) { return this.maxSel() >= CHAPTERS[p].from - 1; }
   nodes() {
-    return LEVELS.map((lv, i) => ({ lv, x: Math.round(W * (0.12 + i * 0.19)), y: Math.round(H * (0.44 + (i % 2 ? -0.1 : 0.08))) }));
+    const ch = CHAPTERS[this.page];
+    return LEVELS.filter(l => l.n >= ch.from && l.n <= ch.to).map((lv, i) => ({ lv, x: Math.round(W * (0.12 + i * 0.19)), y: Math.round(H * (0.44 + (i % 2 ? -0.1 : 0.08))) }));
   }
   update(dt) {
-    this.T += dt; this.moveT = Math.min(1, this.moveT + dt / 0.45);
+    this.T += dt; this.moveT = Math.min(1, this.moveT + dt / 0.45); this.flip = Math.max(0, this.flip - dt * 3);
     const acts = Input.menu();
     if (acts.back) { sfx.uiBack(); Trans.go(() => Scenes.set(new TitleScene(true))); return; }
     if (acts.left || acts.right) {
-      const n = clamp(this.sel + (acts.left ? -1 : 1), 0, Math.min(Save.data.story.reached, LEVELS.length) - 1);
+      const n = clamp(this.sel + (acts.left ? -1 : 1), 0, this.maxSel());
       if (n !== this.sel) this.select(n);
       acts.left = acts.right = false;
     }
     this.ui.update(dt, acts);
   }
-  select(i) { if (i === this.sel) return; this.from = this.sel; this.sel = i; this.moveT = 0; sfx.uiMove(); }
-  play() { const lv = LEVELS[this.sel]; Trans.go(() => Scenes.set(new GameScene({ mode: 'story', level: lv, np: this.np }))); }
+  select(i) {
+    if (i === this.sel) return;
+    const p = chapterOf(i + 1) - 1;
+    if (p !== this.page) { this.page = p; this.flip = 1; this.from = i; } else this.from = this.sel;
+    this.sel = i; this.moveT = this.from === i ? 1 : 0; sfx.uiMove();
+  }
+  // flip to another chapter page; land on its newest open level
+  turn(p) {
+    if (p < 0 || p >= CHAPTERS.length || p === this.page) return;
+    this.page = p; this.flip = 1; sfx.uiMove();
+    if (this.pageOpen(p)) { const ch = CHAPTERS[p]; this.sel = this.from = Math.min(this.maxSel(), ch.to - 1); this.moveT = 1; }
+  }
+  play() {
+    const lv = LEVELS[this.sel];
+    Trans.go(() => {
+      const start = () => Scenes.set(new GameScene({ mode: 'story', level: lv, np: this.np }));
+      if (lv.n === CHAPTERS[1].from && !Save.data.intro2Seen) { Save.data.intro2Seen = true; Save.write(); Scenes.set(new CutsceneScene('intro2', start, this.np)); }
+      else start();
+    });
+  }
   draw() {
-    const T = this.T;
-    if (!this.waterPat) this.waterPat = ctx.createPattern(edgeTile('pond'), 'repeat');
-    ctx.save(); ctx.translate(Math.floor(T * 5) % 32, 0); ctx.fillStyle = this.waterPat; ctx.fillRect(-32, 0, W + 64, H); ctx.restore();
+    const T = this.T, ch = CHAPTERS[this.page], open = this.pageOpen(this.page);
+    // chapter 1 sails on water, chapter 2 floats in the sky
+    const bgWorld = this.page === 0 ? 'pond' : 'clouds';
+    if (!this.pats) this.pats = {};
+    if (!this.pats[bgWorld]) this.pats[bgWorld] = ctx.createPattern(edgeTile(bgWorld), 'repeat');
+    ctx.save(); ctx.translate(Math.floor(T * 5) % 32, 0); ctx.fillStyle = this.pats[bgWorld]; ctx.fillRect(-32, 0, W + 64, H); ctx.restore();
     const nodes = this.nodes(), reached = Math.min(Save.data.story.reached, LEVELS.length);
-    // island blobs under every node
-    for (const n of nodes) { pellipse(n.x, n.y + 6, 30, 15, '#c9ab66'); pellipse(n.x, n.y + 4, 29, 13, '#e9cf8a'); pellipse(n.x, n.y + 3, 24, 10, n.lv.world === 'peaks' ? '#e8f1ff' : n.lv.world === 'factory' ? '#4a4658' : n.lv.world === 'tower' ? '#3b2a5c' : n.lv.world === 'woods' ? '#3f8a4a' : '#5bb450'); }
+    // islands under every node, topped with their world's ground colour
+    for (const n of nodes) {
+      const base = this.page === 0 ? ['#c9ab66', '#e9cf8a'] : ['#b9c6e8', '#e6ecfb'];
+      pellipse(n.x, n.y + 6, 30, 15, base[0]); pellipse(n.x, n.y + 4, 29, 13, base[1]); pellipse(n.x, n.y + 3, 24, 10, WORLD_THEME[n.lv.world].ground[0]);
+    }
     // dotted path
     for (let i = 0; i < nodes.length - 1; i++) {
-      const a = nodes[i], b = nodes[i + 1], open = i + 1 < reached;
-      for (let k = 0; k <= 12; k++) { const t = k / 12; ctx.fillStyle = open ? '#fff8e7' : 'rgba(255,248,231,0.3)'; ctx.fillRect(Math.round(lerp(a.x, b.x, t)), Math.round(lerp(a.y, b.y, t) + Math.sin(t * Math.PI) * -6), 2, 2); }
+      const a = nodes[i], b = nodes[i + 1], on = b.lv.n <= reached;
+      for (let k = 0; k <= 12; k++) { const t = k / 12; ctx.fillStyle = on ? '#fff8e7' : 'rgba(255,248,231,0.3)'; ctx.fillRect(Math.round(lerp(a.x, b.x, t)), Math.round(lerp(a.y, b.y, t) + Math.sin(t * Math.PI) * -6), 2, 2); }
     }
     this.ui.begin();
-    nodes.forEach((n, i) => {
-      const unlocked = i < reached, cleared = Save.data.story.cleared[n.lv.n], f = this.ui.isFocus('n' + i);
+    nodes.forEach(n => {
+      const i = n.lv.n - 1, unlocked = i < reached, cleared = Save.data.story.cleared[n.lv.n], f = this.ui.isFocus('n' + i);
       drawLandmark(n.lv.world, n.x, n.y, T, unlocked);
       if (!unlocked) drawSpr(ART.lock, n.x, n.y - 4, false, false, 2);
-      panel(n.x - 7, n.y + 9, 14, 10, i === this.sel ? C.gold : C.ui, OUT, null, false);
+      const lw = textW(n.lv.n) + 8;
+      panel(n.x - lw / 2, n.y + 9, lw, 10, i === this.sel ? C.gold : C.ui, OUT, null, false);
       text(n.lv.n, n.x, n.y + 12, i === this.sel ? OUT : C.white, 1, 1, null);
-      if (cleared) text('@', n.x + 10, n.y + 10, C.gold, 1, 0);
+      if (cleared) text('@', n.x + lw / 2 + 3, n.y + 10, C.gold, 1, 0);
       if (f && i !== this.sel) pring(n.x, n.y + 2, 16, C.gold, 1, 9);
       this.ui.add('n' + i, n.x - 18, n.y - 20, 36, 40, () => { if (i === this.sel) this.play(); else this.select(i); }, { disabled: !unlocked, def: i === this.sel });
     });
-    // ducks hop along the path to the chosen level
-    const a = nodes[this.from], b = nodes[this.sel], k = Ease.inOutSine(this.moveT);
-    const dx = lerp(a.x, b.x, k), dy = lerp(a.y, b.y, k) - Math.sin(k * Math.PI) * 10 - 2;
-    heroes(this.np).forEach((lo, i) => {
-      const x = dx - 5 + i * 10, hop = this.moveT < 1 ? Math.abs(Math.sin(T * 14 + i)) * 4 : Math.abs(Math.sin(T * 3 + i)) * 1;
-      shadow(x, dy, 4);
-      drawDuck(x, dy - hop, { skin: lo.skin, hat: lo.hat, halo: lo.halo, facing: this.moveT < 1 ? (b.x < a.x ? 'left' : 'right') : 'down', frame: this.moveT < 1 ? Math.floor(T * 10) % 2 : 0, t: T, blink: (T + i) % 3.5 > 3.35 });
-    });
-    // header + info panel
+    // the ducks hop along the path to the chosen level
+    if (chapterOf(this.sel + 1) - 1 === this.page) {
+      const at = i => nodes.find(n => n.lv.n === i + 1) || nodes[0];
+      const a = at(this.from), b = at(this.sel), k = Ease.inOutSine(this.moveT);
+      const dx = lerp(a.x, b.x, k), dy = lerp(a.y, b.y, k) - Math.sin(k * Math.PI) * 10 - 2;
+      heroes(this.np).forEach((lo, i) => {
+        const x = dx - 5 + i * 10, hop = this.moveT < 1 ? Math.abs(Math.sin(T * 14 + i)) * 4 : Math.abs(Math.sin(T * 3 + i)) * 1;
+        shadow(x, dy, 4);
+        drawDuck(x, dy - hop, { skin: lo.skin, hat: lo.hat, halo: lo.halo, facing: this.moveT < 1 ? (b.x < a.x ? 'left' : 'right') : 'down', frame: this.moveT < 1 ? Math.floor(T * 10) % 2 : 0, t: T, blink: (T + i) % 3.5 > 3.35 });
+      });
+    }
+    // header with chapter arrows
     panel(-2, -2, W + 4, 18, C.uiD, OUT, null, false);
-    text('STORY - SAVE PRINCESS DAISY!', W / 2, 5, C.gold, 1, 1);
-    const lv = LEVELS[this.sel], pw = Math.min(W - 12, 260), px = Math.floor(W / 2 - pw / 2), py = H - 50;
+    text(ch.title, W / 2, 5, open ? C.gold : C.gray, 1, 1);
+    if (this.page > 0) drawButton(this.ui, 'prev', 4, 20, 16, 13, '<', { on: () => this.turn(this.page - 1) });
+    if (this.page < CHAPTERS.length - 1) {
+      drawButton(this.ui, 'next', W - 20, 38, 16, 13, '>', { on: () => this.turn(this.page + 1) });
+      if (this.pageOpen(this.page + 1) && !Save.data.intro2Seen) drawNewTag(W - 12, 38, T);
+    }
+    // info panel
+    const pw = Math.min(W - 12, 260), px = Math.floor(W / 2 - pw / 2), py = H - 50;
     panel(px, py, pw, 44, C.uiD, OUT, C.uiL);
-    text(fmt('LEVEL {0}: {1}', lv.n, lv.name), px + 8, py + 6, C.gold, 1, 0);
-    text(fmt('BOSS: {0}', BOSSES[lv.boss].name), px + 8, py + 15, C.white, 1, 0);
-    const cleared = Save.data.story.cleared[lv.n];
-    if (!Save.has('weapon', lv.reward)) { const rw = textW('REWARD:'); text('REWARD:', px + 8, py + 24, C.gray, 1, 0); drawSprX(GUN_ART[lv.reward], px + 18 + rw, py + 27, { sc: 1 }); text(itemOf('weapon', lv.reward).name, px + 28 + rw, py + 24, RARITY[itemOf('weapon', lv.reward).rarity].col, 1, 0); }
-    else text(cleared ? 'CLEARED! @' : 'REWARD ALREADY UNLOCKED', px + 8, py + 24, cleared ? C.gold : C.gray, 1, 0);
-    drawButton(this.ui, 'play', px + pw - 58, py + 6, 50, 16, 'PLAY', { on: () => this.play(), icon: ICON.play, col: '#3d2f63' });
+    if (!open) {
+      text(fmt('CHAPTER {0}', ch.n), px + 8, py + 6, C.gray, 1, 0);
+      text('BEAT CHAPTER 1 FIRST', px + 8, py + 18, C.white, 1, 0);
+      drawSpr(ART.lock, px + pw - 20, py + 22, false, false, 2);
+    } else {
+      const lv = LEVELS[this.sel];
+      text(fmt('LEVEL {0}: {1}', lv.n, lv.name), px + 8, py + 6, C.gold, 1, 0);
+      text(fmt('BOSS: {0}', BOSSES[lv.boss].name), px + 8, py + 15, C.white, 1, 0);
+      const cleared = Save.data.story.cleared[lv.n], rwd = rewardOf(lv), it = itemOf(rwd.cat, rwd.id);
+      if (!Save.has(rwd.cat, rwd.id)) {
+        const rw = textW('REWARD:');
+        text('REWARD:', px + 8, py + 24, C.gray, 1, 0);
+        ctx.save(); ctx.beginPath(); ctx.rect(px + 12 + rw, py + 19, 20, 22); ctx.clip();
+        drawItemIcon(rwd.cat, rwd.id, px + 22 + rw, py + 27, T, Save.data.loadout[0]); ctx.restore();
+        text(it.name, px + 34 + rw, py + 24, RARITY[it.rarity].col, 1, 0);
+      } else text(cleared ? 'CLEARED! @' : 'REWARD ALREADY UNLOCKED', px + 8, py + 24, cleared ? C.gold : C.gray, 1, 0);
+      drawButton(this.ui, 'play', px + pw - 58, py + 6, 50, 16, 'PLAY', { on: () => this.play(), icon: ICON.play, col: '#3d2f63' });
+    }
     drawButton(this.ui, 'locker', px + pw - 58, py + 25, 50, 13, 'LOCKER', { on: () => Trans.go(() => Scenes.push(new LockerScene({}))) });
     if (Save.anyNew()) drawNewTag(px + pw - 16, py + 25, T);
-    drawButton(this.ui, 'back', 4, 20, 34, 12, 'BACK', { on: () => Trans.go(() => Scenes.set(new TitleScene(true))) });
+    drawButton(this.ui, 'back', this.page > 0 ? 24 : 4, 20, 34, 12, 'BACK', { on: () => Trans.go(() => Scenes.set(new TitleScene(true))) });
     drawCoins(W - textW(Save.data.coins) - 22, 20, Save.data.coins, T);
+    if (this.flip > 0) { ctx.globalAlpha = this.flip * 0.6; ctx.fillStyle = '#fff8e7'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
   }
 }
 function drawLandmark(world, x, y, T, on) {
@@ -405,6 +456,11 @@ function drawLandmark(world, x, y, T, on) {
     ctx.fillStyle = '#ffd23f'; ctx.fillRect(x - 8, y - 4, 3, 3); ctx.fillRect(x - 2, y - 4, 3, 3);
     if (on) for (let i = 0; i < 3; i++) pcirc(x + 7 + Math.sin(T * 2 + i) * 2, y - 22 - ((T * 8 + i * 6) % 18), 2 + i * 0.5, 'rgba(160,160,180,0.6)');
   } else if (world === 'tower') { drawTowerFar(x, y + 6); if (on) { ctx.fillStyle = (T * 2 | 0) % 2 ? '#e8343b' : '#ffd23f'; ctx.fillRect(x - 1, y - 52, 2, 2); } }
+  else if (world === 'beach') { drawSpr(DECO_ART.palm, x - 5, y - 7); drawSpr(DECO_ART.starfish, x + 9, y + 2); drawSpr(DECO_ART.shell, x - 12, y + 3); }
+  else if (world === 'swamp') { drawSpr(DECO_ART.deadtree, x - 3, y - 6); drawSpr(DECO_ART.swampmush, x + 9, y + 2); drawSpr(DECO_ART.lily, x - 11, y + 3); }
+  else if (world === 'clouds') { drawSpr(DECO_ART.cloudpillar, x - 5, y - 5); drawSpr(DECO_ART.balloon, x + 9, y - 8 + Math.round(Math.sin(T * 2) * 2)); }
+  else if (world === 'moon') { drawSpr(DECO_ART.dome, x - 4, y - 1); drawSpr(DECO_ART.flag, x + 10, y - 5); drawSpr(DECO_ART.crater, x - 13, y + 4); }
+  else if (world === 'ship') drawMothership(x, y - 6 + Math.round(Math.sin(T * 2) * 2), T, 0.35);
   ctx.globalAlpha = 1;
 }
 
@@ -557,7 +613,8 @@ class LockerScene {
       text(info.name, L.gx + 4, iy + 3, rc.col, 1, 0);
       text(rc.name, L.gx + L.gw - 4, iy + 3, rc.col, 1, 2);
       let line = info.desc || '';
-      if (!has) line = this.cat === 'weapon' && LEVELS.find(l => l.reward === info.id) ? fmt('BEAT STORY LEVEL {0} OR OPEN CHESTS', LEVELS.find(l => l.reward === info.id).n) : info.gift ? 'A SPECIAL GIFT - NOT IN CHESTS' : 'LOCKED - OPEN CHESTS TO FIND IT';
+      if (!has && info.story) line = fmt('BEAT STORY LEVEL {0} TO GET IT', info.story);
+      else if (!has) line = this.cat === 'weapon' && LEVELS.find(l => l.reward === info.id) ? fmt('BEAT STORY LEVEL {0} OR OPEN CHESTS', LEVELS.find(l => l.reward === info.id).n) : info.gift ? 'A SPECIAL GIFT - NOT IN CHESTS' : 'LOCKED - OPEN CHESTS TO FIND IT';
       else if (lo[this.cat] === info.id) line = line || fmt('EQUIPPED ON P{0}', this.pid + 1);
       else line = line || (Input.touch ? 'TAP TO EQUIP' : 'PRESS ENTER TO EQUIP');
       text(line, L.gx + 4, iy + 12, has ? C.white : C.gray, 1, 0, null);
@@ -601,7 +658,7 @@ function drawItemIcon(cat, id, x, y, t, lo) {
 function rollChest(kind) {
   const odds = CHESTS[kind].odds;
   const all = [];
-  for (const cat of CATS) for (const it of COSMETICS[cat]) if (it.id !== 'none' && !it.gift) all.push({ cat, it });
+  for (const cat of CATS) for (const it of COSMETICS[cat]) if (it.id !== 'none' && !it.gift && !it.story) all.push({ cat, it }); // gifts and story rewards never come from chests
   const locked = all.filter(x => !Save.has(x.cat, x.it.id));
   let rar = weighted(odds);
   let pool = locked.filter(x => x.it.rarity === rar);
