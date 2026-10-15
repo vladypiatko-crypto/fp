@@ -17,7 +17,7 @@ const COSMETICS = {
   ],
   hat: [
     { id: 'none', name: 'NO HAT', rarity: 'common' },
-    { id: 'wizard', name: 'WIZARD HAT', rarity: 'legendary', desc: 'SPARKLY AND MAGICAL' },
+    { id: 'wizard', name: 'WIZARD HAT', rarity: 'legendary', desc: 'SPARKLY AND MAGICAL', gift: true }, // only given by the admin, never in chests
     { id: 'bandana_r', name: 'RED BANDANA', rarity: 'common' },
     { id: 'bandana_b', name: 'BLUE BANDANA', rarity: 'common' },
     { id: 'beanie', name: 'BEANIE', rarity: 'common' },
@@ -69,12 +69,12 @@ const COSMETICS = {
 const CATS = ['skin', 'hat', 'halo', 'trail', 'weapon'];
 const CAT_NAME = { skin: 'SKIN', hat: 'HAT', halo: 'HALO', trail: 'TRAIL', weapon: 'WEAPON' };
 const itemOf = (cat, id) => COSMETICS[cat].find(i => i.id === id);
-const DEFAULT_UNLOCKS = ['skin:classic', 'skin:snowy', 'hat:none', 'hat:wizard', 'hat:bandana_r', 'hat:bandana_b', 'halo:none', 'trail:none', 'weapon:blaster'];
+const DEFAULT_UNLOCKS = ['skin:classic', 'skin:snowy', 'hat:none', 'hat:bandana_r', 'hat:bandana_b', 'halo:none', 'trail:none', 'weapon:blaster'];
 function defaultSave() {
   return {
     v: 2, coins: 150, name: 'QUACKER', settings: { shake: true, flash: true, music: true, lang: 'en' }, unlocked: DEFAULT_UNLOCKS.slice(),
     loadout: [
-      { skin: 'classic', hat: 'wizard', halo: 'none', trail: 'none', weapon: 'blaster' },
+      { skin: 'classic', hat: 'bandana_r', halo: 'none', trail: 'none', weapon: 'blaster' },
       { skin: 'snowy', hat: 'bandana_b', halo: 'none', trail: 'none', weapon: 'blaster' },
     ],
     story: { reached: 1, cleared: {} }, best: { e1: 0, e2: 0 }, muted: false, introSeen: false, wizardSeen: false,

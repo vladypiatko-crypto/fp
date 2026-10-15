@@ -414,7 +414,6 @@ class LockerScene {
     this.spin = 0; this.hop = 0; this.shakeId = null; this.shakeT = 0; this.popup = null; this.popUI = new UI();
     this.prevSong = Music.song;
     Music.play('calm');
-    if (!Save.data.wizardSeen) { Save.data.wizardSeen = true; Save.write(); this.popup = { kind: 'gift', t: 0 }; }
   }
   resumed() { Music.play('calm'); }
   close() { Trans.go(() => { Scenes.pop(); Music.play(this.prevSong === 'calm' ? 'calm' : this.prevSong || 'title'); }); }
@@ -557,7 +556,7 @@ class LockerScene {
       text(info.name, L.gx + 4, iy + 3, rc.col, 1, 0);
       text(rc.name, L.gx + L.gw - 4, iy + 3, rc.col, 1, 2);
       let line = info.desc || '';
-      if (!has) line = this.cat === 'weapon' && LEVELS.find(l => l.reward === info.id) ? fmt('BEAT STORY LEVEL {0} OR OPEN CHESTS', LEVELS.find(l => l.reward === info.id).n) : 'LOCKED - OPEN CHESTS TO FIND IT';
+      if (!has) line = this.cat === 'weapon' && LEVELS.find(l => l.reward === info.id) ? fmt('BEAT STORY LEVEL {0} OR OPEN CHESTS', LEVELS.find(l => l.reward === info.id).n) : info.gift ? 'A SPECIAL GIFT - NOT IN CHESTS' : 'LOCKED - OPEN CHESTS TO FIND IT';
       else if (lo[this.cat] === info.id) line = line || fmt('EQUIPPED ON P{0}', this.pid + 1);
       else line = line || (Input.touch ? 'TAP TO EQUIP' : 'PRESS ENTER TO EQUIP');
       text(line, L.gx + 4, iy + 12, has ? C.white : C.gray, 1, 0, null);
@@ -601,7 +600,7 @@ function drawItemIcon(cat, id, x, y, t, lo) {
 function rollChest(kind) {
   const odds = CHESTS[kind].odds;
   const all = [];
-  for (const cat of CATS) for (const it of COSMETICS[cat]) if (it.id !== 'none') all.push({ cat, it });
+  for (const cat of CATS) for (const it of COSMETICS[cat]) if (it.id !== 'none' && !it.gift) all.push({ cat, it });
   const locked = all.filter(x => !Save.has(x.cat, x.it.id));
   let rar = weighted(odds);
   let pool = locked.filter(x => x.it.rarity === rar);

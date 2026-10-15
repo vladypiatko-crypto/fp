@@ -202,6 +202,7 @@ const PHRASES = [
   ['REWARD ALREADY UNLOCKED', 'BELOHNUNG SCHON FREIGESCHALTET', 'НАГРАДА УЖЕ ПОЛУЧЕНА'], ['PLAY', 'SPIELEN', 'ИГРАТЬ'],
   ['BEAT STORY LEVEL {0} OR OPEN CHESTS', 'SCHAFFE LEVEL {0} ODER ÖFFNE TRUHEN', 'ПРОЙДИ УРОВЕНЬ {0} ИЛИ ОТКРОЙ СУНДУКИ'],
   ['LOCKED - OPEN CHESTS TO FIND IT', 'GESPERRT - FINDE ES IN TRUHEN', 'ЗАКРЫТО - ИЩИ В СУНДУКАХ'],
+  ['A SPECIAL GIFT - NOT IN CHESTS', 'EIN BESONDERES GESCHENK - NICHT IN TRUHEN', 'ОСОБЫЙ ПОДАРОК - НЕ ИЗ СУНДУКОВ'],
   ['EQUIPPED ON P{0}', 'AUSGERÜSTET AUF P{0}', 'НАДЕТО НА P{0}'], ['TAP TO EQUIP', 'TIPPEN ZUM AUSRÜSTEN', 'НАЖМИ, ЧТОБЫ НАДЕТЬ'],
   ['PRESS ENTER TO EQUIP', 'ENTER ZUM AUSRÜSTEN', 'ENTER - НАДЕТЬ'], ['CHESTS', 'TRUHEN', 'СУНДУКИ'],
   ['A GIFT FOR YOU!', 'EIN GESCHENK FÜR DICH!', 'ПОДАРОК ДЛЯ ТЕБЯ!'], ['LEGENDARY WIZARD HAT', 'LEGENDÄRER ZAUBERHUT', 'ЛЕГЕНДАРНАЯ ШЛЯПА МАГА'],
