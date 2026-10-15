@@ -61,6 +61,21 @@ The **host's device runs the real game**. Everyone else sends their moves and bu
 - For testing you can point the game at your own PeerJS server with `?peer=host:port` in the address.
 - Set `ONLINE_READY = false` in `www/js/online.js` to hide online play behind an "under construction" sign.
 
+## Accounts and the admin tab
+
+With Firebase switched on, every player picks a **name** and a **unique username** on first start (needs internet once). The admin account gets an **ADMIN** button on the title screen: search players by username, **flag** them (3 flags = automatic ban), **ban / unban**, **reset progress**, and **give coins or any item** (players get an animated "gift from the admin" popup). The wizard hat is only available as an admin gift.
+
+Setup (once):
+
+1. Create a project at [console.firebase.google.com](https://console.firebase.google.com), add a **Web app**, turn on **Authentication → Anonymous** and create a **Firestore Database** in production mode.
+2. Put the web app's `firebaseConfig` into `FIREBASE_CONFIG` and the admin's username (lower case) into `ADMIN_USERNAME` in `www/js/cloud.js`.
+3. Put the same username into `adminName()` in `firebase/firestore.rules`, then paste the whole file into **Firestore Database → Rules** and press **Publish**. The rules are what stop anyone else from using admin powers, even with an edited app.
+4. Install the new build and claim the admin username straight away.
+
+Good to know: accounts are anonymous and live in the app's storage. Uninstalling or clearing the app's data starts a new account (the old username stays taken), and a banned player could get a fresh account that way. Without `FIREBASE_CONFIG` the game skips accounts and runs fully offline.
+
+Testing locally: `npx firebase-tools emulators:start --only auth,firestore` in `firebase/` (with the admin name filled in), then open the game with `?emu=1&admin=<name>`.
+
 ## Controls
 
 | | Player 1 | Player 2 |
@@ -73,6 +88,7 @@ Online, each device controls its own duck with the controls above (keyboard play
 
 ## Project layout
 
+- `www/js/cloud.js`: accounts, bans, flags, resets and admin gifts (Firebase) · `www/js/admin.js`: the admin tab · `firebase/firestore.rules`: who may change what
 - `www/js/lang.js`: translations (all text is written in English and translated as it's drawn), the QUACK language and the name filter
 - `www/js/engine.js`: canvas scaling, pixel font, sprites, chiptune and voice audio, input, UI widgets, impact frames, network state, save file
 - `www/js/art.js`: all pixel art (ducks, hats and their animation, robots, bosses, worlds)

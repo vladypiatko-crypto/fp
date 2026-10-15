@@ -13,7 +13,8 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('blur', () => { const top = Scenes.top(); if (top instanceof GameScene && top.state === 'play') top.pause(); });
 
-Scenes.set(new TitleScene(false));
+// with accounts switched on, sign in first (first start: pick a name and username; banned: stop here)
+Scenes.set(Cloud.enabled ? new BootScene() : new TitleScene(false));
 
 let lastFrame = performance.now();
 function frame(now) {
@@ -26,6 +27,7 @@ function frame(now) {
     const top = Scenes.top();
     if (Trans.phase === 'out') { Input.ptrEv.length = 0; Input.hit.clear(); }
     if (top) { top.update(dt); }
+    showCloudPopups();
     ctx.imageSmoothingEnabled = false;
     const cur = Scenes.top();
     if (cur) cur.draw();
@@ -38,4 +40,4 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // hook for automated tests
-window.__quack = { Scenes, Save, Input, Net, GameScene, MapScene, LockerScene, ChestScene, TitleScene, CutsceneScene, OnlineScene, RoomScene, NameScene, setLang, trMissing, isBadName, get R() { return R; }, updatePlayer, applyUpgrade, spawnBoss, Impact };
+window.__quack = { Scenes, Save, Input, Net, GameScene, MapScene, LockerScene, ChestScene, TitleScene, CutsceneScene, OnlineScene, RoomScene, NameScene, setLang, Cloud, AccountScene, BannedScene, GiftScene, AdminScene, AdminUserScene, BootScene, trMissing, isBadName, get R() { return R; }, updatePlayer, applyUpgrade, spawnBoss, Impact };

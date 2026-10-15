@@ -740,7 +740,8 @@ const Save = {
     this.data = d;
     setMuted(!!d.muted);
   },
-  write() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.data)); } catch (e) { /* storage blocked */ } },
+  // quiet: don't send this change to the online account (used when the change came from there)
+  write(quiet) { try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.data)); } catch (e) { /* storage blocked */ } if (!quiet && typeof Cloud !== 'undefined') Cloud.dirty = true; },
   has(cat, id) { return this.data.unlocked.includes(cat + ':' + id); },
   unlock(cat, id) { if (!this.has(cat, id)) { this.data.unlocked.push(cat + ':' + id); this.data.newItems.push(cat + ':' + id); this.write(); return true; } return false; },
   isNew(cat, id) { return this.data.newItems.includes(cat + ':' + id); },

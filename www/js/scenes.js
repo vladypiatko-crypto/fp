@@ -195,6 +195,7 @@ class TitleScene {
     });
     // corner widgets
     drawCoins(4, 4, Save.data.coins, this.T);
+    if (Cloud.isAdmin()) drawButton(this.modal ? new UI() : this.ui, 'admin', 4, 20, 44, 13, 'ADMIN', { on: () => Trans.go(() => Scenes.push(new AdminScene())), col: '#7a2a5c' });
     iconButton(this.ui, 'snd', W - 17, 4, drawSoundIcon, toggleSound);
     if (fsSupported()) iconButton(this.ui, 'fs', W - 33, 4, drawFsIcon, toggleFullscreen);
     iconButton(this.ui, 'set', W - (fsSupported() ? 49 : 33), 4, drawGearIcon, () => this.openModal('settings'));
@@ -253,7 +254,7 @@ class TitleScene {
     // language: ENGLISH > DEUTSCH > РУССКИЙ > QUACK
     drawButton(ui, 'set_lang', px + 10, py + 26 + 3 * rowH, pw - 20, rowH - 3, fmt('{0}: {1}  >', 'LANGUAGE', keep(langName())), {
       on: () => { const i = LANGS.findIndex(l => l[0] === LANG), next = LANGS[(i + 1) % LANGS.length][0]; st.lang = next; Save.write(); setLang(next); } });
-    drawButton(ui, 'set_name', px + 10, py + 26 + 4 * rowH, pw - 20, rowH - 3, fmt('{0}: {1}  >', 'NAME', keep(Save.data.name)), { on: () => Scenes.push(new NameScene()) });
+    drawButton(ui, 'set_name', px + 10, py + 26 + 4 * rowH, pw - 20, rowH - 3, fmt('{0}: {1}  >', 'NAME', keep(Save.data.name + (Save.data.account ? '  (' + Save.data.account.username + ')' : ''))), { on: () => Scenes.push(new NameScene()) });
     drawButton(ui, 'set_back', Math.floor(W / 2 - 30), py + ph - 20, 60, 13, 'BACK', { on: () => { this.modal = null; } });
   }
   drawModal() {
@@ -724,14 +725,56 @@ class ChestScene {
   done() { Trans.go(() => Scenes.pop()); }
 }
 
+// ================================================================ on-screen keyboard (also takes a real keyboard)
+class Keyboard {
+  constructor({ value = '', max = NAME_MAX, space = true, rand = false } = {}) {
+    this.value = value; this.max = max; this.space = space; this.rand = rand;
+    this.rows = ['1234567890', 'QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
+  }
+  add(ch) {
+    if (ch === ' ' && (!this.space || !this.value || this.value.endsWith(' '))) return false;
+    if (this.value.length >= this.max) return false;
+    this.value += ch; return true;
+  }
+  del() { this.value = this.value.slice(0, -1); }
+  // a real keyboard types; returns true when it did, so letters don't also move the focus or press buttons
+  typed(acts) {
+    if (!Input.typed.length) return false;
+    for (const ch of Input.typed) { if (ch === '<') this.del(); else if (NAME_CHARS.includes(ch) || ch === ' ') this.add(ch); }
+    acts.up = acts.down = acts.left = acts.right = acts.ok = acts.back = false;
+    return true;
+  }
+  // draws the keys from y down; returns the y below the last row
+  draw(ui, y, changed = () => {}) {
+    const kw = Math.min(17, Math.floor((W - 12) / 10) - 2), kh = 12;
+    this.rows.forEach((row, r) => {
+      const x0 = Math.floor(W / 2 - (row.length * (kw + 2) - 2) / 2);
+      [...row].forEach((ch, i) => drawButton(ui, 'k' + ch, x0 + i * (kw + 2), y + r * (kh + 2), kw, kh, ch, { on: () => { if (this.add(ch)) changed(); sfx.uiMove(); }, silent: true, def: ch === 'Q' }));
+    });
+    const by = y + 4 * (kh + 2) + 2, n = this.rand ? 3 : this.space ? 2 : 1, bw = Math.min(60, Math.floor((W - 24) / 3));
+    const x0 = Math.floor(W / 2 - (n * bw + (n - 1) * 4) / 2);
+    let k = 0;
+    if (this.space) drawButton(ui, 'space', x0 + (k++) * (bw + 4), by, bw, 13, 'SPACE', { on: () => { if (this.add(' ')) changed(); }, silent: true });
+    drawButton(ui, 'del', x0 + (k++) * (bw + 4), by, bw, 13, 'DEL', { on: () => { this.del(); changed(); }, silent: true });
+    if (this.rand) drawButton(ui, 'rand', x0 + (k++) * (bw + 4), by, bw, 13, 'RANDOM', { on: () => { const pool = NAMES.filter(n => n !== this.value); this.value = pool[Math.floor(Math.random() * pool.length)]; changed(); } });
+    return by + 15;
+  }
+}
+// a text box with a blinking cursor and a letter count
+function drawField(x, y, w, value, max, t, opts = {}) {
+  panel(x, y, w, 16, opts.active === false ? C.uiD : C.ui, opts.error ? C.red : opts.active === false ? OUT : C.gold, null, false);
+  const tw = textW(keep(value));
+  if (value) text(keep(value), x + w / 2, y + 6, C.white, 1, 1, null);
+  else if (opts.hint) text(opts.hint, x + w / 2, y + 6, C.grayD, 1, 1, null);
+  if (opts.active !== false && (t * 2 | 0) % 2 === 0 && (!max || value.length < max)) { ctx.fillStyle = C.gold; ctx.fillRect(Math.round(x + w / 2 + tw / 2 + 2), y + 4, 1, 7); }
+  if (max) text(value.length + '/' + max, x + w + 4, y + 6, C.gray, 1, 0, null);
+}
+
 // ================================================================ name: type your own (shown to friends online)
 class NameScene {
-  constructor() { this.T = 0; this.ui = new UI(); this.name = Save.data.name || ''; this.note = ''; this.shake = 0; this.rows = ['1234567890', 'QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM']; }
-  add(ch) { if (this.name.length < NAME_MAX && !(ch === ' ' && (!this.name || this.name.endsWith(' ')))) { this.name += ch; this.note = ''; } }
-  del() { this.name = this.name.slice(0, -1); this.note = ''; }
-  random() { const pool = NAMES.filter(n => n !== this.name); this.name = pool[Math.floor(Math.random() * pool.length)]; this.note = ''; }
+  constructor() { this.T = 0; this.ui = new UI(); this.kb = new Keyboard({ value: Save.data.name || '', rand: true }); this.note = ''; this.shake = 0; }
   save() {
-    const n = this.name.replace(/ +/g, ' ').trim();
+    const n = this.kb.value.replace(/ +/g, ' ').trim();
     if (n.length < 2) return this.nope('NAME IS TOO SHORT');
     if (isBadName(n)) return this.nope("THAT NAME ISN'T ALLOWED");
     Save.data.name = n; Save.write(); sfx.pickup();
@@ -741,40 +784,21 @@ class NameScene {
   update(dt) {
     this.T += dt; this.shake = Math.max(0, this.shake - dt);
     const acts = Input.menu();
-    // a real keyboard types; then letters must not also move the focus or press buttons
-    if (Input.typed.length) {
-      for (const ch of Input.typed) { if (ch === '<') this.del(); else if (NAME_CHARS.includes(ch) || ch === ' ') this.add(ch); }
-      acts.up = acts.down = acts.left = acts.right = acts.ok = acts.back = false;
-    }
+    if (this.kb.typed(acts)) this.note = '';
     if (Input.anyHit(['Enter', 'NumpadEnter'])) { this.save(); return; }
     if (Input.anyHit(['Escape']) || acts.back) { sfx.uiBack(); Scenes.pop(); return; }
     this.ui.update(dt, acts);
   }
   draw() {
-    ctx.fillStyle = C.uiD; ctx.fillRect(0, 0, W, H);
-    for (let y = 0; y < H; y += 12) for (let x = (y / 12) % 2 ? 0 : 12; x < W; x += 24) { ctx.fillStyle = '#251d3a'; ctx.fillRect(x, y, 12, 12); }
+    drawChecker();
     this.ui.begin();
     text('YOUR NAME', W / 2, 6, C.gold, 2, 1, 'outline');
     text('SHOWN TO OTHER PLAYERS ONLINE', W / 2, 22, C.gray, 1, 1);
-    // the name field, with a blinking cursor
     const fw = 6 * NAME_MAX + 16, fx = Math.floor(W / 2 - fw / 2) + Math.round(Math.sin(this.shake * 60) * this.shake * 8), fy = 32;
-    panel(fx, fy, fw, 16, C.ui, this.note ? C.red : C.gold, null, false);
-    const tw = textW(keep(this.name));
-    text(keep(this.name), fx + fw / 2, fy + 6, C.white, 1, 1, null);
-    if ((this.T * 2 | 0) % 2 === 0 && this.name.length < NAME_MAX) { ctx.fillStyle = C.gold; ctx.fillRect(Math.round(fx + fw / 2 + tw / 2 + 2), fy + 4, 1, 7); }
-    text(this.name.length + '/' + NAME_MAX, fx + fw + 4, fy + 6, C.gray, 1, 0, null);
+    drawField(fx, fy, fw, this.kb.value, NAME_MAX, this.T, { error: !!this.note });
     if (this.note) text(this.note, W / 2, fy + 20, C.red, 1, 1, 'outline');
-    // on-screen keyboard
-    const kw = Math.min(17, Math.floor((W - 12) / 10) - 2), kh = 12, ky = 62;
-    this.rows.forEach((row, r) => {
-      const x0 = Math.floor(W / 2 - (row.length * (kw + 2) - 2) / 2);
-      [...row].forEach((ch, i) => drawButton(this.ui, 'k' + ch, x0 + i * (kw + 2), ky + r * (kh + 2), kw, kh, ch, { on: () => { this.add(ch); sfx.uiMove(); }, silent: true, def: ch === 'Q' }));
-    });
-    const by = ky + 4 * (kh + 2) + 2, bw = Math.min(60, Math.floor((W - 24) / 3));
-    drawButton(this.ui, 'space', Math.floor(W / 2 - bw * 1.5 - 4), by, bw, 13, 'SPACE', { on: () => this.add(' '), silent: true });
-    drawButton(this.ui, 'del', Math.floor(W / 2 - bw / 2), by, bw, 13, 'DEL', { on: () => this.del(), silent: true });
-    drawButton(this.ui, 'rand', Math.floor(W / 2 + bw / 2 + 4), by, bw, 13, 'RANDOM', { on: () => this.random() });
-    const sy = Math.min(H - 18, by + 20);
+    const by = this.kb.draw(this.ui, 62, () => { this.note = ''; });
+    const sy = Math.min(H - 18, by + 5);
     drawButton(this.ui, 'cancel', Math.floor(W / 2 - 74), sy, 70, 14, 'CANCEL', { on: () => Scenes.pop(), icon: ICON.back });
     drawButton(this.ui, 'save', Math.floor(W / 2 + 4), sy, 70, 14, 'SAVE', { on: () => this.save(), col: '#3d2f63' });
   }

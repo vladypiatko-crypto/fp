@@ -41,6 +41,8 @@ function peerErrorText(e) { return PEER_ERRORS[e && e.type] || "COULDN'T CONNECT
 
 // ================================================================ the lobby, run by the host's device
 // (what a server would normally do: members, ready flags, mode, start, and passing game messages along)
+const cleanUser = u => String(u || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+const myUsername = () => (Save.data.account && Save.data.account.username) || '';
 function cleanLoadout(lo) {
   const out = {};
   for (const k of ['skin', 'hat', 'halo', 'trail', 'weapon']) out[k] = String((lo && lo[k]) || 'none').replace(/[^a-z_]/g, '').slice(0, 24);
@@ -49,7 +51,7 @@ function cleanLoadout(lo) {
 const Hub = {
   room: null, nextId: 2,
   open(code, name, lo) {
-    const host = { id: 'p1', conn: null, name: cleanName(name), lo: cleanLoadout(lo), ready: false };
+    const host = { id: 'p1', conn: null, name: cleanName(name), user: cleanUser(myUsername()), lo: cleanLoadout(lo), ready: false };
     this.room = { code, name: host.name, state: 'lobby', mode: 'endless', level: 1, hostId: host.id, members: [host] };
     this.nextId = 2;
     this.to(host, { t: 'hello', id: host.id });
@@ -60,7 +62,7 @@ const Hub = {
   view() {
     const r = this.room;
     return { code: r.code, name: r.name, state: r.state, mode: r.mode, level: r.level,
-      members: r.members.map(m => ({ id: m.id, name: m.name, lo: m.lo, ready: m.ready, host: m.id === r.hostId })) };
+      members: r.members.map(m => ({ id: m.id, name: m.name, user: m.user, lo: m.lo, ready: m.ready, host: m.id === r.hostId })) };
   },
   // send to one member: the host's own messages are delivered locally, friends get them over their connection
   to(mem, m, str) {
@@ -83,7 +85,7 @@ const Hub = {
       const r = this.room, fail = msg => { try { conn.send(JSON.stringify({ t: 'error', msg })); } catch (e) { /* gone */ } setTimeout(() => conn.close(), 500); };
       if (r.state !== 'lobby') { fail('THAT GAME HAS ALREADY STARTED'); return; }
       if (r.members.length >= MAX_PLAYERS) { fail('THAT LOBBY IS FULL'); return; }
-      mem = { id: 'p' + (this.nextId++), conn, name: cleanName(m.name), lo: cleanLoadout(m.lo), ready: false };
+      mem = { id: 'p' + (this.nextId++), conn, name: cleanName(m.name), user: cleanUser(m.user), lo: cleanLoadout(m.lo), ready: false };
       r.members.push(mem);
       this.to(mem, { t: 'hello', id: mem.id });
       this.to(mem, { t: 'joined', code: r.code });
@@ -219,7 +221,7 @@ Object.assign(Net, {
           if (m && m.t !== 'ka') this.onMsg(m);
         });
         conn.on('close', () => { if (this.conn === conn) this.lost('LOST THE HOST'); });
-        conn.send(JSON.stringify({ t: 'join', name, lo }));
+        conn.send(JSON.stringify({ t: 'join', name, lo, user: myUsername() }));
         res();
       });
       conn.on('error', () => { clearTimeout(t); rej(new Error("COULDN'T CONNECT TO YOUR FRIEND")); });
@@ -423,6 +425,7 @@ class RoomScene {
       if (mem) {
         drawDuck(24, y + rowH - 8, { skin: mem.lo.skin, hat: mem.lo.hat, halo: mem.lo.halo, facing: 'right', t: this.T, sc: 1.6, blink: this.T % 3.2 > 3.05 });
         text(keep(mem.name), 42, y + 5, PCOL[i], 1, 0);
+        if (mem.user) text(keep('(' + mem.user + ')'), 42 + textW(keep(mem.name)) + 6, y + 14, C.grayD, 1, 0, null);
         if (mem.id === Net.myId) text('YOU', 42 + textW(keep(mem.name)) + 6, y + 5, C.gray, 1, 0);
         if (mem.host) { panel(W - 46, y + 4, 34, 11, C.pink, OUT, null, false); text('HOST', W - 29, y + 7, OUT, 1, 1, null); }
         else text(mem.ready ? 'READY!' : 'NOT READY', W - 14, y + 5, mem.ready ? C.green : C.gray, 1, 2);

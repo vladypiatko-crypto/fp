@@ -1,0 +1,53 @@
+rules_version = '2';
+// QUACK ATTACK! database rules. Paste this whole file into Firebase console -> Firestore Database -> Rules -> Publish.
+// They are what makes accounts safe: they run on Google's side, so editing the app can't get around them.
+//  - every player can only touch their own account, and can't change their own flags, ban, username or reset
+//  - usernames are unique: usernames/{name} can only be created once
+//  - the admin is whoever owns the username below, and only the admin can see other players, ban, flag,
+//    reset or send gifts
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function adminName() { return 'ADMIN_USERNAME_HERE'; }
+    function isAdmin() {
+      let ref = /databases/$(database)/documents/usernames/$(adminName());
+      return signedIn() && exists(ref) && get(ref).data.uid == request.auth.uid;
+    }
+
+    match /usernames/{name} {
+      allow get: if signedIn();
+      allow list: if isAdmin();
+      // claim a free username, once per account (the account document must not exist yet)
+      allow create: if signedIn()
+        && name.matches('^[a-z0-9]{3,12}$')
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid
+        && !exists(/databases/$(database)/documents/users/$(request.auth.uid));
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    match /users/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      // a new account starts clean and must own the username it names
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.flags == 0
+        && request.resource.data.banned == false
+        && request.resource.data.resetAt == 0
+        && request.resource.data.usernameLower == request.resource.data.username.lower()
+        && getAfter(/databases/$(database)/documents/usernames/$(request.resource.data.usernameLower)).data.uid == uid;
+      // players update their own save and display name; flags, bans, resets and the username are the admin's
+      allow update: if isAdmin() || (signedIn() && request.auth.uid == uid
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['flags', 'banned', 'resetAt', 'username', 'usernameLower', 'created']));
+      allow delete: if isAdmin();
+
+      // gifts from the admin: the player picks them up (reads, then deletes them)
+      match /gifts/{gift} {
+        allow read, delete: if signedIn() && (request.auth.uid == uid || isAdmin());
+        allow create: if isAdmin();
+        allow update: if false;
+      }
+    }
+  }
+}
