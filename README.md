@@ -27,9 +27,11 @@ Each chapter has an animated intro and ending, and the map has a page per chapte
 
 - **Online with friends**: host a lobby and share its 4-letter code, or join a friend's. Up to 4 ducks, each on their own device. No server to set up: devices connect directly. Pick story or endless, ready up, and start.
 - **6 weapons**: Blaster, Quackshot, Bubble Gun, Feather-rang, Beak Beam laser, Quackinator minigun
-- **Level-up cards** (13 upgrades): multi shot, piercing, egg orbit, bread bombs, chain lightning, mega quack shockwave, dash attack…
+- **Level-up cards**: gun and duck upgrades (multi shot, piercing, speed, regen, dash attack…) plus **7 power-ups**: egg orbit, bread bombs, chain lightning, mega quack, feather darts, splash puddles and bubble shield. You get **3 power-up slots**; once they are full only those three come back. Eggs block bullets and push robots away.
+- **Overcharge**: after a power-up is maxed, a rare red glowing OVERCHARGE card can show up and makes it much stronger (giant fast-spinning eggs, splitting bread storms, lightning that jumps to everything, lava lakes, mirror shields…).
 - **Robot army**: Bolt Bots, Boom Bots, Goo Blobs, Tank Bots, Zap Drones and Saw Bots, each with its own behaviour. Bosses telegraph charges, jumps, bullet rings and missile strikes.
-- **Impact frames**: big hits freeze the world for a moment, flash white and throw speed lines.
+- **Impact frames**: big hits freeze the world for a moment, flash in inverted black and white with speed lines, then a shockwave.
+- **Soundtrack**: every world has its own chiptune song (beach, swamp, sky, space, factory…), plus boss, chapter finale and locker tunes.
 - **Honks and quacks**: Dr. Honk honks, the ducks quack. Both are synthesised in the browser, no sound files.
 - **Locker**: customise each duck's **skin, hat, halo, trail and weapon**. Every hat sways, sparkles and has its own little extras (twinkling crown, floating notes, chef steam).
 - **Chests**: spend the coins you earn on Duck Chests or Royal Chests. **Unlocks are shared by both players.** New items get a bouncing red NEW! on their locker tab and a red ! on the item until you tap it.
@@ -70,7 +72,7 @@ The **host's device runs the real game**. Everyone else sends their moves and bu
 
 ## Accounts and the admin tab
 
-With Firebase switched on, every player picks a **name** and a **unique username** on first start (needs internet once). The admin account gets an **ADMIN** button on the title screen: search players by username, **flag** them (3 flags = automatic ban), **ban / unban**, **reset progress**, and **give coins or any item** (players get an animated "gift from the admin" popup). The wizard hat is only available as an admin gift.
+With Firebase switched on, every player picks a **name** and a **unique username** on first start (needs internet once). The admin account gets an **ADMIN** button on the title screen: search players by username, **flag** them (3 flags = automatic ban), **ban / unban**, **reset progress**, and **give coins or any item**, optionally with a **message** (or send a message alone). Players get an animated **ADMIN GIFT!** popup that shows what they got and the message. The wizard hat has the rainbow **ADMIN** rarity and is only available as an admin gift.
 
 Setup (once):
 

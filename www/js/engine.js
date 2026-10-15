@@ -68,7 +68,10 @@ const RARITY = {
   rare: { name: 'RARE', col: '#5ec8ff', w: 28 },
   epic: { name: 'EPIC', col: '#c06bff', w: 10 },
   legendary: { name: 'LEGENDARY', col: '#ffd23f', w: 3 },
+  admin: { name: 'ADMIN', col: '#ff5ce1', w: 0, rainbow: true }, // only the admin can hand these out
 };
+// rarity colour; ADMIN items cycle through the rainbow
+function rarityCol(r, t = performance.now() / 1000) { const R0 = RARITY[r] || RARITY.common; return R0.rainbow ? RAINBOW[Math.floor(t * 8) % RAINBOW.length] : R0.col; }
 
 // ================================================================ bitmap font (5px tall, variable width)
 const FONT = {
@@ -388,7 +391,7 @@ const sfx = {
   chestShake(n) { tone(200 + n * 60, 0.08, 'square', 0.06, 120); noise(0.06, 0.05, 2000); },
   chestOpen(rar) {
     noise(0.3, 0.12, 3000); tone(300, 0.2, 'sine', 0.1, 900);
-    const notes = { common: [523, 659], rare: [523, 659, 784], epic: [523, 659, 784, 1046], legendary: [523, 659, 784, 1046, 1318, 1568] }[rar];
+    const notes = { common: [523, 659], rare: [523, 659, 784], epic: [523, 659, 784, 1046], legendary: [523, 659, 784, 1046, 1318, 1568], admin: [523, 659, 784, 1046, 1318, 1568, 2093] }[rar] || [523, 659];
     notes.forEach((f, i) => tone(f, 0.18, 'square', 0.06, 0, atime(0.15 + i * 0.08)));
   },
   title() { noise(0.5, 0.15, 800); tone(110, 0.5, 'sine', 0.18, 40); },
@@ -423,6 +426,49 @@ const SONGS = {
     bass: [38, 38, 50, 38, 38, 50, 38, 48, 36, 36, 48, 36, 36, 48, 36, 46, 34, 34, 46, 34, 34, 46, 34, 45, 33, 33, 45, 33, 45, 33, 44, 45],
     mel: [74, 0, 77, 0, 81, 0, 77, 0, 76, 0, 74, 0, 73, 0, 74, 0, 72, 0, 76, 0, 79, 0, 76, 0, 74, 0, 72, 0, 70, 0, 72, 0,
       70, 0, 74, 0, 77, 0, 74, 0, 72, 0, 70, 0, 69, 0, 70, 0, 69, 0, 73, 0, 76, 0, 81, 0, 79, 0, 76, 0, 73, 0, 0, 0],
+  },
+  // one song per world (see WORLD_THEME.song), the chapter finales and the locker
+  beach: {
+    bpm: 138, lead: 'square', drums: 'light',
+    bass: [48, 0, 55, 48, 52, 0, 55, 0, 41, 0, 48, 41, 45, 0, 48, 0, 43, 0, 50, 43, 47, 0, 50, 0, 48, 0, 55, 48, 52, 55, 48, 0],
+    mel: [76, 0, 0, 79, 0, 0, 76, 0, 74, 0, 72, 0, 74, 0, 76, 0, 77, 0, 0, 81, 0, 0, 77, 0, 76, 0, 74, 0, 72, 0, 69, 0,
+      71, 0, 0, 74, 0, 0, 79, 0, 77, 0, 76, 0, 74, 0, 71, 0, 72, 0, 76, 0, 79, 0, 84, 0, 0, 0, 79, 0, 76, 0, 0, 0],
+  },
+  swamp: {
+    bpm: 112, lead: 'triangle', drums: 'light',
+    bass: [45, 0, 0, 45, 52, 0, 45, 0, 38, 0, 0, 38, 45, 0, 38, 0, 40, 0, 0, 40, 47, 0, 44, 0, 45, 0, 52, 0, 45, 0, 44, 0],
+    mel: [69, 0, 0, 72, 0, 0, 71, 0, 69, 0, 0, 0, 64, 0, 0, 0, 65, 0, 0, 69, 0, 0, 72, 0, 74, 0, 0, 0, 72, 0, 0, 0,
+      71, 0, 0, 68, 0, 0, 64, 0, 68, 0, 71, 0, 74, 0, 0, 0, 72, 0, 71, 0, 69, 0, 0, 0, 68, 0, 0, 0, 69, 0, 0, 0],
+  },
+  sky: {
+    bpm: 156, lead: 'square', drums: 'full',
+    bass: [50, 0, 57, 0, 50, 57, 62, 57, 47, 0, 54, 0, 47, 54, 59, 54, 43, 0, 50, 0, 43, 50, 55, 50, 45, 0, 52, 0, 45, 52, 57, 52],
+    mel: [74, 0, 78, 0, 81, 0, 86, 0, 0, 0, 85, 0, 81, 0, 78, 0, 83, 0, 0, 0, 81, 0, 78, 0, 74, 0, 78, 0, 79, 0, 81, 0,
+      79, 0, 83, 0, 86, 0, 83, 0, 81, 0, 79, 0, 78, 0, 76, 0, 78, 0, 0, 76, 0, 0, 73, 0, 76, 0, 79, 0, 81, 0, 0, 0],
+  },
+  space: {
+    bpm: 120, lead: 'triangle', drums: 'light',
+    bass: [40, 0, 47, 0, 52, 0, 47, 0, 36, 0, 43, 0, 48, 0, 43, 0, 38, 0, 45, 0, 50, 0, 45, 0, 35, 0, 42, 0, 47, 0, 51, 0],
+    mel: [76, 0, 0, 0, 79, 0, 0, 0, 83, 0, 0, 0, 81, 0, 79, 0, 76, 0, 0, 0, 72, 0, 0, 0, 79, 0, 0, 0, 76, 0, 0, 0,
+      74, 0, 0, 0, 78, 0, 0, 0, 81, 0, 0, 0, 79, 0, 78, 0, 75, 0, 0, 0, 78, 0, 0, 0, 83, 0, 0, 0, 0, 0, 0, 0],
+  },
+  factory: {
+    bpm: 158, lead: 'sawtooth', drums: 'full',
+    bass: [36, 36, 48, 36, 0, 36, 46, 48, 32, 32, 44, 32, 0, 32, 43, 44, 34, 34, 46, 34, 0, 34, 44, 46, 31, 31, 43, 31, 43, 31, 42, 43],
+    mel: [72, 0, 72, 75, 0, 72, 0, 79, 0, 77, 0, 75, 74, 0, 72, 0, 68, 0, 68, 72, 0, 68, 0, 75, 0, 74, 0, 72, 70, 0, 68, 0,
+      70, 0, 70, 74, 0, 70, 0, 77, 0, 75, 0, 74, 72, 0, 70, 0, 67, 0, 71, 0, 74, 0, 77, 0, 79, 0, 0, 77, 0, 74, 71, 0],
+  },
+  final: {
+    bpm: 178, lead: 'sawtooth', drums: 'full',
+    bass: [38, 38, 50, 38, 50, 38, 48, 50, 34, 34, 46, 34, 46, 34, 45, 46, 36, 36, 48, 36, 48, 36, 47, 48, 33, 33, 45, 33, 45, 44, 45, 47],
+    mel: [74, 0, 0, 74, 77, 0, 81, 0, 86, 0, 0, 84, 0, 81, 0, 0, 82, 0, 0, 81, 0, 77, 0, 74, 77, 0, 0, 0, 74, 0, 77, 0,
+      79, 0, 0, 79, 84, 0, 79, 0, 76, 0, 0, 79, 0, 84, 0, 0, 81, 0, 80, 0, 81, 0, 85, 0, 88, 0, 0, 0, 85, 0, 81, 0],
+  },
+  shop: {
+    bpm: 120, lead: 'square', drums: 'light',
+    bass: [41, 0, 48, 0, 45, 0, 48, 0, 38, 0, 45, 0, 41, 0, 45, 0, 43, 0, 50, 0, 46, 0, 50, 0, 36, 0, 43, 0, 40, 0, 46, 0],
+    mel: [77, 0, 81, 0, 84, 0, 81, 0, 79, 0, 77, 0, 0, 0, 72, 0, 74, 0, 77, 0, 81, 0, 77, 0, 76, 0, 74, 0, 0, 0, 0, 0,
+      74, 0, 0, 77, 0, 0, 79, 0, 82, 0, 81, 0, 79, 0, 77, 0, 76, 0, 77, 0, 79, 0, 72, 0, 76, 0, 79, 0, 82, 0, 0, 0],
   },
 };
 const Music = {
@@ -690,39 +736,54 @@ const Net = { role: null, inputs: [{}, {}, {}, {}], idToPid: {}, evt: [], sndT: 
 function netRemote(pid) { return Net.role === 'host' && pid > 0; } // host: this duck is driven by a friend's device
 
 // ================================================================ impact frames
-// Hit-stops, white flashes, speed lines and a frozen copy of the last frame on the big moments.
+// The big moments freeze the game for a few frames: first an inverted "impact frame" with hard black speed
+// lines and a camera punch, then the real frame with white lines easing out and a shockwave ring.
 const Impact = {
-  stop: 0, flash: 0, lines: 0, snap: null,
-  trigger(kind = 'small') {
+  stop: 0, stopMax: 0, kind: null, lines: 0, ring: 0, snap: null, fx: 0, fy: 0, seed: 1,
+  trigger(kind = 'small', fx, fy) {
     if (Net.role === 'host') Net.evt.push(['imp', kind]);
-    const cfg = { small: [0.035, 0.12, 0], big: [0.07, 0.4, 0.5], huge: [0.12, 0.7, 1] }[kind] || [0.035, 0.12, 0];
-    this.stop = Math.max(this.stop, cfg[0]);
+    const cfg = { small: [0.035, 0, 0], big: [0.085, 0.7, 1], huge: [0.15, 1, 1] }[kind] || [0.035, 0, 0];
+    if (cfg[0] >= this.stop) { this.stop = this.stopMax = cfg[0]; this.kind = kind; }
     const s = Save.data && Save.data.settings;
-    if (!s || !s.flash) return;
-    this.flash = Math.max(this.flash, cfg[1]);
-    this.lines = Math.max(this.lines, cfg[2]);
-    if (kind !== 'small') {
-      if (!this.snap || this.snap.width !== cvs.width || this.snap.height !== cvs.height) this.snap = mkCanvas(cvs.width, cvs.height);
-      this.snap.getContext('2d').drawImage(cvs, 0, 0);
-    }
+    if (!s || !s.flash || kind === 'small') return;
+    this.fx = fx === undefined ? W / 2 : fx; this.fy = fy === undefined ? H / 2 : fy;
+    this.lines = Math.max(this.lines, cfg[1]); this.ring = Math.max(this.ring, cfg[2]); this.seed = Math.random() * 1000;
+    if (!this.snap || this.snap.width !== cvs.width || this.snap.height !== cvs.height) this.snap = mkCanvas(cvs.width, cvs.height);
+    this.snap.getContext('2d').drawImage(cvs, 0, 0);
   },
-  update(dt) { this.stop = Math.max(0, this.stop - dt); this.flash = Math.max(0, this.flash - dt * 3); this.lines = Math.max(0, this.lines - dt * 2.2); },
+  update(dt) { this.stop = Math.max(0, this.stop - dt); this.lines = Math.max(0, this.lines - dt * 3.2); this.ring = Math.max(0, this.ring - dt * 2.4); },
+  // speed lines: wedges pointing at the focus, leaving a clear circle around it
+  speedLines(col, alpha, heavy) {
+    const n = heavy ? 30 : 22, R0 = Math.min(W, H) * (heavy ? 0.2 : 0.28), R1 = Math.hypot(W, H);
+    ctx.save(); ctx.globalAlpha = alpha; ctx.fillStyle = col;
+    for (let i = 0; i < n; i++) {
+      const h = Math.sin(this.seed + i * 12.9898) * 43758.5453, r = h - Math.floor(h); // stable per hit
+      const a = (i + r * 0.6) / n * TAU, w = (heavy ? 0.035 : 0.02) * (0.5 + r), r0 = R0 * (0.9 + r * 0.5);
+      ctx.beginPath();
+      ctx.moveTo(this.fx + Math.cos(a) * r0, this.fy + Math.sin(a) * r0);
+      ctx.lineTo(this.fx + Math.cos(a - w) * R1, this.fy + Math.sin(a - w) * R1);
+      ctx.lineTo(this.fx + Math.cos(a + w) * R1, this.fy + Math.sin(a + w) * R1);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  },
   draw() {
-    if (this.stop > 0 && this.snap) { // the frozen frame, nudged so it jitters
-      ctx.drawImage(this.snap, Math.round(rand(-2, 2)), Math.round(rand(-1, 1)), W, H);
-      ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fillRect(0, 0, W, H);
+    const on = Save.data && Save.data.settings && Save.data.settings.flash;
+    if (!on) return;
+    if (this.stop > 0 && this.snap && this.kind !== 'small') {
+      const k = 1 - this.stop / this.stopMax, heavy = this.kind === 'huge';
+      const z = 1 + (heavy ? 0.07 : 0.045) * (1 - Ease.outCubic(k)); // camera punch, settling back
+      ctx.save(); ctx.translate(this.fx, this.fy); ctx.scale(z, z); ctx.translate(-this.fx, -this.fy);
+      ctx.drawImage(this.snap, 0, 0, W, H); ctx.restore();
+      if (k < 0.5) { // the impact frame itself: inverted colours, hard black lines
+        ctx.save(); ctx.globalCompositeOperation = 'difference'; ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H); ctx.restore();
+        this.speedLines('#000000', 0.9, true);
+      } else this.speedLines('#ffffff', 0.85, heavy);
+    } else if (this.lines > 0.02) this.speedLines('#ffffff', Math.min(1, this.lines) * 0.55, false);
+    if (this.ring > 0.02) { // shockwave ring
+      const k = 1 - this.ring, r = Ease.outCubic(k) * Math.hypot(W, H) * 0.55;
+      ctx.globalAlpha = this.ring * 0.7; pring(this.fx, this.fy, r, '#ffffff', 2); pring(this.fx, this.fy, r * 0.82, '#fff3b0', 1); ctx.globalAlpha = 1;
     }
-    if (this.lines > 0.01) {
-      ctx.save(); ctx.translate(W / 2, H / 2); ctx.globalAlpha = Math.min(1, this.lines) * 0.85; ctx.strokeStyle = '#ffffff';
-      const len = Math.max(W, H);
-      for (let i = 0; i < 26; i++) {
-        const a = i / 26 * TAU + this.lines * 0.25;
-        ctx.lineWidth = 1 + (i * 7 % 3);
-        ctx.beginPath(); ctx.moveTo(Math.cos(a) * len * 0.22, Math.sin(a) * len * 0.22); ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len); ctx.stroke();
-      }
-      ctx.restore();
-    }
-    if (this.flash > 0.01) { ctx.globalAlpha = Math.min(1, this.flash); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
   },
 };
 
@@ -735,6 +796,7 @@ const Save = {
     try { d = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { d = null; }
     const def = defaultSave();
     if (!d || d.v !== 2) d = def;
+    else if (d.onlineNewsSeen === undefined) d.onlineNewsSeen = false; // played before online existed: tell them it's here
     for (const k in def) if (d[k] === undefined) d[k] = def[k];
     for (const id of def.unlocked) if (!d.unlocked.includes(id)) d.unlocked.push(id);
     this.data = d;

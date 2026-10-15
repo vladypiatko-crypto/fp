@@ -130,7 +130,8 @@ const Cloud = {
       const it = g.cat && COSMETICS[g.cat] && COSMETICS[g.cat].find(x => x.id === g.id);
       if (it) Save.unlock(g.cat, g.id);
       Save.write();
-      if (g.coins > 0 || it) this.popups.push({ coins: g.coins > 0 ? g.coins : 0, cat: it ? g.cat : null, id: it ? g.id : null });
+      const msg = typeof g.msg === 'string' ? g.msg.toUpperCase().slice(0, 60) : '', from = String(g.from || 'ADMIN').slice(0, 12);
+      if (g.coins > 0 || it || msg) this.popups.push({ coins: g.coins > 0 ? g.coins : 0, cat: it ? g.cat : null, id: it ? g.id : null, msg, from });
     }
     doc.ref.delete().catch(() => {});
   },
@@ -163,7 +164,7 @@ const Cloud = {
   },
   ban(uid, on) { return this.db.doc('users/' + uid).update(on ? { banned: true } : { banned: false, flags: 0 }); },
   resetProgress(uid) { return this.db.doc('users/' + uid).update({ resetAt: Date.now(), save: { coins: 150, unlocked: DEFAULT_UNLOCKS.slice() } }); },
-  give(uid, gift) { return this.db.collection('users/' + uid + '/gifts').add(Object.assign({ from: 'ADMIN', at: serverTime() }, gift)); },
+  give(uid, gift) { return this.db.collection('users/' + uid + '/gifts').add(Object.assign({ from: (this.me && this.me.username) || 'ADMIN', at: serverTime() }, gift)); },
 };
 Cloud.init();
 
@@ -260,40 +261,65 @@ class BannedScene {
 
 // ================================================================ a gift (or a message) from the admin
 class GiftScene {
-  constructor(g) { this.g = g; this.t = 0; this.ui = new UI(); this.parts = []; if (g.notice) sfx.uiBack(); else { sfx.chestOpen(g.cat ? itemOf(g.cat, g.id).rarity : 'rare'); sfx.quack(); } }
+  constructor(g) {
+    this.g = g; this.t = 0; this.ui = new UI(); this.parts = [];
+    this.item = g.cat ? itemOf(g.cat, g.id) : null;
+    if (g.notice) sfx.uiBack();
+    else if (this.item || g.coins) { sfx.chestOpen(this.item ? this.item.rarity : 'rare'); sfx.quack(); }
+    else { sfx.quack(1.3); tone(880, 0.12, 'triangle', 0.06, 0, atime(0.1)); }
+  }
   update(dt) {
     this.t += dt;
     for (const q of this.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt; }
     this.parts = this.parts.filter(q => q.life > 0);
-    if (!this.g.notice && Math.random() < 0.4) this.parts.push({ x: W / 2 + rand(-40, 40), y: H / 2 + rand(-30, 20), vx: 0, vy: rand(-24, -6), life: 0.9, col: pick(['#ffd23f', '#c9a6ff', '#fff8e7']) });
+    if (!this.g.notice && (this.item || this.g.coins) && Math.random() < 0.4) this.parts.push({ x: W / 2 + rand(-50, 50), y: H / 2 + rand(-30, 20), vx: 0, vy: rand(-24, -6), life: 0.9, col: pick(this.item && this.item.rarity === 'admin' ? RAINBOW : ['#ffd23f', '#c9a6ff', '#fff8e7']) });
     this.ui.update(dt, this.t > 0.5 ? Input.menu() : null);
   }
   draw() {
     const prev = Scenes.stack[Scenes.stack.length - 2];
     if (prev) prev.draw();
-    const g = this.g, k = Ease.outBack(Math.min(1, this.t / 0.4));
-    ctx.fillStyle = 'rgba(15,10,26,0.82)'; ctx.fillRect(0, 0, W, H);
+    const g = this.g, it = this.item, k = Ease.outBack(Math.min(1, this.t / 0.4)), T = this.t;
+    ctx.fillStyle = 'rgba(15,10,26,0.84)'; ctx.fillRect(0, 0, W, H);
     this.ui.begin();
     if (g.notice) {
       text(g.notice, W / 2, H / 2 - 10, C.white, 1, 1, 'outline');
     } else {
-      ctx.save(); ctx.translate(W / 2, H / 2 - 6); ctx.rotate(this.t * 0.6); ctx.fillStyle = 'rgba(255,210,63,0.12)';
-      for (let i = 0; i < 8; i++) { ctx.rotate(TAU / 8); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-10, -H); ctx.lineTo(10, -H); ctx.fill(); }
-      ctx.restore();
+      const gift = it || g.coins, admin = it && it.rarity === 'admin';
+      if (gift) { // turning light rays (rainbow for ADMIN items)
+        ctx.save(); ctx.translate(W / 2, H * 0.47); ctx.rotate(T * 0.6);
+        for (let i = 0; i < 8; i++) { ctx.rotate(TAU / 8); ctx.fillStyle = admin ? RAINBOW[i % RAINBOW.length] : '#ffd23f'; ctx.globalAlpha = admin ? 0.1 : 0.12; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-10, -H); ctx.lineTo(10, -H); ctx.fill(); }
+        ctx.restore(); ctx.globalAlpha = 1;
+      }
       for (const q of this.parts) { ctx.fillStyle = q.col; ctx.fillRect(Math.round(q.x), Math.round(q.y), 2, 2); }
-      drawZoomText('A GIFT FROM THE ADMIN!', W / 2, H * 0.14, lerp(6, 2, k), C.gold);
-      const lo = Save.data.loadout[0], y = H / 2 + 18 - Math.abs(Math.sin(this.t * 4)) * 4, sc = 4 * k;
-      const it = g.cat ? itemOf(g.cat, g.id) : null;
-      if (g.cat === 'skin') drawDuck(W / 2, y, { skin: g.id, facing: 'down', sc, t: this.t });
-      else if (g.cat === 'hat') drawDuck(W / 2, y, { skin: lo.skin, hat: g.id, facing: 'down', sc, t: this.t, sparkle: (x, yy) => this.parts.push({ x, y: yy, vx: rand(-8, 8), vy: rand(-20, -8), life: 0.8, col: pick(['#fff3b0', '#ffd23f', '#c9a6ff']) }) });
-      else if (g.cat === 'halo') drawDuck(W / 2, y, { skin: lo.skin, halo: g.id, facing: 'down', sc, t: this.t });
-      else if (g.cat === 'weapon') drawSprX(GUN_ART[g.id], W / 2, y - 16, { sc: 3 * k });
-      else if (g.cat === 'trail') { ctx.save(); ctx.translate(W / 2, y - 14); ctx.scale(3 * k, 3 * k); drawTrailIcon(g.id, 0, 0, this.t); ctx.restore(); }
-      let ty = H / 2 + 26;
-      if (it) { text(it.name, W / 2, ty, RARITY[it.rarity].col, 1, 1, 'outline'); ty += 10; }
-      if (g.coins) { coinIcon(Math.floor(W / 2 - textW('+' + g.coins, 2) / 2 - 10), ty + 1, this.t); text('+' + g.coins, W / 2 + 4, ty, C.gold, 2, 1, 'outline'); }
+      drawZoomText(gift ? 'ADMIN GIFT!' : 'A MESSAGE FROM THE ADMIN', W / 2, H * 0.1, lerp(6, 2, k), gift ? C.pink : C.gold);
+      const msgH = g.msg ? 12 + 7 * Math.min(3, wrapText(keep(g.msg), Math.min(W - 60, 220)).length) : 0;
+      const cy = Math.round(H * 0.47 - msgH * 0.35);
+      if (it) {
+        text('YOU GOT:', W / 2, H * 0.1 + 12, C.white, 1, 1, 'outline');
+        const lo = Save.data.loadout[0], y = cy + 16 - Math.abs(Math.sin(T * 4)) * 4, sc = (g.msg ? 3 : 4) * k;
+        if (g.cat === 'skin') drawDuck(W / 2, y, { skin: g.id, facing: 'down', sc, t: T });
+        else if (g.cat === 'hat') drawDuck(W / 2, y, { skin: lo.skin, hat: g.id, facing: 'down', sc, t: T, sparkle: (x, yy) => this.parts.push({ x, y: yy, vx: rand(-8, 8), vy: rand(-20, -8), life: 0.8, col: pick(['#fff3b0', '#ffd23f', '#c9a6ff']) }) });
+        else if (g.cat === 'halo') drawDuck(W / 2, y, { skin: lo.skin, halo: g.id, facing: 'down', sc, t: T });
+        else if (g.cat === 'weapon') drawSprX(GUN_ART[g.id], W / 2, y - 16, { sc: 3 * k });
+        else if (g.cat === 'trail') { ctx.save(); ctx.translate(W / 2, y - 14); ctx.scale(3 * k, 3 * k); drawTrailIcon(g.id, 0, 0, T); ctx.restore(); }
+        const col = rarityCol(it.rarity, T);
+        text(it.name, W / 2, cy + 24, col, 1, 1, 'outline');
+        text(RARITY[it.rarity].name, W / 2, cy + 33, col, 1, 1, null);
+      } else if (g.coins) {
+        const bob = Math.abs(Math.sin(T * 4)) * 4;
+        ctx.save(); ctx.translate(W / 2, cy - 6 - bob); ctx.scale(3 * k, 3 * k); coinIcon(-4, -4, T); ctx.restore();
+        text(fmt('YOU GOT {0} COINS!', g.coins), W / 2, cy + 18, C.gold, 1, 1, 'outline');
+      }
+      if (g.msg) { // speech bubble with the admin's note
+        const bw = Math.min(W - 40, 240), lines = wrapText(keep(g.msg), bw - 16).slice(0, 3), bh = 14 + lines.length * 7;
+        const bx = Math.floor(W / 2 - bw / 2), by = Math.min(H - 30 - bh, Math.round(gift ? cy + 42 : H * 0.42));
+        panel(bx, by, bw, bh, '#fff8e7', OUT, null, false);
+        ctx.fillStyle = '#fff8e7'; ctx.beginPath(); ctx.moveTo(W / 2 - 5, by); ctx.lineTo(W / 2, by - 6); ctx.lineTo(W / 2 + 5, by); ctx.fill();
+        text(fmt('FROM {0}:', keep(g.from || 'ADMIN')), bx + 6, by + 4, '#c0609e', 1, 0, null);
+        lines.forEach((ln, i) => text(ln, bx + 6, by + 12 + i * 7, OUT, 1, 0, null));
+      }
     }
-    drawButton(this.ui, 'ok', W / 2 - 26, H - 24, 52, 16, g.notice ? 'OK' : 'YAY!', { on: () => Scenes.pop(), col: '#3d2f63', def: true });
+    drawButton(this.ui, 'ok', W / 2 - 26, H - 22, 52, 16, g.notice ? 'OK' : 'YAY!', { on: () => Scenes.pop(), col: '#3d2f63', def: true });
   }
 }
 // gifts wait until you're on a menu (never in the middle of a fight or a chest opening)

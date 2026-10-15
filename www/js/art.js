@@ -123,6 +123,7 @@ const PROJ_ART = {
   seed: spr(['ee', 'ee'], { e: '#ff3b5c' }),
   missile: spr(['.rr.', 'rwwr', 'rwwr', '.ff.'], { r: '#e8343b', w: '#d5dbe6', f: '#ffd23f' }),
   snowball: spr(['.ww.', 'wwww', 'wwwb', '.wb.'], { w: '#ffffff', b: '#bde6ff' }),
+  feather: spr(['ww...', '.wwwW', '...ww'], { w: '#fff8e7', W: '#c9a6ff' }),
 };
 
 // ================================================================ robots (Dr. Honk's army). m/M/l are re-tinted per world.
@@ -242,6 +243,9 @@ const ICON = {
   egg: ART.eggOrb, bread: ART.bread,
   zap: spr(['...yy', '..yy.', '.yyyy', '..yy.', '.yy..', 'yy...'], { y: '#fff36b' }),
   quack: spr(['.yyy..o', 'yyKyoo.', '.yyy..o', '..yy...'], { y: '#ffd23f', o: '#ff9f1c', K: OUT }),
+  feather: spr(['....ww', '..wwwW', '.wwwW.', 'wwW...', 'k.....'], { w: '#fff8e7', W: '#c9a6ff', k: '#8b8aa0' }),
+  puddle: spr(['..bbb..', '.bBbbb.', 'bbbbBbb', '.bbbbb.'], { b: '#3fa7ff', B: '#c9ecff' }),
+  shield: spr(['.ccc.', 'cWccc', 'cWccc', 'ccccc', '.ccc.'], { c: '#7ecbff', W: '#ffffff' }),
   speed: spr(['..www', '.wwww', 'www..', 'ww...', 'w....'], { w: '#c9ecff' }),
   heart: ART.heart, magnet: ART.magnet,
   regen: spr(['..g..', '..g..', 'ggggg', '..g..', '..g..'], { g: '#51cf66' }),

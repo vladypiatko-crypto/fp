@@ -20,7 +20,7 @@ const NET_FACE = ['down', 'left', 'right', 'up'];
 const SNACK = { k: 'snack', name: 'BREAD SNACK', max: 99, d: () => 'HEAL 40 HP' };
 const r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100;
 const stIdx = s => { const i = NET_STATES.indexOf(s || ''); return i < 0 ? NET_STATES.length - 1 : i; };
-const findUpgrade = k => (k === 'snack' ? SNACK : UPGRADES.find(u => u.k === k));
+const findUpgrade = k => (k === 'snack' ? SNACK : k.startsWith('over:') ? overCard(k.slice(5)) : UPGRADES.find(u => u.k === k));
 const bossDef = name => Object.assign({ xp: 0, fx: BOSSES[name].fx || 'metal', heavy: 0.05 }, BOSSES[name]);
 const worldFromSeed = seed => Object.keys(WORLD_THEME)[seed % Object.keys(WORLD_THEME).length];
 const makeCode = () => { let c = ''; for (let i = 0; i < 4; i++) c += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]; return c; };
@@ -486,9 +486,9 @@ GameScene.prototype.buildSnapshot = function () {
     t: 'snap', T: r2(this.t), st: this.state, n: r2(this.stateT),
     // players: [x, y, face, aim, hp, maxHp, bits, dashT, dashCd, reviveT, level, xp, xpNext, kills, pending, upgrades, choiceKeys, hurtFlash, squash, speed]
     p: this.players.map(p => [r1(p.x), r1(p.y), NET_FACE.indexOf(p.facing), r2(p.aim), Math.ceil(p.hp), p.maxHp,
-      (p.down ? 1 : 0) | (p.gone ? 2 : 0) | (p.moving ? 4 : 0) | (p.iframes > 0 ? 8 : 0),
+      (p.down ? 1 : 0) | (p.gone ? 2 : 0) | (p.moving ? 4 : 0) | (p.iframes > 0 ? 8 : 0) | (lvl(p, 'shield') && p.shieldT <= 0 ? 16 : 0),
       r2(p.dashT), r2(p.dashCd), r2(p.reviveT), p.level, Math.floor(p.xp), p.xpNext, p.kills, p.pending, p.up,
-      (p.choice || []).map(c => c.k), r2(p.hurtFlash), r2(p.squash), r2(p.spd)]),
+      (p.choice || []).map(c => c.k), r2(p.hurtFlash), r2(p.squash), r2(p.spd), Object.keys(p.over)]),
     // enemies: [id, type, x, y, hp, maxHp, bits, z, state, flash, fuse, rot]
     e: this.enemies.filter(e => !e.dead).map(e => [e.id, NET_TYPES.indexOf(e.type), r1(e.x), r1(e.y), Math.ceil(e.hp), Math.ceil(e.maxHp),
       (e.flip ? 1 : 0) | (e.boss ? 2 : 0) | (e.spawnT > 0 ? 4 : 0) | (e.fuse >= 0 ? 8 : 0) | (e.phase === 2 ? 16 : 0),
@@ -500,6 +500,7 @@ GameScene.prototype.buildSnapshot = function () {
     it: this.items.map(k => [k.k, r1(k.x), r1(k.y), r1(k.t)]),
     bm: this.bombs.map(b => [r1(b.x0), r1(b.y0), r1(b.x1), r1(b.y1), r2(b.t), b.dur, b.r]),
     mk: this.marks.filter(m => !m.done).map(m => [r1(m.x), r1(m.y), m.r, r2(m.t), m.dur]),
+    pd: this.puddles.map(q => [r1(q.x), r1(q.y), r1(q.r), r2(q.t), q.dur, q.lava ? 1 : 0]),
     fx: this.fx.map(f => Object.assign({}, f)),
     tx: this.texts.map(t => ({ x: r1(t.x), y: r1(t.y), str: t.str, col: t.col, life: r2(t.life), max: t.max, sc: t.sc, vy: r1(t.vy) })),
     ban: this.banners.map(b => ({ str: b.str, col: b.col, t: r2(b.t), dur: b.dur, sub: b.sub })),
@@ -518,7 +519,8 @@ GameScene.prototype.applySnapshot = function (s) {
   s.p.forEach((a, i) => {
     const p = this.players[i]; if (!p) return;
     const bits = a[6];
-    p.down = !!(bits & 1); p.gone = !!(bits & 2); p.moving = !!(bits & 4); p.iframes = bits & 8 ? 0.3 : 0;
+    p.down = !!(bits & 1); p.gone = !!(bits & 2); p.moving = !!(bits & 4); p.iframes = bits & 8 ? 0.3 : 0; p.shieldT = bits & 16 ? 0 : 1;
+    p.over = {}; for (const k of a[20] || []) p.over[k] = true;
     p.hp = a[4]; p.maxHp = a[5]; p.dashT = a[7]; p.dashCd = a[8]; p.reviveT = a[9];
     p.level = a[10]; p.xp = a[11]; p.xpNext = a[12]; p.kills = a[13]; p.pending = a[14]; p.up = a[15];
     p.aim = a[3]; p.facing = NET_FACE[a[2]] || p.facing; p.spd = a[19];
@@ -563,6 +565,7 @@ GameScene.prototype.applySnapshot = function (s) {
   this.items = s.it.map(a => ({ k: a[0], x: a[1], y: a[2], t: a[3] }));
   this.bombs = s.bm.map(a => ({ x0: a[0], y0: a[1], x1: a[2], y1: a[3], t: a[4], dur: a[5], r: a[6] }));
   this.marks = s.mk.map(a => ({ x: a[0], y: a[1], r: a[2], t: a[3], dur: a[4] }));
+  this.puddles = (s.pd || []).map(a => ({ x: a[0], y: a[1], r: a[2], t: a[3], dur: a[4], lava: !!a[5] }));
   this.fx = s.fx;
   this.texts = s.tx;
   this.banners = s.ban;
@@ -640,6 +643,7 @@ GameScene.prototype.clientTick = function (dt) {
     if (p.choice) p.choiceT += dt;
     if (p.id !== this.localPid && p.tx !== undefined) { p.x += (p.tx - p.x) * Math.min(1, dt * 12); p.y += (p.ty - p.y) * Math.min(1, dt * 12); }
     if (p.mvx === undefined) { p.mvx = 0; p.mvy = 0; }
+    p.eggAng += dt * eggSpeed(p);
     tickPicked(p, dt); dustFor(p, dt); heartbeatFor(p, dt);
     updateTrail(p, dt);
   }
@@ -655,6 +659,7 @@ GameScene.prototype.clientTick = function (dt) {
   for (const k of this.items) k.t += dt;
   for (const b of this.bombs) b.t += dt;
   for (const m of this.marks) m.t += dt;
+  for (const q of this.puddles) q.t += dt;
   for (const f of this.fx) f.t += dt;
   this.fx = this.fx.filter(f => f.t < f.dur);
   for (const b of this.banners) b.t += dt;

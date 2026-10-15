@@ -65,8 +65,13 @@ class AdminScene {
 class AdminUserScene {
   constructor(uid) {
     this.uid = uid; this.T = 0; this.ui = new UI(); this.u = undefined; this.note = ''; this.noteT = 0; this.sure = 0;
-    this.cat = 'hat'; this.item = 0;
+    this.cat = 'hat'; this.item = 0; this.msg = '';
     this.off = Cloud.watchUser(uid, u => { this.u = u; });
+  }
+  // a gift (or just a message); a written message rides along with the next gift
+  send(gift, done) {
+    const g = this.msg ? Object.assign({ msg: this.msg }, gift) : gift;
+    this.act(Cloud.give(this.uid, g).then(() => { this.msg = ''; }), done);
   }
   close() { if (this.off) this.off(); Trans.go(() => Scenes.pop()); }
   say(msg) { this.note = msg; this.noteT = 2.5; }
@@ -104,7 +109,7 @@ class AdminUserScene {
     y += bh + 8;
     // gifts: coins
     text('GIVE COINS', x0, y + 4, C.gold, 1, 0);
-    [100, 500, 1000].forEach((n, i) => drawButton(this.ui, 'c' + n, x0 + 50 + i * 44, y, 40, bh, '+' + n, { on: () => this.act(Cloud.give(u.uid, { coins: n }), 'SENT!') }));
+    [100, 500, 1000].forEach((n, i) => drawButton(this.ui, 'c' + n, x0 + 50 + i * 44, y, 40, bh, '+' + n, { on: () => this.send({ coins: n }, 'SENT!') }));
     y += bh + 4;
     // gifts: any item (category < >, item < >)
     const list = this.items(); this.item = clamp(this.item, 0, list.length - 1);
@@ -115,10 +120,41 @@ class AdminUserScene {
     panel(x0 + 127, y - 4, 22, 22, C.uiD, RARITY[it.rarity].col, null, false);
     ctx.save(); ctx.beginPath(); ctx.rect(x0 + 128, y - 3, 20, 20); ctx.clip(); drawItemIcon(this.cat, it.id, x0 + 138, y + 7, this.T, Save.data.loadout[0]); ctx.restore();
     drawButton(this.ui, 'inext', x0 + 152, y, 14, bh, '>', { on: () => { this.item = (this.item + 1) % list.length; } });
-    drawButton(this.ui, 'give', x0 + 170, y, Math.max(40, bw * 3 + 8 - 170), bh, 'GIVE', { col: '#3d2f63', on: () => this.act(Cloud.give(u.uid, { cat: this.cat, id: it.id }), 'SENT!') });
+    drawButton(this.ui, 'give', x0 + 170, y, Math.max(40, bw * 3 + 8 - 170), bh, 'GIVE', { col: '#3d2f63', on: () => this.send({ cat: this.cat, id: it.id }, 'SENT!') });
     text(it.name, x0 + 50, y + bh + 4, RARITY[it.rarity].col, 1, 0, null);
     y += bh + 16;
-    drawButton(this.ui, 'wizard', x0, y, bw * 3 + 8, bh, 'GIVE THE WIZARD HAT', { col: '#4b2a7a', on: () => this.act(Cloud.give(u.uid, { cat: 'hat', id: 'wizard' }), 'SENT!') });
+    drawButton(this.ui, 'wizard', x0, y, bw * 3 + 8, bh, 'GIVE THE WIZARD HAT', { col: '#4b2a7a', on: () => this.send({ cat: 'hat', id: 'wizard' }, 'SENT!') });
+    y += bh + 4;
+    // message: written on its own screen, sent with the next gift or by itself
+    const mw = bw * 3 + 8 - 64;
+    drawButton(this.ui, 'msg', x0, y, mw, bh, fmt('MESSAGE: {0}  >', this.msg ? keep(this.msg.length > 22 ? this.msg.slice(0, 21) + '...' : this.msg) : '(NONE)'), { on: () => Scenes.push(new MessageScene(this)) });
+    drawButton(this.ui, 'msgsend', x0 + mw + 4, y, 60, bh, 'SEND', { disabled: !this.msg, col: '#3d2f63', on: () => this.send({}, 'SENT!') });
     if (this.noteT > 0) text(this.note, W / 2, Math.min(H - 10, y + bh + 6), C.gold, 1, 1, 'outline');
+    else if (this.msg) text('GOES WITH YOUR NEXT GIFT, OR SEND IT ALONE', W / 2, Math.min(H - 10, y + bh + 6), C.gray, 1, 1, null);
+  }
+}
+
+// ================================================================ writing a message to a player
+class MessageScene {
+  constructor(owner) { this.owner = owner; this.T = 0; this.ui = new UI(); this.kb = new Keyboard({ value: owner.msg || '', max: 60, extra: ".,!?'#:-()" }); }
+  save() { this.owner.msg = this.kb.value.replace(/ +/g, ' ').trim(); sfx.pickup(); Scenes.pop(); }
+  update(dt) {
+    this.T += dt;
+    const acts = Input.menu();
+    this.kb.typed(acts);
+    if (Input.anyHit(['Enter', 'NumpadEnter'])) { this.save(); return; }
+    if (Input.anyHit(['Escape']) || acts.back) { sfx.uiBack(); Scenes.pop(); return; }
+    this.ui.update(dt, acts);
+  }
+  draw() {
+    drawChecker(); this.ui.begin();
+    text('WRITE A MESSAGE', W / 2, 5, C.pink, 2, 1, 'outline');
+    const fw = Math.min(W - 40, 250), fx = Math.floor(W / 2 - fw / 2) - 10;
+    drawField(fx, 22, fw, this.kb.value, this.kb.max, this.T);
+    const by = this.kb.draw(this.ui, 44);
+    const sy = Math.min(H - 17, by + 3);
+    drawButton(this.ui, 'clear', Math.floor(W / 2 - 112), sy, 70, 14, 'CLEAR', { on: () => { this.kb.value = ''; } });
+    drawButton(this.ui, 'cancel', Math.floor(W / 2 - 35), sy, 70, 14, 'CANCEL', { on: () => Scenes.pop(), icon: ICON.back });
+    drawButton(this.ui, 'save', Math.floor(W / 2 + 42), sy, 70, 14, 'SAVE', { on: () => this.save(), col: '#3d2f63', def: true });
   }
 }

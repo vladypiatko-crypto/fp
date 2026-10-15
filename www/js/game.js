@@ -89,7 +89,7 @@ class GameScene {
     this.theme = WORLD_THEME[this.world];
     this.t = 0; this.state = 'play'; this.stateT = 0;
     this.enemies = []; this.shots = []; this.eshots = []; this.drops = []; this.items = []; this.parts = []; this.tparts = [];
-    this.texts = []; this.fx = []; this.decals = []; this.bombs = []; this.marks = []; this.banners = [];
+    this.texts = []; this.fx = []; this.decals = []; this.bombs = []; this.marks = []; this.banners = []; this.puddles = [];
     this.spawnAcc = 0; this.nextEvent = 40; this.eventN = 0; this.nextBoss = this.mode === 'endless' ? 150 : Infinity;
     this.bossCount = 0; this.boss = null; this.bossSpawned = false; this.kills = 0; this.coins = 0; this.gemCombo = 0; this.gemComboT = 0;
     this.uid = 1; this.hintT = 0; this.slow = 1; this.sticks = [null, null, null, null]; this.ui = new UI(); this.pauseUI = new UI(); this.resUI = new UI();
@@ -104,11 +104,11 @@ class GameScene {
     if (this.role === 'client') this.state = 'play'; // the host starts the match and sends us its state
     else if (this.level && this.level.intro.length && !this.online) { this.state = 'dialog'; this.dialog = new Dialog(this.level.intro, () => this.begin()); }
     else this.begin();
-    Music.play(this.state === 'dialog' ? 'calm' : 'battle');
+    Music.play(this.state === 'dialog' ? 'calm' : worldSong(this.world));
   }
   begin() {
     this.state = 'play'; this.dialog = null;
-    Music.play('battle');
+    Music.play(worldSong(this.world));
     banner(this.level ? fmt('LEVEL {0}: {1}', this.level.n, this.level.name) : 'SURVIVE!', C.gold, 2.4, this.level ? 'SURVIVE UNTIL THE BOSS ARRIVES' : '');
     for (let i = 0; i < 5; i++) spawnEnemy('bolt', spawnPos());
   }
@@ -118,7 +118,7 @@ class GameScene {
     return {
       id, lo, name: name || 'P' + (id + 1), weapon: lo.weapon, x: WORLD_SIZE / 2 + ring[0], y: WORLD_SIZE / 2 + ring[1], r: 5, hp: 100, maxHp: 100, spd: 70, gone: false,
       facing: 'down', turnT: 0, ax: 1, ay: 0, aim: 0, iframes: 0, dashT: 0, dashCd: 0, dvx: 0, dvy: 0, dashHit: new Set(),
-      xp: 0, level: 1, xpNext: xpFor(1), kills: 0, down: false, reviveT: 0, up: {}, tm: { main: 0.3, bread: 1, zap: 1.5, quack: 2 },
+      xp: 0, level: 1, xpNext: xpFor(1), kills: 0, down: false, reviveT: 0, up: {}, over: {}, shieldT: 0, tm: { main: 0.3, bread: 1, zap: 1.5, quack: 2, feather: 1.2, puddle: 1.5 },
       pending: 0, choice: null, sel: 1, choiceT: 0, anim: 0, moving: false, eggAng: 0, blinkT: rand(1, 4), hurtFlash: 0, moved: false,
       trailT: 0, rainbow: [], ghosts: [], target: null, squash: 0,
     };
@@ -177,7 +177,7 @@ class GameScene {
     updateEnemies(dt);
     buildGrid();
     updateShots(dt);
-    updateBombs(dt);
+    updateBombs(dt); updatePuddles(dt);
     updateDrops(dt);
     updateParticles(dt);
     for (const f of this.fx) f.t += dt;
@@ -392,6 +392,9 @@ function spawnEnemy(type, pos, opts = {}) {
   R.enemies.push(e);
   return e;
 }
+// every world has its own song
+const WORLD_SONG = { pond: 'battle', woods: 'battle', peaks: 'sky', factory: 'factory', tower: 'factory', beach: 'beach', swamp: 'swamp', clouds: 'sky', moon: 'space', ship: 'factory' };
+const worldSong = w => WORLD_SONG[w] || 'battle';
 function spawnBoss(id) {
   const b = BOSSES[id];
   const pos = spawnPos();
@@ -405,7 +408,7 @@ function spawnBoss(id) {
   R.enemies.push(e);
   R.boss = e; R.bossCount++;
   R.bossIntro = { t: 0, name: b.name };
-  Music.play('boss'); sfx.bossIntro(); sfx.honk(b.final ? 0.8 : 1.15); sfx.warn(); Impact.trigger('big');
+  Music.play(b.final ? 'final' : 'boss'); sfx.bossIntro(); sfx.honk(b.final ? 0.8 : 1.15); sfx.warn(); Impact.trigger('big');
   return e;
 }
 function spawnPos() {
@@ -494,12 +497,17 @@ function killEnemy(e, owner, quiet) {
   else if (luck < 0.018) R.items.push({ k: 'sauce', x: e.x, y: e.y, t: 0 });
   if (e.d.ai === 'bomber') explode(e.x, e.y, 24, 22 * hpMul(), owner, false);
   if (e.d.split) for (let i = 0; i < 3; i++) { const m = spawnEnemy(e.d.split, { x: e.x + rand(-4, 4), y: e.y + rand(-4, 4) }, { instant: true }); m.kx = rand(-80, 80); m.ky = rand(-80, 80); }
-  if (e.type === 'tank') Impact.trigger('big');
+  if (e.type === 'tank') impactAt('big', e.x, e.y);
   if (e.boss) bossDefeated(e);
+}
+// an impact frame aimed at a spot in the world (the speed lines and shockwave converge on it)
+function impactAt(kind, x, y) {
+  const v = R.views && R.views.find(q => x >= q.camX && x <= q.camX + q.w && y >= q.camY && y <= q.camY + q.h);
+  if (v) Impact.trigger(kind, v.x + x - v.camX, v.y + y - v.camY); else Impact.trigger(kind);
 }
 function bossDefeated(e) {
   sfx.bigBoom(); shakeAt(e.x, e.y, 9);
-  Impact.trigger('huge');
+  impactAt('huge', e.x, e.y);
   for (let i = 0; i < 6; i++) R.fx.push({ k: 'boom', x: e.x + rand(-20, 20), y: e.y + rand(-20, 20), r: rand(14, 26), t: -i * 0.12, dur: 0.35 });
   for (let i = 0; i < 25; i++) dropAt(e.x + rand(-24, 24), e.y + rand(-24, 24), 'xp', 5);
   for (let i = 0; i < 18; i++) dropAt(e.x + rand(-24, 24), e.y + rand(-24, 24), 'coin', 2);
@@ -508,7 +516,7 @@ function bossDefeated(e) {
   banner(fmt('{0} DESTROYED!', e.d.name), C.gold, 2.6);
   R.boss = null;
   if (R.mode === 'story') { R.state = 'clear'; R.stateT = 0; Music.play(null); sfx.win(); for (const p of R.players) if (p.down) { p.down = false; p.hp = p.maxHp * 0.5; } }
-  else Music.play('battle');
+  else Music.play(worldSong(R.world));
 }
 function dropAt(x, y, k, v) {
   if (R.drops.length > 400 && k === 'xp') {
@@ -527,12 +535,20 @@ function explode(x, y, r, dmg, owner, hurtsPlayers) {
 }
 function hurtPlayer(p, dmg) {
   if (p.down || p.iframes > 0 || p.dashT > 0 || R.state === 'clear' || picking(p)) return;
+  if (lvl(p, 'shield') && p.shieldT <= 0) { // bubble shield: this hit pops the bubble instead
+    p.shieldT = shieldCd(p); p.iframes = 0.5;
+    R.fx.push({ k: 'ring', x: p.x, y: p.y - 6, r: p.over.shield ? 60 : 36, t: 0, dur: 0.3, col: '#9fdcff' });
+    burst(p.x, p.y - 6, ['#9fdcff', '#ffffff'], 12, 70, 0.4); sfx.pop();
+    forNear(p.x, p.y, 44, e => { const a = Math.atan2(e.y - p.y, e.x - p.x); if (d2(p.x, p.y, e.x, e.y) < 40 * 40) hurtEnemy(e, 4 * tScale(), Math.cos(a), Math.sin(a), 240, p); });
+    if (p.over.shield) for (const b of R.eshots) if (d2(p.x, p.y, b.x, b.y) < 60 * 60) b.life = 0;
+    return;
+  }
   p.hp -= dmg; p.iframes = 0.6; p.hurtFlash = 0.25; p.squash = 0.2;
   sfx.hurt(); shakeFor(p, 4);
   floatText(p.x, p.y - 16, '-' + Math.round(dmg), C.red, 0.7);
   burst(p.x, p.y - 4, ['#fff8e7', PCOL[p.id]], 6, 50, 0.4);
   if (p.hp <= 0) {
-    p.hp = 0; p.down = true; p.reviveT = 0; Impact.trigger('huge');
+    p.hp = 0; p.down = true; p.reviveT = 0; impactAt('huge', p.x, p.y);
     burst(p.x, p.y, ['#fff8e7', '#ffd23f'], 20, 90, 0.7);
     if (alivePlayers().length) banner(fmt('{0} IS DOWN!', R.online ? keep(p.name) : 'P' + (p.id + 1)), PCOL[p.id], 2, 'STAND NEXT TO THEIR EGG TO REVIVE');
   }
@@ -554,7 +570,7 @@ function updatePlayer(p, dt) {
       p.reviveT += dt;
       if (p.reviveT >= 2.5) {
         p.down = false; p.hp = Math.round(p.maxHp * 0.5); p.iframes = 2; p.reviveT = 0; p.squash = 0.3;
-        sfx.revive(); sfx.quack(1.2); Impact.trigger('big'); burst(p.x, p.y, ['#51cf66', '#fff8e7', PCOL[p.id]], 24, 90, 0.7);
+        sfx.revive(); sfx.quack(1.2); impactAt('big', p.x, p.y); burst(p.x, p.y, ['#51cf66', '#fff8e7', PCOL[p.id]], 24, 90, 0.7);
         floatText(p.x, p.y - 18, 'REVIVED!', C.green, 1.2);
       }
     } else p.reviveT = Math.max(0, p.reviveT - dt * 0.5);
@@ -654,16 +670,16 @@ function fireWeapons(p, dt, tgt) {
     if (tgt) { fireMain(p, tgt, wd); p.tm.main = wd.cd * Math.pow(0.84, lvl(p, 'rapid')); }
     else p.tm.main = 0.05;
   }
-  // --- egg orbit
+  // --- egg orbit: eggs hurt and push robots away, and block bullets
   const eg = lvl(p, 'egg');
   if (eg) {
-    p.eggAng += dt * (2.6 + eg * 0.25);
-    const n = eg + 1, rad = 22 + eg;
-    for (let i = 0; i < n; i++) {
-      const a = p.eggAng + i * TAU / n, ex = p.x + Math.cos(a) * rad, ey = p.y - 3 + Math.sin(a) * rad;
-      forNear(ex, ey, 10, e => {
-        if (e.eggCd <= 0 && d2(ex, ey, e.x, e.y) < (e.r + 3) ** 2) { e.eggCd = 0.35; const k = Math.atan2(e.y - p.y, e.x - p.x); hurtEnemy(e, (6 + 4 * eg) * tScale(), Math.cos(k), Math.sin(k), 90, p); }
+    p.eggAng += dt * eggSpeed(p);
+    const big = !!p.over.egg, hitR = big ? 8 : 3, dmg = (6 + 4 * eg) * tScale() * (big ? 2.2 : 1);
+    for (const [ex, ey] of eggSpots(p)) {
+      forNear(ex, ey, 14, e => {
+        if (e.eggCd <= 0 && d2(ex, ey, e.x, e.y) < (e.r + hitR) ** 2) { e.eggCd = 0.35; const k = Math.atan2(e.y - p.y, e.x - p.x); hurtEnemy(e, dmg, Math.cos(k), Math.sin(k), big ? 260 : 170, p); }
       });
+      for (const b of R.eshots) if (!(b.wait > 0) && b.life > 0 && d2(ex, ey, b.x, b.y) < (hitR + 3) ** 2) { b.life = 0; burst(b.x, b.y, ['#fff8e7', '#ffd23f'], 3, 40, 0.2); }
     }
   }
   // --- bread bombs
@@ -671,7 +687,7 @@ function fireWeapons(p, dt, tgt) {
   if (br) {
     p.tm.bread -= dt;
     if (p.tm.bread <= 0) {
-      p.tm.bread = 2.8 - 0.25 * br;
+      p.tm.bread = (2.8 - 0.25 * br) * (p.over.bread ? 0.7 : 1);
       for (let i = 0; i < 1 + Math.floor(br / 2); i++) {
         const near = R.enemies.filter(e => !e.dead && e.spawnT <= 0 && d2(e.x, e.y, p.x, p.y) < 130 * 130);
         const t = near.length ? pick(near) : null;
@@ -684,11 +700,12 @@ function fireWeapons(p, dt, tgt) {
   if (zp) {
     p.tm.zap -= dt;
     if (p.tm.zap <= 0) {
-      let cur = nearestEnemy(p.x, p.y, 120);
+      const oz = !!p.over.zap;
+      let cur = nearestEnemy(p.x, p.y, oz ? 160 : 120);
       if (cur) {
-        p.tm.zap = 2.2 - 0.25 * zp;
-        const pts = [[p.x, p.y - 6]], hit = new Set(), dmg = (12 + 7 * zp) * tScale();
-        for (let i = 0; i < 2 + zp && cur; i++) { hit.add(cur); pts.push([cur.x, cur.y]); hurtEnemy(cur, dmg, 0, 0, 0, p); cur = nearestEnemy(cur.x, cur.y, 70, hit); }
+        p.tm.zap = (2.2 - 0.25 * zp) * (oz ? 0.5 : 1);
+        const pts = [[p.x, p.y - 6]], hit = new Set(), dmg = (12 + 7 * zp) * tScale() * (oz ? 1.5 : 1);
+        for (let i = 0; i < 2 + zp + (oz ? 6 : 0) && cur; i++) { hit.add(cur); pts.push([cur.x, cur.y]); hurtEnemy(cur, dmg, 0, 0, 0, p); cur = nearestEnemy(cur.x, cur.y, oz ? 110 : 70, hit); }
         R.fx.push({ k: 'zap', pts, t: 0, dur: 0.18 });
         sfx.zap();
       } else p.tm.zap = 0.2;
@@ -698,19 +715,78 @@ function fireWeapons(p, dt, tgt) {
   const qk = lvl(p, 'quack');
   if (qk) {
     p.tm.quack -= dt;
-    const rad = 34 + 8 * qk;
+    const oq = !!p.over.quack, rad = (34 + 8 * qk) * (oq ? 1.8 : 1);
     if (p.tm.quack <= 0) {
       if (nearestEnemy(p.x, p.y, rad)) {
-        p.tm.quack = 4.6 - 0.5 * qk;
+        p.tm.quack = (4.6 - 0.5 * qk) * (oq ? 0.5 : 1);
+        if (oq) Impact.trigger('small');
         R.fx.push({ k: 'ring', x: p.x, y: p.y - 3, r: rad, t: 0, dur: 0.3, col: PCOL[p.id] });
         floatText(p.x, p.y - 20, 'QUAAACK!', PCOL[p.id], 0.7);
         sfx.quack(0.8); p.squash = 0.2;
         forNear(p.x, p.y, rad + 8, e => {
-          if (d2(p.x, p.y, e.x, e.y) < (rad + e.r) ** 2) { const a = Math.atan2(e.y - p.y, e.x - p.x); hurtEnemy(e, (6 + 5 * qk) * tScale(), Math.cos(a), Math.sin(a), 260, p); }
+          if (d2(p.x, p.y, e.x, e.y) < (rad + e.r) ** 2) { const a = Math.atan2(e.y - p.y, e.x - p.x); hurtEnemy(e, (6 + 5 * qk) * tScale() * (oq ? 2 : 1), Math.cos(a), Math.sin(a), oq ? 420 : 260, p); }
         });
       } else p.tm.quack = 0.2;
     }
   }
+  // --- feather darts: homing feathers at the nearest robots
+  const fe = lvl(p, 'feather');
+  if (fe) {
+    p.tm.feather -= dt;
+    if (p.tm.feather <= 0) {
+      const of = !!p.over.feather, near = R.enemies.filter(e => !e.dead && e.spawnT <= 0 && d2(e.x, e.y, p.x, p.y) < 150 * 150);
+      if (near.length) {
+        p.tm.feather = (1.6 - 0.12 * fe) * (of ? 0.6 : 1);
+        const n = (1 + fe) * (of ? 2 : 1);
+        for (let i = 0; i < n; i++) {
+          const a = rand(0, TAU), tgt = pick(near);
+          R.shots.push({ kind: 'feather', x: p.x, y: p.y - 6, vx: Math.cos(a) * 90, vy: Math.sin(a) * 90, life: 1.4, max: 1.4, dmg: (7 + 4 * fe) * tScale() * (of ? 1.5 : 1),
+            pierce: of ? 2 : 0, hit: new Set(), owner: p, r: 2, col: '#fff8e7', kb: 40, rot: 0, tgt });
+        }
+        sfx.pop();
+      } else p.tm.feather = 0.25;
+    }
+  }
+  // --- splash puddle: drop a puddle that hurts robots standing in it
+  const pu = lvl(p, 'puddle');
+  if (pu) {
+    p.tm.puddle -= dt;
+    if (p.tm.puddle <= 0 && nearestEnemy(p.x, p.y, 110)) {
+      const lava = !!p.over.puddle;
+      p.tm.puddle = (3.4 - 0.3 * pu) * (lava ? 0.6 : 1);
+      R.puddles.push({ x: p.x, y: p.y + 2, r: (16 + 3 * pu) * (lava ? 1.8 : 1), t: 0, dur: 3 + 0.3 * pu, tick: 0, dmg: (5 + 3 * pu) * tScale() * (lava ? 2 : 1), owner: p, lava });
+      sfx.pop();
+    }
+  }
+  // --- bubble shield: recharges (the block itself happens in hurtPlayer)
+  if (lvl(p, 'shield')) p.shieldT = Math.max(0, p.shieldT - dt);
+}
+// egg geometry, shared by the game and the drawing
+const eggSpeed = p => (2.6 + lvl(p, 'egg') * 0.25) * (p.over && p.over.egg ? 2.6 : 1);
+function eggSpots(p) {
+  const eg = lvl(p, 'egg'), out = [];
+  if (!eg) return out;
+  const n = eg + 1, rad = p.over && p.over.egg ? 31 + eg * 1.5 : 22 + eg;
+  for (let i = 0; i < n; i++) { const a = p.eggAng + i * TAU / n; out.push([p.x + Math.cos(a) * rad, p.y - 3 + Math.sin(a) * rad]); }
+  return out;
+}
+const shieldCd = p => (p.over && p.over.shield ? 3 : 9 - 1.2 * lvl(p, 'shield'));
+function updatePuddles(dt) {
+  for (const q of R.puddles) {
+    q.t += dt; q.tick -= dt;
+    if (q.tick <= 0) {
+      q.tick = 0.35;
+      forNear(q.x, q.y, q.r + 8, e => { if (d2(q.x, q.y, e.x, e.y) < (q.r * 0.9 + e.r) ** 2) hurtEnemy(e, q.dmg, 0, 0, 0, q.owner); });
+    }
+  }
+  R.puddles = R.puddles.filter(q => q.t < q.dur);
+}
+function drawPuddle(q) {
+  const k = q.t / q.dur, a = Math.min(1, q.t * 6) * Math.min(1, (1 - k) * 4), r = q.r * (0.85 + Math.min(1, q.t * 5) * 0.15);
+  ctx.globalAlpha = a * 0.55; pellipse(q.x, q.y, r, r * 0.55, q.lava ? '#ff6b1a' : '#3fa7ff');
+  ctx.globalAlpha = a * 0.7; pellipse(q.x - r * 0.15, q.y - r * 0.1, r * 0.55, r * 0.22, q.lava ? '#ffd23f' : '#9fdcff');
+  ctx.globalAlpha = a; const rr = (q.t * 22) % r; pring(q.x, q.y, rr, q.lava ? '#ffd23f' : '#c9ecff', 1, rr * 0.55);
+  ctx.globalAlpha = 1;
 }
 function fireMain(p, tgt, wd) {
   const pw = lvl(p, 'power'), multi = lvl(p, 'spread');
@@ -752,6 +828,10 @@ function fireMain(p, tgt, wd) {
 function updateShots(dt) {
   for (const b of R.shots) {
     b.life -= dt; b.rot += dt * 18;
+    if (b.kind === 'feather') { // home in on the target (or the nearest robot once it's gone)
+      if (!b.tgt || b.tgt.dead) b.tgt = nearestEnemy(b.x, b.y, 120);
+      if (b.tgt) { const dx = b.tgt.x - b.x, dy = b.tgt.y - b.y, dl = Math.hypot(dx, dy) || 1, sp = 170; b.vx += (dx / dl * sp - b.vx) * Math.min(1, dt * 7); b.vy += (dy / dl * sp - b.vy) * Math.min(1, dt * 7); }
+    }
     if (b.kind === 'rang') {
       // flies out, slows, then homes back to its owner
       const tLeft = b.life / b.max;
@@ -799,7 +879,16 @@ function popBubble(b) {
   forNear(b.x, b.y, b.aoe + 8, e => { if (d2(b.x, b.y, e.x, e.y) < (b.aoe + e.r) ** 2) { const a = Math.atan2(e.y - b.y, e.x - b.x); hurtEnemy(e, b.dmg, Math.cos(a), Math.sin(a), b.kb, b.owner); } });
 }
 function updateBombs(dt) {
-  for (const b of R.bombs) { b.t += dt; if (b.t >= b.dur && !b.done) { b.done = true; explode(b.x1, b.y1, b.r, b.dmg, b.owner, false); } }
+  const extra = [];
+  for (const b of R.bombs) {
+    b.t += dt;
+    if (b.t >= b.dur && !b.done) {
+      b.done = true; explode(b.x1, b.y1, b.r, b.dmg, b.owner, false);
+      if (!b.mini && b.owner && b.owner.over && b.owner.over.bread) // overcharged: the bomb bursts into four more
+        for (let i = 0; i < 4; i++) { const a = i / 4 * TAU + rand(-0.3, 0.3); extra.push({ x0: b.x1, y0: b.y1, x1: b.x1 + Math.cos(a) * 34, y1: b.y1 + Math.sin(a) * 34, t: 0, dur: 0.35 + i * 0.05, r: b.r * 0.7, dmg: b.dmg * 0.6, owner: b.owner, mini: true }); }
+    }
+  }
+  R.bombs.push(...extra);
   R.bombs = R.bombs.filter(b => !b.done);
 }
 function gainXp(p, v) {
@@ -916,7 +1005,7 @@ function updateEnemies(dt) {
 // bosses pick from a set of telegraphed attacks
 function updateBoss(e, tgt, dx, dy, dist, dt) {
   const B = e.d;
-  if (e.phase === 1 && B.final && e.hp < e.maxHp * 0.5) { e.phase = 2; banner('HONK RAGE MODE!', C.red, 2.4, 'HE IS REALLY ANGRY NOW'); sfx.honk(0.7); Impact.trigger('big'); e.bt = 0.6; }
+  if (e.phase === 1 && B.final && e.hp < e.maxHp * 0.5) { e.phase = 2; banner('HONK RAGE MODE!', C.red, 2.4, 'HE IS REALLY ANGRY NOW'); sfx.honk(0.7); impactAt('big', e.x, e.y); e.bt = 0.6; }
   const fast = e.phase === 2 ? 0.65 : 1;
   e.bt -= dt;
   e.flip = tgt.x < e.x;
@@ -1000,8 +1089,8 @@ function updateBoss(e, tgt, dx, dy, dist, dt) {
 const CARD_IN = 0.14, CARD_FLIP = 0.3, CARD_STAGGER = 0.12;
 const CARD_READY = CARD_IN + CARD_STAGGER * 2 + CARD_FLIP; // all three cards are face up
 const CARD_TIME = 12;                                       // auto-pick while the game keeps running
-const CARD_STYLE = { weapon: ['#ff6fae', 'WEAPON'], main: ['#ffd23f', 'GUN'], stat: ['#5ec8ff', 'DUCK'], snack: ['#51cf66', 'SNACK'] };
-const cardKind = k => (SIDE_WEAPONS.includes(k) ? 'weapon' : ['rapid', 'power', 'spread', 'pierce'].includes(k) ? 'main' : k === 'snack' ? 'snack' : 'stat');
+const CARD_STYLE = { weapon: ['#ff6fae', 'POWER-UP'], main: ['#ffd23f', 'GUN'], stat: ['#5ec8ff', 'DUCK'], snack: ['#51cf66', 'SNACK'], over: ['#ff3b3b', 'OVERCHARGE'] };
+const cardKind = k => (k.startsWith('over:') ? 'over' : SIDE_WEAPONS.includes(k) ? 'weapon' : ['rapid', 'power', 'spread', 'pierce'].includes(k) ? 'main' : k === 'snack' ? 'snack' : 'stat');
 const picking = p => p.pending > 0 && !p.down && !p.gone;
 function choosing() { return R.state === 'play' && R.players.some(picking); }
 function cardsPauseAll() {
@@ -1010,21 +1099,34 @@ function cardsPauseAll() {
   return alive.length > 0 && alive.every(picking);
 }
 function tickPicked(p, dt) { if (p.picked) { p.picked.t += dt; if (p.picked.t > 0.45) p.picked = null; } }
+const ownedPowers = p => SIDE_WEAPONS.filter(k => lvl(p, k));
 function rollChoices(p) {
-  const pool = UPGRADES.filter(u => lvl(p, u.k) < u.max);
+  // three power-up slots: once they're full, only those three keep coming (gun and duck upgrades always can)
+  const full = ownedPowers(p).length >= POWER_SLOTS;
+  const pool = UPGRADES.filter(u => lvl(p, u.k) < u.max && !(full && SIDE_WEAPONS.includes(u.k) && !lvl(p, u.k)));
   const opts = [];
+  // now and then a maxed power-up offers its overcharge
+  const ready = ownedPowers(p).filter(k => lvl(p, k) >= UPGRADES.find(u => u.k === k).max && !p.over[k]);
+  if (ready.length && Math.random() < OVER_CHANCE) opts.push(overCard(pick(ready)));
   while (opts.length < 3 && pool.length) {
     let i = Math.floor(Math.random() * pool.length);
     if (p.level <= 6 && Math.random() < 0.35) { const w = pool.findIndex(u => SIDE_WEAPONS.includes(u.k) && !lvl(p, u.k)); if (w >= 0) i = w; }
     opts.push(pool.splice(i, 1)[0]);
   }
   while (opts.length < 3) opts.push({ k: 'snack', name: 'BREAD SNACK', max: 99, d: () => 'HEAL 40 HP' });
+  if (opts[0].over) opts.splice(rint(0, 2), 0, opts.shift()); // the red card can land anywhere
   return opts;
 }
 function applyUpgrade(p, u) {
   sfx.pickup();
   if (u.k === 'snack') p.hp = Math.min(p.maxHp, p.hp + 40);
-  else { p.up[u.k] = lvl(p, u.k) + 1; if (u.k === 'heart') { p.maxHp += 20; p.hp = Math.min(p.maxHp, p.hp + 30); } }
+  else if (u.over) {
+    p.over[u.over] = true;
+    impactAt('big', p.x, p.y); sfx.chestOpen('legendary');
+    R.fx.push({ k: 'ring', x: p.x, y: p.y - 6, r: 46, t: 0, dur: 0.5, col: '#ff3b3b' });
+    burst(p.x, p.y - 6, ['#ff3b3b', '#ffd23f', '#fff8e7'], 30, 110, 0.7);
+    banner('OVERCHARGE!', '#ff3b3b', 2.2, u.name);
+  } else { p.up[u.k] = lvl(p, u.k) + 1; if (u.k === 'heart') { p.maxHp += 20; p.hp = Math.min(p.maxHp, p.hp + 30); } }
   floatText(p.x, p.y - 18, fmt('{0}!', u.name), PCOL[p.id], 1.1);
   if (p.choice) p.picked = { choice: p.choice, sel: Math.max(0, p.choice.indexOf(u)), t: 0 };
   p.pending--; p.choice = null; p.squash = 0.25;
@@ -1105,6 +1207,7 @@ function drawView(v) {
     for (const [ox, oy] of d.px) ctx.fillRect(d.x + ox, d.y + oy, 2, 1);
   }
   ctx.globalAlpha = 1;
+  for (const q of R.puddles) if (inV(q.x, q.y, q.r)) drawPuddle(q);
   // telegraphs on the ground
   for (const m of R.marks) {
     if (m.t < 0 || !inV(m.x, m.y)) continue;
@@ -1167,6 +1270,7 @@ function drawView(v) {
     if (!inV(b.x, b.y, 6)) continue;
     if (b.kind === 'bubble') { pcirc(b.x, b.y, b.r, 'rgba(189,230,255,0.45)'); pring(b.x, b.y, b.r, '#bde6ff'); ctx.fillStyle = '#fff'; ctx.fillRect(Math.round(b.x - 2), Math.round(b.y - 2), 1, 1); }
     else if (b.kind === 'rang') drawSprX(PROJ_ART.rang, b.x, b.y, { rot: b.rot });
+    else if (b.kind === 'feather') drawSprX(PROJ_ART.feather, b.x, b.y, { rot: Math.atan2(b.vy, b.vx) });
     else if (b.owner.weapon === 'minigun' || b.r <= 1 && b.owner.weapon === 'shotgun') {
       const l = Math.hypot(b.vx, b.vy) || 1;
       pline(b.x, b.y, b.x - b.vx / l * 4, b.y - b.vy / l * 4, b.col);
@@ -1290,16 +1394,21 @@ function drawPlayer(p) {
   if (p.turnT > 0) sx *= 1 - 0.55 * Math.sin(Math.PI * (1 - p.turnT / 0.14));
   if (p.squash > 0) { const q = Math.sin(p.squash / 0.25 * Math.PI); sx *= 1 + q * 0.2; sy *= 1 - q * 0.18; }
   const bob = p.moving ? -Math.round(Math.abs(Math.sin(p.anim * 9))) : 0;
-  const eg = lvl(p, 'egg'), eggs = [];
-  if (eg) { const n = eg + 1, rad = 22 + eg; for (let i = 0; i < n; i++) { const a = p.eggAng + i * TAU / n; eggs.push([p.x + Math.cos(a) * rad, p.y - 3 + Math.sin(a) * rad]); } }
-  for (const [x, y] of eggs) if (y < p.y - 3) drawSpr(ART.eggOrb, x, y);
+  const eggs = eggSpots(p), eggSc = p.over && p.over.egg ? 2 : 1;
+  for (const [x, y] of eggs) if (y < p.y - 3) drawSprX(ART.eggOrb, x, y, { sc: eggSc });
   drawDuck(p.x, p.y + bob, {
     skin: p.lo.skin, hat: p.lo.hat, halo: p.lo.halo, weapon: p.weapon, facing: p.facing, frame: p.moving ? Math.floor(p.anim * 9) % 2 : 0,
     blink: p.blinkT < 0, aim: p.aim, sx, sy, white: p.hurtFlash > 0.15, t: p.anim,
     sparkle: (x, y) => R.tparts.push({ x, y, vx: rand(-4, 4), vy: rand(-14, -6), life: 0.6, max: 0.6, col: pick(['#fff3b0', '#ffd23f', '#c9a6ff']), tw: true }),
     ember: (x, y) => R.tparts.push({ x, y, vx: rand(-4, 4), vy: rand(-18, -8), life: 0.4, max: 0.4, col: pick(['#ff8c1a', '#ffd23f']), size: 1 }),
   });
-  for (const [x, y] of eggs) if (y >= p.y - 3) drawSpr(ART.eggOrb, x, y);
+  for (const [x, y] of eggs) if (y >= p.y - 3) drawSprX(ART.eggOrb, x, y, { sc: eggSc });
+  if (lvl(p, 'shield') && p.shieldT <= 0 && !p.choice) { // bubble shield is up
+    const r = 11 + Math.sin(p.anim * 4) * 0.6, ov = p.over && p.over.shield;
+    ctx.globalAlpha = 0.16; pcirc(p.x, p.y - 7, r, ov ? '#ffd1e6' : '#9fdcff'); ctx.globalAlpha = 0.8;
+    pring(p.x, p.y - 7, r, ov ? '#ff9ccb' : '#9fdcff'); ctx.globalAlpha = 1;
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(p.x - r * 0.5), Math.round(p.y - 7 - r * 0.6), 2, 1);
+  }
   if (picking(p) || p.choice) { // shield bubble while picking a card
     const r = 12 + Math.sin(p.anim * 5) * 0.8, a = p.anim * 3;
     ctx.globalAlpha = 0.22; pcirc(p.x, p.y - 7, r, PCOL[p.id]); ctx.globalAlpha = 1;
@@ -1337,7 +1446,14 @@ function drawHud(v, p, cx, cy) {
     panel(ix, iy - 3, 16, 12, C.uiD, OUT, null, false);
     drawSprX(GUN_ART[p.weapon] || GUN_ART.blaster, ix + 8, iy + 3, { ax: 0.5 });
     ix += 19;
-    for (const k of SIDE_WEAPONS) { const l = lvl(p, k); if (!l) continue; drawSpr(ICON[k], ix + 4, iy + 3); text(l, ix + 9, iy + 3, C.white, 1, 0); ix += 16; }
+    const owned = ownedPowers(p);
+    for (let s = 0; s < POWER_SLOTS; s++) {
+      const k = owned[s], ov = k && p.over[k];
+      if (ov && (R.t * 4 | 0) % 2) { ctx.fillStyle = 'rgba(255,59,59,0.5)'; ctx.fillRect(ix - 2, iy - 5, 22, 16); }
+      panel(ix, iy - 3, 20, 12, k ? C.uiD : 'rgba(31,24,48,0.5)', ov ? '#ff3b3b' : OUT, null, false);
+      if (k) { drawSpr(ICON[k], ix + 6, iy + 3); text(ov ? '+' : lvl(p, k) >= UPGRADES.find(u => u.k === k).max ? 'M' : lvl(p, k), ix + 12, iy, ov ? '#ff8080' : C.white, 1, 0, null); }
+      ix += 22;
+    }
   }
   // partner arrow
   if (R.players.length > 1) {
@@ -1458,7 +1574,11 @@ function drawCard(r, u, p, i, t, sel, picked) {
     y += Math.round((1 - Ease.outBack(kin)) * 36);
     const kf = clamp((t - CARD_IN - i * CARD_STAGGER) / CARD_FLIP, 0, 1);
     front = kf >= 0.5; sx = Math.abs(Math.cos(kf * Math.PI)); lift = -Math.round(Math.sin(kf * Math.PI) * 6);
-    if (front && !((p.cardSnd || 0) & (1 << i))) { p.cardSnd = (p.cardSnd || 0) | (1 << i); tone(1100 + i * 140, 0.05, 'square', 0.035, 1500 + i * 160); }
+    if (front && !((p.cardSnd || 0) & (1 << i))) {
+      p.cardSnd = (p.cardSnd || 0) | (1 << i);
+      if (u.over) { [523, 784, 1046, 1568].forEach((f, j) => tone(f, 0.12, 'square', 0.05, 0, atime(j * 0.05))); noise(0.2, 0.05, 4000); }
+      else tone(1100 + i * 140, 0.05, 'square', 0.035, 1500 + i * 160);
+    }
     if (kf >= 1 && i === sel && !Input.touch) lift = -3 + Math.round(Math.sin(t * 6));
   } else {
     const k = picked.t / 0.45;
@@ -1470,11 +1590,12 @@ function drawCard(r, u, p, i, t, sel, picked) {
   const x = Math.round(r.x + r.w / 2 - w / 2), yy = Math.round(y + lift + r.h / 2 - h / 2);
   const a0 = ctx.globalAlpha; ctx.globalAlpha = a0 * alpha;
   if (front) drawCardFront(x, yy, w, h, u, p, i, t, !picked && i === sel && !Input.touch, sx > 0.9);
-  else drawCardBack(x, yy, w, h);
+  else drawCardBack(x, yy, w, h, u && u.over, t);
   ctx.globalAlpha = a0;
 }
-function drawCardBack(x, y, w, h) {
-  panel(x, y, w, h, '#3b2a5c', OUT, '#5b3f8f');
+function drawCardBack(x, y, w, h, over = false, t = 0) {
+  if (over) { const a = ctx.globalAlpha; ctx.globalAlpha = a * (0.4 + Math.sin(t * 14) * 0.2); ctx.fillStyle = '#ff3b3b'; ctx.fillRect(x - 3, y - 3, w + 6, h + 6); ctx.globalAlpha = a; }
+  panel(x, y, w, h, over ? '#5c1a24' : '#3b2a5c', OUT, over ? '#8f2a36' : '#5b3f8f');
   if (w < 8) return;
   ctx.fillStyle = 'rgba(255,210,63,0.55)';
   ctx.fillRect(x + 3, y + 3, w - 6, 1); ctx.fillRect(x + 3, y + h - 4, w - 6, 1); ctx.fillRect(x + 3, y + 3, 1, h - 6); ctx.fillRect(x + w - 4, y + 3, 1, h - 6);
@@ -1484,20 +1605,31 @@ function drawCardBack(x, y, w, h) {
 }
 function drawCardFront(x, y, w, h, u, p, i, t, selected, full) {
   const [col, label] = CARD_STYLE[cardKind(u.k)];
+  if (u.over) { // overcharge: pulsing red glow and sparks running around the edge
+    const a = ctx.globalAlpha;
+    for (let g = 3; g >= 1; g--) { ctx.globalAlpha = a * (0.16 + Math.sin(t * 9) * 0.06) * (4 - g) / 2; ctx.fillStyle = '#ff3b3b'; ctx.fillRect(x - g * 2, y - g * 2, w + g * 4, h + g * 4); }
+    ctx.globalAlpha = a;
+  }
   if (selected) { const a = ctx.globalAlpha; ctx.globalAlpha = a * (0.35 + Math.sin(t * 8) * 0.15); ctx.fillStyle = PCOL[p.id]; ctx.fillRect(x - 2, y - 2, w + 4, h + 4); ctx.globalAlpha = a; }
-  panel(x, y, w, h, selected ? '#3d2f63' : C.ui, selected ? PCOL[p.id] : OUT, C.uiL);
+  panel(x, y, w, h, u.over ? (selected ? '#6b1f2a' : '#4a1520') : selected ? '#3d2f63' : C.ui, u.over ? '#ff3b3b' : selected ? PCOL[p.id] : OUT, u.over ? '#a83240' : C.uiL);
   if (w < 6) return;
+  if (u.over && full) for (let s = 0; s < 4; s++) { // sparks chase each other around the border
+    const k = ((t * 0.9 + s / 4) % 1) * 2 * (w + h), px = k < w ? x + k : k < w + h ? x + w - 1 : k < 2 * w + h ? x + w - 1 - (k - w - h) : x, py = k < w ? y : k < w + h ? y + (k - w) : k < 2 * w + h ? y + h - 1 : y + h - 1 - (k - 2 * w - h);
+    ctx.fillStyle = s % 2 ? '#ffd23f' : '#ffffff'; ctx.fillRect(Math.round(px) - 1, Math.round(py) - 1, 3, 3);
+  }
   ctx.fillStyle = col; ctx.fillRect(x + 1, y + 1, w - 2, 9);
   ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(x + 1, y + 1, w - 2, 1);
   if (!full) return;
   text(label, x + w / 2, y + 3, OUT, 1, 1, null);
   const cx = x + w / 2, iy = y + 22;
   pcirc(cx, iy, 10, OUT); pcirc(cx, iy, 9, '#3d3456'); pring(cx, iy, 9, col);
-  drawSpr(ICON[u.k] || ART.heart, cx, iy + Math.round(Math.sin(t * 4 + i)), false, false, 2);
+  drawSpr(ICON[u.over || u.k] || ART.heart, cx, iy + Math.round(Math.sin(t * 4 + i)), false, false, 2);
+  if (u.over && (t * 6 | 0) % 2) pring(cx, iy, 11, '#ffd23f');
   let ty = y + 35;
-  for (const ln of wrapText(u.name, w - 6)) { text(ln, cx, ty, C.gold, 1, 1); ty += 7; }
+  for (const ln of wrapText(u.name, w - 6)) { text(ln, cx, ty, u.over ? '#ff8080' : C.gold, 1, 1); ty += 7; }
   const l = lvl(p, u.k);
-  if (u.k !== 'snack') {
+  if (u.over) { const nw = textW('MAX+') + 6; panel(Math.round(cx - nw / 2), ty - 1, nw, 8, '#ff3b3b', OUT, null, false); text('MAX+', cx, ty, '#fff8e7', 1, 1, null); ty += 10; }
+  else if (u.k !== 'snack') {
     if (!l) { const nw = textW('NEW!') + 6; panel(Math.round(cx - nw / 2), ty - 1, nw, 8, C.pink, OUT, null, false); text('NEW!', cx, ty, OUT, 1, 1, null); }
     else { // one pip per level, the level you're about to get blinks
       const pw = u.max * 4 - 1, px0 = Math.round(cx - pw / 2);

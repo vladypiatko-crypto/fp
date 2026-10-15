@@ -47,6 +47,8 @@ class TitleScene {
     this.t = skipIntro ? 3 : 0; this.T = 0; this.ui = new UI(); this.modal = null; this.modalUI = new UI(); this.modalT = 0;
     this.shake = 0; this.flash = 0; this.landed = skipIntro; this.parts = [];
     this.buildWords();
+    // returning players watch the construction tape come off the ONLINE button, then get the news
+    this.news = ONLINE_READY && Save.data.onlineNewsSeen === false ? { t: 0 } : null;
     this.ducks = [0, 1].map(i => ({ x: W * (0.3 + i * 0.4), y: H * 0.86, tx: 0, ty: 0, wait: rand(0.5, 2), facing: 'down', frame: 0, anim: rand(0, 5), hop: 0, turnT: 0, quackT: 0 }));
     this.ship = { x: -80, t: 6 };
     Music.play('title');
@@ -73,6 +75,11 @@ class TitleScene {
     for (const q of this.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 90 * dt; q.life -= dt; }
     this.parts = this.parts.filter(q => q.life > 0);
     this.updateDucks(dt);
+    if (this.news && this.t > 2.2 && !this.modal) {
+      const before = this.news.t; this.news.t += dt;
+      if (before < 0.45 && this.news.t >= 0.45) { sfx.chestOpen('epic'); sfx.quack(1.2); this.burst(...(this.onlineXY || [W / 2, H * 0.5]), ['#ffd23f', '#e8343b', '#5ec8ff', '#51cf66', '#fff8e7'], 40, 120); }
+      if (this.news.t >= 1.3) { this.openModal('news'); Save.data.onlineNewsSeen = true; Save.write(); }
+    }
     this.ship.t -= dt;
     if (this.ship.t <= 0) { this.ship.x += dt * 22; if (this.ship.x > W + 90) { this.ship.x = -90; this.ship.t = rand(10, 18); } }
     if (this.modal) {
@@ -104,6 +111,23 @@ class TitleScene {
   }
   burst(x, y, cols, n, spd) { for (let i = 0; i < n; i++) { const a = rand(0, TAU), s = rand(spd * 0.3, spd); this.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 30, life: rand(0.5, 1.2), col: pick(cols) }); } }
   openModal(kind) { this.modal = kind; this.modalT = 0; this.modalUI = new UI(); }
+  // the construction tape on ONLINE trembles, tears in two and falls away
+  drawUnveil(x, y, w, h, label) {
+    const t = this.news.t, tear = clamp((t - 0.45) / 0.6, 0, 1);
+    drawButton(new UI(), 'online_new', x, y, w, h, label, { col: C.ui });
+    if (tear >= 1) return;
+    const shake = t < 0.45 ? Math.round(Math.sin(t * 70) * Math.min(2, t * 6)) : 0;
+    [-1, 1].forEach(side => {
+      const hw = Math.ceil(w / 2), cx = x + (side < 0 ? hw / 2 : w - hw / 2), cy = y + h / 2;
+      ctx.save();
+      ctx.globalAlpha = 1 - Ease.inCubic(tear);
+      ctx.translate(cx + shake + side * tear * 26, cy + Ease.inCubic(tear) * 70);
+      ctx.rotate(side * tear * 0.9);
+      panel(-hw / 2, -h / 2, hw, h, '#2a2535', OUT, null, false);
+      hazard(-hw / 2 + 1, -h / 2 + 1, hw - 2, h - 2, this.T);
+      ctx.restore();
+    });
+  }
   start(np) {
     const kind = this.modal;
     Trans.go(() => {
@@ -190,6 +214,7 @@ class TitleScene {
       const y = (stack ? by0 + i * (bh + 4) : by0) + Math.round((1 - k2) * (H - by0));
       const ui = this.modal ? new UI() : this.ui;
       if (id === 'online' && !ONLINE_READY) drawWipButton(ui, id, x, y, bw, bh, label, this.T, on);
+      else if (id === 'online' && this.news && this.news.t < 1.1) { this.onlineXY = [x + bw / 2, y + bh / 2]; this.drawUnveil(x, y, bw, bh, label); }
       else drawButton(ui, id, x, y, bw, bh, label, { on, icon, def: i === 0, col: i === 0 ? '#3d2f63' : C.ui });
       if (id === 'locker' && Save.anyNew()) drawNewTag(x + bw - 10, y, this.T);
     });
@@ -203,7 +228,35 @@ class TitleScene {
     if (b.e1 || b.e2) text(fmt('BEST ENDLESS  1P {0}  2P {1}', fmtTime(b.e1), fmtTime(b.e2)), W / 2, H - 9, C.white, 1, 1, 'outline');
     if (this.modal === 'settings') this.drawSettings();
     else if (this.modal === 'online') this.drawWip();
+    else if (this.modal === 'news') this.drawNews();
     else if (this.modal) this.drawModal();
+  }
+  // news for returning players: online play is here
+  drawNews() {
+    ctx.fillStyle = 'rgba(15,10,26,0.78)'; ctx.fillRect(0, 0, W, H);
+    const k = Ease.outBack(Math.min(1, this.modalT / 0.4)), T = this.T;
+    const pw = Math.min(W - 16, 250), ph = Math.min(H - 16, 150), px = Math.floor(W / 2 - pw / 2), py = Math.floor(H / 2 - ph / 2 + (1 - k) * 40);
+    // light rays behind the panel
+    ctx.save(); ctx.translate(W / 2, py + 30); ctx.rotate(T * 0.4); ctx.fillStyle = 'rgba(255,210,63,0.08)';
+    for (let i = 0; i < 10; i++) { ctx.rotate(TAU / 10); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-12, -H); ctx.lineTo(12, -H); ctx.fill(); }
+    ctx.restore();
+    panel(px, py, pw, ph, C.uiD, C.gold, C.uiL);
+    const nw = textW('NEW!') + 8; panel(px + 8, py - 5, nw, 10, C.pink, OUT, null, false); text('NEW!', px + 8 + nw / 2, py - 3, OUT, 1, 1, null);
+    drawZoomText('ONLINE IS OUT!', W / 2, py + 20, lerp(5, 2, k), C.gold);
+    text('PLAY TOGETHER, EACH ON YOUR OWN PHONE OR PC', W / 2, py + 36, C.white, 1, 1);
+    text('HOST A GAME AND SHARE THE 4 LETTER CODE', W / 2, py + 46, C.gray, 1, 1);
+    // two ducks on two "phones", connected by travelling dots
+    const ay = py + ph - 44, ax = W / 2 - 46, bx = W / 2 + 46;
+    [[ax, 0], [bx, 1]].forEach(([x, i]) => {
+      panel(x - 13, ay - 26, 26, 40, '#3d3a52', OUT, '#5a5872', false); ctx.fillStyle = '#8fd3ff'; ctx.fillRect(x - 10, ay - 23, 20, 30);
+      const lo = Save.data.loadout[i] || Save.data.loadout[0];
+      drawDuck(x, ay + 4 - Math.abs(Math.sin(T * 6 + i * 2)) * 2, { skin: lo.skin, hat: lo.hat, facing: i ? 'left' : 'right', t: T, frame: Math.floor(T * 6) % 2 });
+    });
+    for (let d = 0; d < 5; d++) { const q = ((T * 0.9 + d / 5) % 1); ctx.fillStyle = d % 2 ? C.gold : '#5ec8ff'; ctx.fillRect(Math.round(lerp(ax + 16, bx - 16, q)), Math.round(ay - 8 - Math.sin(q * Math.PI) * 10), 2, 2); }
+    const ui = this.modalUI; ui.begin();
+    const bw = 70, by = py + ph - 19;
+    drawButton(ui, 'news_try', Math.floor(W / 2 - bw - 4), by, bw, 14, 'TRY IT!', { def: true, col: '#3d2f63', on: () => { this.modal = null; Trans.go(() => Scenes.set(new OnlineScene())); } });
+    drawButton(ui, 'news_later', Math.floor(W / 2 + 4), by, bw, 14, 'LATER', { on: () => { this.modal = null; } });
   }
   // online play isn't ready yet: a construction site with a sign and a duck in a hard hat
   drawWip() {
@@ -470,10 +523,10 @@ class LockerScene {
     this.opts = opts; this.pid = 0; this.cat = 'hat'; this.ui = new UI(); this.T = 0; this.parts = [];
     this.spin = 0; this.hop = 0; this.shakeId = null; this.shakeT = 0; this.popup = null; this.popUI = new UI();
     this.prevSong = Music.song;
-    Music.play('calm');
+    Music.play('shop');
   }
-  resumed() { Music.play('calm'); }
-  close() { Trans.go(() => { Scenes.pop(); Music.play(this.prevSong === 'calm' ? 'calm' : this.prevSong || 'title'); }); }
+  resumed() { Music.play('shop'); }
+  close() { Trans.go(() => { Scenes.pop(); Music.play(this.prevSong || 'title'); }); }
   update(dt) {
     this.T += dt; this.spin += dt; this.hop = Math.max(0, this.hop - dt); this.shakeT = Math.max(0, this.shakeT - dt);
     const lo = Save.data.loadout[this.pid];
@@ -586,9 +639,10 @@ class LockerScene {
     const newDots = [];
     items.forEach((it, i) => {
       const cx = L.gx + (i % cols) * (cs + 2), cy = gy0 + Math.floor(i / cols) * (cs + 2), id = 'it' + it.id;
-      const has = Save.has(this.cat, it.id), eq = lo[this.cat] === it.id, f = this.ui.isFocus(id), rc = RARITY[it.rarity].col;
+      const has = Save.has(this.cat, it.id), eq = lo[this.cat] === it.id, f = this.ui.isFocus(id), rc = rarityCol(it.rarity, T + i * 0.1);
       const sh = this.shakeT > 0 && this.shakeId === this.cat + it.id ? Math.round(Math.sin(this.shakeT * 60) * 2) : 0;
       panel(cx + sh, cy, cs, cs, has ? (eq ? '#4b3a72' : C.ui) : '#221a33', f ? C.white : eq ? PCOL[this.pid] : rc, null, false);
+      if (it.rarity === 'admin' && has) { ctx.globalAlpha = 0.18 + Math.sin(T * 4) * 0.08; ctx.fillStyle = rc; ctx.fillRect(cx + 1, cy + 1, cs - 2, cs - 2); ctx.globalAlpha = 1; }
       if (it.rarity === 'legendary' && has) { const g = (T * 2 + i) % 3; if (g < 1) { ctx.globalAlpha = 0.25 * (1 - g); ctx.fillStyle = '#ffd23f'; ctx.fillRect(cx + 1, cy + 1, cs - 2, cs - 2); ctx.globalAlpha = 1; } }
       ctx.save(); ctx.beginPath(); ctx.rect(cx + 1 + sh, cy + 1, cs - 2, cs - 2); ctx.clip();
       if (has) drawItemIcon(this.cat, it.id, cx + cs / 2 + sh, cy + cs / 2, T, lo);
@@ -608,13 +662,13 @@ class LockerScene {
     const iy = Math.min(gy0 + rows * (cs + 2) + 2, H - 40);
     const info = focusItem || items.find(it => it.id === lo[this.cat]);
     if (info) {
-      const has = Save.has(this.cat, info.id), rc = RARITY[info.rarity];
+      const has = Save.has(this.cat, info.id), rc = RARITY[info.rarity], rcol = rarityCol(info.rarity, T);
       panel(L.gx, iy, L.gw, 20, C.uiD, OUT, null, false);
-      text(info.name, L.gx + 4, iy + 3, rc.col, 1, 0);
-      text(rc.name, L.gx + L.gw - 4, iy + 3, rc.col, 1, 2);
+      text(info.name, L.gx + 4, iy + 3, rcol, 1, 0);
+      text(rc.name, L.gx + L.gw - 4, iy + 3, rcol, 1, 2);
       let line = info.desc || '';
       if (!has && info.story) line = fmt('BEAT STORY LEVEL {0} TO GET IT', info.story);
-      else if (!has) line = this.cat === 'weapon' && LEVELS.find(l => l.reward === info.id) ? fmt('BEAT STORY LEVEL {0} OR OPEN CHESTS', LEVELS.find(l => l.reward === info.id).n) : info.gift ? 'A SPECIAL GIFT - NOT IN CHESTS' : 'LOCKED - OPEN CHESTS TO FIND IT';
+      else if (!has) line = this.cat === 'weapon' && LEVELS.find(l => l.reward === info.id) ? fmt('BEAT STORY LEVEL {0} OR OPEN CHESTS', LEVELS.find(l => l.reward === info.id).n) : info.rarity === 'admin' ? 'ONLY THE ADMIN CAN GIVE THIS' : info.gift ? 'A SPECIAL GIFT - NOT IN CHESTS' : 'LOCKED - OPEN CHESTS TO FIND IT';
       else if (lo[this.cat] === info.id) line = line || fmt('EQUIPPED ON P{0}', this.pid + 1);
       else line = line || (Input.touch ? 'TAP TO EQUIP' : 'PRESS ENTER TO EQUIP');
       text(line, L.gx + 4, iy + 12, has ? C.white : C.gray, 1, 0, null);
@@ -784,9 +838,10 @@ class ChestScene {
 
 // ================================================================ on-screen keyboard (also takes a real keyboard)
 class Keyboard {
-  constructor({ value = '', max = NAME_MAX, space = true, rand = false } = {}) {
-    this.value = value; this.max = max; this.space = space; this.rand = rand;
+  constructor({ value = '', max = NAME_MAX, space = true, rand = false, extra = '' } = {}) {
+    this.value = value; this.max = max; this.space = space; this.rand = rand; this.extra = extra;
     this.rows = ['1234567890', 'QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
+    if (extra) this.rows.push(extra);
   }
   add(ch) {
     if (ch === ' ' && (!this.space || !this.value || this.value.endsWith(' '))) return false;
@@ -797,7 +852,7 @@ class Keyboard {
   // a real keyboard types; returns true when it did, so letters don't also move the focus or press buttons
   typed(acts) {
     if (!Input.typed.length) return false;
-    for (const ch of Input.typed) { if (ch === '<') this.del(); else if (NAME_CHARS.includes(ch) || ch === ' ') this.add(ch); }
+    for (const ch of Input.typed) { if (ch === '<') this.del(); else if (NAME_CHARS.includes(ch) || ch === ' ' || this.extra.includes(ch)) this.add(ch); }
     acts.up = acts.down = acts.left = acts.right = acts.ok = acts.back = false;
     return true;
   }
@@ -808,7 +863,7 @@ class Keyboard {
       const x0 = Math.floor(W / 2 - (row.length * (kw + 2) - 2) / 2);
       [...row].forEach((ch, i) => drawButton(ui, 'k' + ch, x0 + i * (kw + 2), y + r * (kh + 2), kw, kh, ch, { on: () => { if (this.add(ch)) changed(); sfx.uiMove(); }, silent: true, def: ch === 'Q' }));
     });
-    const by = y + 4 * (kh + 2) + 2, n = this.rand ? 3 : this.space ? 2 : 1, bw = Math.min(60, Math.floor((W - 24) / 3));
+    const by = y + this.rows.length * (kh + 2) + 2, n = this.rand ? 3 : this.space ? 2 : 1, bw = Math.min(60, Math.floor((W - 24) / 3));
     const x0 = Math.floor(W / 2 - (n * bw + (n - 1) * 4) / 2);
     let k = 0;
     if (this.space) drawButton(ui, 'space', x0 + (k++) * (bw + 4), by, bw, 13, 'SPACE', { on: () => { if (this.add(' ')) changed(); }, silent: true });

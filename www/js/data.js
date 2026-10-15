@@ -17,7 +17,7 @@ const COSMETICS = {
   ],
   hat: [
     { id: 'none', name: 'NO HAT', rarity: 'common' },
-    { id: 'wizard', name: 'WIZARD HAT', rarity: 'legendary', desc: 'SPARKLY AND MAGICAL', gift: true }, // only given by the admin, never in chests
+    { id: 'wizard', name: 'WIZARD HAT', rarity: 'admin', desc: 'SPARKLY AND MAGICAL', gift: true }, // only given by the admin, never in chests
     { id: 'bandana_r', name: 'RED BANDANA', rarity: 'common' },
     { id: 'bandana_b', name: 'BLUE BANDANA', rarity: 'common' },
     { id: 'beanie', name: 'BEANIE', rarity: 'common' },
@@ -77,7 +77,7 @@ function defaultSave() {
       { skin: 'classic', hat: 'bandana_r', halo: 'none', trail: 'none', weapon: 'blaster' },
       { skin: 'snowy', hat: 'bandana_b', halo: 'none', trail: 'none', weapon: 'blaster' },
     ],
-    story: { reached: 1, cleared: {} }, best: { e1: 0, e2: 0 }, muted: false, introSeen: false, wizardSeen: false,
+    story: { reached: 1, cleared: {} }, best: { e1: 0, e2: 0 }, muted: false, introSeen: false, wizardSeen: false, onlineNewsSeen: true,
     newItems: [], // unlocked cosmetics nobody has clicked in the locker yet
   };
 }
@@ -103,7 +103,7 @@ const UPGRADES = [
   { k: 'power', name: 'MORE POWER', max: 5, d: () => '+35% MAIN WEAPON DAMAGE' },
   { k: 'spread', name: 'MULTI SHOT', max: 4, d: () => '+1 PROJECTILE PER SHOT' },
   { k: 'pierce', name: 'PIERCING', max: 3, d: () => 'SHOTS PASS THROUGH +1 ROBOT' },
-  { k: 'egg', name: 'EGG ORBIT', max: 5, d: l => (l ? '+1 EGG, MORE DAMAGE' : 'SPINNING EGGS GUARD YOU') },
+  { k: 'egg', name: 'EGG ORBIT', max: 5, d: l => (l ? '+1 EGG, MORE DAMAGE' : 'EGGS BLOCK BULLETS, PUSH ROBOTS') },
   { k: 'bread', name: 'BREAD BOMB', max: 5, d: l => (l ? 'BIGGER, FASTER BOOMS' : 'LOB EXPLODING BREAD') },
   { k: 'zap', name: 'ZAP', max: 5, d: l => (l ? 'MORE CHAINS + DAMAGE' : 'CHAIN LIGHTNING') },
   { k: 'quack', name: 'MEGA QUACK', max: 5, d: l => (l ? 'BIGGER SHOCKWAVE' : 'QUACK KNOCKS ROBOTS BACK') },
@@ -112,8 +112,22 @@ const UPGRADES = [
   { k: 'magnet', name: 'MAGNET', max: 4, d: () => 'GRAB XP AND COINS FROM FARTHER' },
   { k: 'regen', name: 'REGEN', max: 5, d: () => 'HEAL 0.6 HP PER SEC' },
   { k: 'dash', name: 'DASH ATTACK', max: 5, d: l => (l ? 'MORE DASH DAMAGE' : 'DASH HURTS ROBOTS') },
+  { k: 'feather', name: 'FEATHER DARTS', max: 5, d: l => (l ? 'MORE DARTS, MORE DAMAGE' : 'HOMING FEATHERS HUNT ROBOTS') },
+  { k: 'puddle', name: 'SPLASH PUDDLE', max: 5, d: l => (l ? 'BIGGER PUDDLES, MORE DAMAGE' : 'DROP PUDDLES THAT HURT ROBOTS') },
+  { k: 'shield', name: 'BUBBLE SHIELD', max: 5, d: l => (l ? 'SHIELD COMES BACK FASTER' : 'BLOCKS A HIT, THEN RECHARGES') },
 ];
-const SIDE_WEAPONS = ['egg', 'bread', 'zap', 'quack'];
+// power-ups: you can carry 3 of them per run; after that only those 3 show up (plus gun and duck upgrades)
+const SIDE_WEAPONS = ['egg', 'bread', 'zap', 'quack', 'feather', 'puddle', 'shield'];
+const POWER_SLOTS = 3;
+// a maxed power-up can (rarely) be OVERCHARGED: a red card that makes it much stronger
+const OVER_CHANCE = 0.16;
+const OVERCHARGE = {
+  egg: ['GIANT EGGS', 'HUGE EGGS SPIN WAY FASTER'], bread: ['BREAD STORM', 'EVERY BOMB SPLITS INTO MORE'],
+  zap: ['THUNDERSTORM', 'ZAPS JUMP TO EVERYTHING'], quack: ['SONIC QUACK', 'GIANT QUACK, TWICE AS OFTEN'],
+  feather: ['FEATHER STORM', 'TWICE THE DARTS, THEY PIERCE'], puddle: ['LAVA LAKE', 'HUGE BURNING PUDDLES'],
+  shield: ['MIRROR SHIELD', 'RECHARGES FAST, POPS BULLETS'],
+};
+const overCard = k => ({ k: 'over:' + k, over: k, name: OVERCHARGE[k][0], max: 1, d: () => OVERCHARGE[k][1] });
 
 // ================================================================ enemies: Dr. Honk's robot army
 const ENEMIES = {

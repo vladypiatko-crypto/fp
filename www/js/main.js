@@ -40,4 +40,4 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // hook for automated tests
-window.__quack = { Scenes, Save, Input, Net, GameScene, MapScene, LockerScene, ChestScene, TitleScene, CutsceneScene, OnlineScene, RoomScene, NameScene, setLang, tr, bossName: b => BOSSES[b].name, cosmetics: c => COSMETICS[c], Cloud, AccountScene, BannedScene, GiftScene, AdminScene, AdminUserScene, BootScene, trMissing, isBadName, get R() { return R; }, LEVELS, updatePlayer, applyUpgrade, spawnBoss, Impact };
+window.__quack = { Scenes, Save, Input, Net, GameScene, MapScene, LockerScene, ChestScene, TitleScene, CutsceneScene, OnlineScene, RoomScene, NameScene, setLang, tr, bossName: b => BOSSES[b].name, cosmetics: c => COSMETICS[c], Cloud, AccountScene, BannedScene, GiftScene, AdminScene, AdminUserScene, BootScene, MessageScene, trMissing, isBadName, get R() { return R; }, LEVELS, updatePlayer, applyUpgrade, spawnBoss, Impact, rollChoices, eggSpots, fireWeapons, hurtPlayer, impactAt, overCard, UPG: k => UPGRADES.find(u => u.k === k) };
