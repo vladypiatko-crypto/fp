@@ -6,7 +6,16 @@
  * can't be faked by editing the app. Without FIREBASE_CONFIG the game runs exactly as before, fully offline. */
 
 // Paste the firebaseConfig object from the Firebase console here (null = no accounts).
-const FIREBASE_CONFIG = null;
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyAnfPdcls1Hoqj2kVsR6nQmQDwEX5cv0Bg',
+  authDomain: 'quackattackreal.firebaseapp.com',
+  projectId: 'quackattackreal',
+  storageBucket: 'quackattackreal.firebasestorage.app',
+  messagingSenderId: '604766249036',
+  appId: '1:604766249036:web:ea7d894c8a1541dbb5d4e9',
+};
+// Accounts switch on only when this is true (set once Firebase Authentication and Firestore are set up).
+const ACCOUNTS_ON = false;
 // The admin's username in lower case. It must be the same as adminName() in firebase/firestore.rules.
 const ADMIN_USERNAME = '';
 const USERNAME_MIN = 3, USERNAME_MAX = 12;
@@ -25,7 +34,10 @@ const Cloud = {
   isAdmin() { return !!(this.me && this.adminName && this.me.usernameLower === this.adminName); },
 
   init() {
-    const cfg = FIREBASE_CONFIG || (CLOUD_EMU ? { apiKey: 'demo-key', projectId: 'demo-quack', authDomain: 'demo-quack.firebaseapp.com' } : null);
+    const cfg = CLOUD_EMU ? null : ACCOUNTS_ON && FIREBASE_CONFIG;
+    return this.start(cfg || (CLOUD_EMU ? { apiKey: 'demo-key', projectId: 'demo-quack', authDomain: 'demo-quack.firebaseapp.com' } : null));
+  },
+  start(cfg) {
     if (!cfg || typeof firebase === 'undefined') return false;
     try {
       firebase.initializeApp(cfg);
