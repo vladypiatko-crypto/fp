@@ -41,7 +41,6 @@ function peerErrorText(e) { return PEER_ERRORS[e && e.type] || "COULDN'T CONNECT
 
 // ================================================================ the lobby, run by the host's device
 // (what a server would normally do: members, ready flags, mode, start, and passing game messages along)
-function cleanName(str, max, fallback) { const s = String(str || '').replace(/[^A-Za-z0-9 ]/g, '').trim().slice(0, max); return s || fallback; }
 function cleanLoadout(lo) {
   const out = {};
   for (const k of ['skin', 'hat', 'halo', 'trail', 'weapon']) out[k] = String((lo && lo[k]) || 'none').replace(/[^a-z_]/g, '').slice(0, 24);
@@ -50,8 +49,8 @@ function cleanLoadout(lo) {
 const Hub = {
   room: null, nextId: 2,
   open(code, name, lo) {
-    const host = { id: 'p1', conn: null, name: cleanName(name, 12, 'DUCK'), lo: cleanLoadout(lo), ready: false };
-    this.room = { code, name: host.name + "'S LOBBY", state: 'lobby', mode: 'endless', level: 1, hostId: host.id, members: [host] };
+    const host = { id: 'p1', conn: null, name: cleanName(name), lo: cleanLoadout(lo), ready: false };
+    this.room = { code, name: host.name, state: 'lobby', mode: 'endless', level: 1, hostId: host.id, members: [host] };
     this.nextId = 2;
     this.to(host, { t: 'hello', id: host.id });
     this.to(host, { t: 'joined', code });
@@ -84,7 +83,7 @@ const Hub = {
       const r = this.room, fail = msg => { try { conn.send(JSON.stringify({ t: 'error', msg })); } catch (e) { /* gone */ } setTimeout(() => conn.close(), 500); };
       if (r.state !== 'lobby') { fail('THAT GAME HAS ALREADY STARTED'); return; }
       if (r.members.length >= MAX_PLAYERS) { fail('THAT LOBBY IS FULL'); return; }
-      mem = { id: 'p' + (this.nextId++), conn, name: cleanName(m.name, 12, 'DUCK'), lo: cleanLoadout(m.lo), ready: false };
+      mem = { id: 'p' + (this.nextId++), conn, name: cleanName(m.name), lo: cleanLoadout(m.lo), ready: false };
       r.members.push(mem);
       this.to(mem, { t: 'hello', id: mem.id });
       this.to(mem, { t: 'joined', code: r.code });
@@ -208,7 +207,7 @@ Object.assign(Net, {
       const conn = peer.connect(PEER_PREFIX + code, { serialization: 'raw', reliable: true });
       const t = setTimeout(() => rej(new Error("COULDN'T CONNECT - TRY AGAIN")), 20000);
       peer.off('error');
-      peer.on('error', e => { clearTimeout(t); rej(new Error(e.type === 'peer-unavailable' ? 'NO LOBBY WITH CODE ' + code : peerErrorText(e))); });
+      peer.on('error', e => { clearTimeout(t); rej(new Error(e.type === 'peer-unavailable' ? fmt('NO LOBBY WITH CODE {0}', keep(code)) : peerErrorText(e))); });
       conn.on('open', () => {
         clearTimeout(t);
         if (gen !== this.gen) { rej(new Error('')); return; }
@@ -297,21 +296,17 @@ class OnlineScene {
     return false;
   }
   leave() { Net.close(); Trans.go(() => Scenes.set(new TitleScene(true))); }
-  cycleName() {
-    const i = NAMES.indexOf(Save.data.name);
-    Save.data.name = NAMES[(i + 1) % NAMES.length]; Save.write(); sfx.uiMove();
-  }
   cancel() { Net.close(); this.busy = ''; sfx.uiBack(); }
   hostGame() {
     if (this.busy) return;
-    this.busy = 'MAKING A LOBBY...'; this.note = '';
+    this.busy = 'MAKING A LOBBY'; this.note = '';
     Net.host(Save.data.name, Save.data.loadout[0]).catch(e => { if (!e.message) return; this.busy = ''; this.note = e.message; sfx.uiBack(); }); // no message: cancelled
   }
   submitCode() {
     if (this.busy) return;
     if (this.code.length < 4) { this.note = 'TYPE ALL 4 CODE LETTERS'; sfx.uiBack(); return; }
     const code = this.code;
-    this.busy = 'LOOKING FOR LOBBY ' + code + '...'; this.note = '';
+    this.busy = fmt('LOOKING FOR LOBBY {0}', keep(code)); this.note = '';
     Net.join(code, Save.data.name, Save.data.loadout[0]).catch(e => { if (!e.message) return; this.busy = ''; this.note = e.message; sfx.uiBack(); }); // no message: cancelled
   }
   update(dt) {
@@ -337,7 +332,7 @@ class OnlineScene {
     if (this.busy) {
       ctx.fillStyle = 'rgba(15,10,26,0.75)'; ctx.fillRect(0, 0, W, H);
       const dots = '.'.repeat(1 + Math.floor(this.T * 3) % 3);
-      text(this.busy.replace(/\.\.\.$/, dots), W / 2, H / 2 - 4, C.white, 1, 1, 'outline');
+      text(RAW + tr(this.busy) + dots, W / 2, H / 2 - 4, C.white, 1, 1, 'outline');
       for (let i = 0; i < 3; i++) drawDuck(W / 2 - 16 + i * 16, H / 2 + 26 - Math.abs(Math.sin(this.T * 6 + i)) * 4, { skin: Save.data.loadout[0].skin, facing: 'down', t: this.T, frame: Math.floor(this.T * 8 + i) % 2 });
       this.ui.begin(); // only the cancel button while we wait
       drawButton(this.ui, 'cancelwait', Math.floor(W / 2 - 30), H - 24, 60, 14, 'CANCEL', { on: () => this.cancel(), def: true, icon: ICON.back });
@@ -347,7 +342,7 @@ class OnlineScene {
     text('ONLINE', W / 2, 6, C.gold, 2, 1, 'outline');
     text('PLAY TOGETHER, EACH ON YOUR OWN PHONE OR PC', W / 2, 22, C.white, 1, 1);
     const nameW = Math.min(W - 20, 170);
-    drawButton(this.ui, 'name', Math.floor(W / 2 - nameW / 2), 34, nameW, 14, 'YOUR NAME: ' + Save.data.name + '  >', { on: () => this.cycleName() });
+    drawButton(this.ui, 'name', Math.floor(W / 2 - nameW / 2), 34, nameW, 14, fmt('YOUR NAME: {0}  >', keep(Save.data.name)), { on: () => Scenes.push(new NameScene()) });
     // the two big choices
     const bw = Math.min(150, Math.floor((W - 30) / 2)), bh = Math.min(64, H - 120), by = 56;
     const x0 = Math.floor(W / 2 - bw - 5), x1 = Math.floor(W / 2 + 5);
@@ -419,24 +414,24 @@ class RoomScene {
     const room = Net.room;
     if (!room) { text('CONNECTING TO THE LOBBY...', W / 2, H / 2, C.white, 1, 1); return; }
     const me = room.members.find(m => m.id === Net.myId), isHost = !!(me && me.host);
-    text('LOBBY ' + room.code, W / 2, 6, C.gold, 2, 1, 'outline');
-    text(isHost ? 'TELL YOUR FRIENDS TO JOIN WITH CODE ' + room.code : 'IN ' + room.name, W / 2, 22, isHost ? C.white : C.gray, 1, 1);
+    text(fmt('LOBBY {0}', keep(room.code)), W / 2, 6, C.gold, 2, 1, 'outline');
+    text(isHost ? fmt('TELL YOUR FRIENDS TO JOIN WITH CODE {0}', keep(room.code)) : fmt("IN {0}'S LOBBY", keep(room.name)), W / 2, 22, isHost ? C.white : C.gray, 1, 1);
     const top = 32, rowH = 30;
     for (let i = 0; i < 4; i++) {
       const mem = room.members[i], y = top + i * rowH;
       panel(8, y, W - 16, rowH - 4, mem ? C.ui : '#221a33', OUT, mem ? C.uiL : null, false);
       if (mem) {
         drawDuck(24, y + rowH - 8, { skin: mem.lo.skin, hat: mem.lo.hat, halo: mem.lo.halo, facing: 'right', t: this.T, sc: 1.6, blink: this.T % 3.2 > 3.05 });
-        text(mem.name, 42, y + 5, PCOL[i], 1, 0);
-        if (mem.id === Net.myId) text('YOU', 42 + textW(mem.name) + 6, y + 5, C.gray, 1, 0);
+        text(keep(mem.name), 42, y + 5, PCOL[i], 1, 0);
+        if (mem.id === Net.myId) text('YOU', 42 + textW(keep(mem.name)) + 6, y + 5, C.gray, 1, 0);
         if (mem.host) { panel(W - 46, y + 4, 34, 11, C.pink, OUT, null, false); text('HOST', W - 29, y + 7, OUT, 1, 1, null); }
         else text(mem.ready ? 'READY!' : 'NOT READY', W - 14, y + 5, mem.ready ? C.green : C.gray, 1, 2);
       } else text('OPEN SLOT', 42, y + 8, C.grayD, 1, 0);
     }
-    const label = room.mode === 'endless' ? 'ENDLESS' : 'STORY ' + room.level + ': ' + LEVELS[room.level - 1].name;
+    const label = room.mode === 'endless' ? 'ENDLESS' : fmt('STORY {0}: {1}', room.level, LEVELS[room.level - 1].name);
     const my = top + 4 * rowH + 2;
-    if (isHost) drawButton(this.ui, 'mode', 8, my, W - 16, 15, 'MODE: ' + label + '   >', { on: () => this.cycleMode(room) });
-    else text('MODE: ' + label, W / 2, my + 4, C.white, 1, 1);
+    if (isHost) drawButton(this.ui, 'mode', 8, my, W - 16, 15, fmt('MODE: {0}   >', label), { on: () => this.cycleMode(room) });
+    else text(fmt('MODE: {0}', label), W / 2, my + 4, C.white, 1, 1);
     text(isHost ? 'START WHEN EVERYONE IS HERE. ALL DEVICES NEED TO STAY OPEN.' : 'WAITING FOR THE HOST TO START...', W / 2, my + 22, C.gray, 1, 1);
     const by = H - 17;
     if (isHost) drawButton(this.ui, 'start', Math.floor(W / 2 - 84), by, 90, 14, 'START', { on: () => Net.send({ t: 'start' }), def: true, col: '#3d2f63' });
@@ -471,7 +466,7 @@ GameScene.prototype.dropPlayer = function (id) {
   const p = this.players[Net.idToPid[id]];
   if (!p || p.gone) return;
   p.gone = true; p.down = true; p.reviveT = 0; p.choice = null; p.pending = 0;
-  banner(p.name + ' LEFT THE GAME', C.gray, 2.2);
+  banner(fmt('{0} LEFT THE GAME', keep(p.name)), C.gray, 2.2);
   burst(p.x, p.y, ['#fff8e7', '#8b8aa0'], 14, 60, 0.6);
 };
 GameScene.prototype.netPump = function (dt) {

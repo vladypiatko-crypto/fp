@@ -72,7 +72,7 @@ const itemOf = (cat, id) => COSMETICS[cat].find(i => i.id === id);
 const DEFAULT_UNLOCKS = ['skin:classic', 'skin:snowy', 'hat:none', 'hat:wizard', 'hat:bandana_r', 'hat:bandana_b', 'halo:none', 'trail:none', 'weapon:blaster'];
 function defaultSave() {
   return {
-    v: 2, coins: 150, name: 'QUACKER', settings: { shake: true, flash: true, music: true }, unlocked: DEFAULT_UNLOCKS.slice(),
+    v: 2, coins: 150, name: 'QUACKER', settings: { shake: true, flash: true, music: true, lang: 'en' }, unlocked: DEFAULT_UNLOCKS.slice(),
     loadout: [
       { skin: 'classic', hat: 'wizard', halo: 'none', trail: 'none', weapon: 'blaster' },
       { skin: 'snowy', hat: 'bandana_b', halo: 'none', trail: 'none', weapon: 'blaster' },

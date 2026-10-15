@@ -2,6 +2,8 @@
 /* QUACK ATTACK! — boot + main loop. */
 
 Save.load();
+setLang(Save.data.settings.lang || 'en');
+Save.data.name = cleanName(Save.data.name, 'QUACKER');
 onResize.push(() => { for (const s of Scenes.stack) if (s.resize) s.resize(); });
 resize();
 window.addEventListener('resize', resize);
@@ -36,4 +38,4 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // hook for automated tests
-window.__quack = { Scenes, Save, Input, Net, GameScene, MapScene, LockerScene, ChestScene, TitleScene, CutsceneScene, OnlineScene, RoomScene, get R() { return R; }, updatePlayer, applyUpgrade, spawnBoss, Impact };
+window.__quack = { Scenes, Save, Input, Net, GameScene, MapScene, LockerScene, ChestScene, TitleScene, CutsceneScene, OnlineScene, RoomScene, NameScene, setLang, trMissing, isBadName, get R() { return R; }, updatePlayer, applyUpgrade, spawnBoss, Impact };

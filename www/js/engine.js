@@ -96,28 +96,46 @@ const FONT = {
   '$': ['01110', '11011', '10101', '11011', '01110'], // coin
   '^': ['010', '111', '000', '000', '000'],
 };
+// German and Russian letters. A 6-row glyph has its accent (dots, breve) in the first row, drawn just above the letter.
+const SAME = { 'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M', 'Н': 'H', 'О': 'O', 'Р': 'P', 'С': 'C', 'Т': 'T', 'Х': 'X', 'З': '3', 'Ч': '4' };
+for (const ch in SAME) FONT[ch] = FONT[SAME[ch]];
+Object.assign(FONT, {
+  'Ä': ['101', ...FONT.A], 'Ö': ['101', ...FONT.O], 'Ü': ['101', ...FONT.U], 'Ё': ['101', ...FONT.E],
+  'Б': ['111', '100', '110', '101', '110'], 'Г': ['111', '100', '100', '100', '100'], 'Д': ['0110', '1010', '1010', '1111', '1001'],
+  'Ж': ['10101', '10101', '01110', '10101', '10101'], 'И': ['1001', '1011', '1101', '1001', '1001'],
+  'Й': ['0110', '1001', '1011', '1101', '1001', '1001'], 'Л': ['011', '101', '101', '101', '101'], 'П': ['111', '101', '101', '101', '101'],
+  'У': ['101', '101', '011', '001', '110'], 'Ф': ['01110', '10101', '10101', '01110', '00100'], 'Ц': ['1010', '1010', '1010', '1111', '0001'],
+  'Ш': ['10101', '10101', '10101', '10101', '11111'], 'Щ': ['101010', '101010', '101010', '111111', '000001'],
+  'Ъ': ['1100', '0100', '0110', '0101', '0110'], 'Ы': ['10001', '10001', '11001', '10101', '11001'], 'Ь': ['100', '100', '110', '101', '110'],
+  'Э': ['110', '001', '011', '001', '110'], 'Ю': ['10010', '10101', '11101', '10101', '10010'], 'Я': ['011', '101', '011', '101', '101'],
+});
+// atlas rows: 0 = accents, 1 = gap, 2..6 = the letter
 const GLYPH = {};
 let fontAtlasW = 0;
 for (const ch in FONT) { GLYPH[ch] = { x: fontAtlasW, w: FONT[ch][0].length }; fontAtlasW += FONT[ch][0].length + 1; }
-const fontBase = mkCanvas(fontAtlasW, 5);
+const fontBase = mkCanvas(fontAtlasW, 7);
 {
   const g = fontBase.getContext('2d'); g.fillStyle = '#fff';
-  for (const ch in FONT) FONT[ch].forEach((row, y) => { for (let x = 0; x < row.length; x++) if (row[x] === '1') g.fillRect(GLYPH[ch].x + x, y, 1, 1); });
+  for (const ch in FONT) {
+    const rows = FONT[ch], top = rows.length === 6 ? 0 : 2;
+    rows.forEach((row, i) => { for (let x = 0; x < row.length; x++) if (row[x] === '1') g.fillRect(GLYPH[ch].x + x, top + i, 1, 1); });
+  }
 }
 const fontCache = new Map();
 function fontFor(col) {
   let c = fontCache.get(col);
   if (!c) {
-    c = mkCanvas(fontAtlasW, 5); const g = c.getContext('2d');
-    g.drawImage(fontBase, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = col; g.fillRect(0, 0, fontAtlasW, 5);
+    c = mkCanvas(fontAtlasW, 7); const g = c.getContext('2d');
+    g.drawImage(fontBase, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = col; g.fillRect(0, 0, fontAtlasW, 7);
     fontCache.set(col, c);
   }
   return c;
 }
 const glyphOf = ch => GLYPH[ch] || GLYPH[ch.toUpperCase()];
+// every string is translated (lang.js) right before it is measured or drawn
 function textW(s, sc = 1) {
   let w = 0;
-  for (const ch of String(s)) { const g = glyphOf(ch); w += (g ? g.w : 2) + 1; }
+  for (const ch of tr(s)) { const g = glyphOf(ch); w += (g ? g.w : 2) + 1; }
   return Math.max(0, w - 1) * sc;
 }
 function rawText(s, x, y, col, sc, g = ctx) {
@@ -125,15 +143,15 @@ function rawText(s, x, y, col, sc, g = ctx) {
   for (const ch of s) {
     const gl = glyphOf(ch);
     if (!gl) { x += 3 * sc; continue; }
-    g.drawImage(img, gl.x, 0, gl.w, 5, x, y, gl.w * sc, 5 * sc);
+    g.drawImage(img, gl.x, 0, gl.w, 7, x, y - 2 * sc, gl.w * sc, 7 * sc);
     x += (gl.w + 1) * sc;
   }
 }
 const OUTLINE8 = [[-1, 0], [1, 0], [0, -1], [0, 1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
 // align: 0 left, 1 centre, 2 right. style: 'shadow' (default), 'outline', or null
 function text(s, x, y, col = C.white, sc = 1, align = 0, style = 'shadow', shadowCol = OUT) {
-  s = String(s);
-  const w = textW(s, sc);
+  s = tr(s);
+  const w = textW(RAW + s, sc);
   if (align === 1) x -= w / 2; else if (align === 2) x -= w;
   x = Math.round(x); y = Math.round(y);
   if (style === 'outline') {
@@ -145,19 +163,20 @@ function text(s, x, y, col = C.white, sc = 1, align = 0, style = 'shadow', shado
 }
 function wrapText(s, maxW, sc = 1) {
   const lines = [];
-  for (const para of String(s).split('\n')) {
+  for (const para of tr(s).split('\n')) {
     let cur = '';
     for (const wd of para.split(' ')) {
       const t = cur ? cur + ' ' + wd : wd;
-      if (textW(t, sc) > maxW && cur) { lines.push(cur); cur = wd; } else cur = t;
+      if (textW(RAW + t, sc) > maxW && cur) { lines.push(RAW + cur); cur = wd; } else cur = t;
     }
-    lines.push(cur);
+    lines.push(RAW + cur);
   }
-  return lines;
+  return lines; // already translated (RAW), so drawing them doesn't translate again
 }
 // Renders a string once to its own little canvas (used for smooth zooming titles).
 function textCanvas(s, col, sc = 1, outline = true) {
-  const w = textW(s, sc) + 4 * sc, h = 5 * sc + 5 * sc;
+  s = tr(s);
+  const w = textW(RAW + s, sc) + 4 * sc, h = 5 * sc + 5 * sc;
   const c = mkCanvas(w, h), g = c.getContext('2d');
   const ox = 2 * sc, oy = 2 * sc;
   if (outline) {

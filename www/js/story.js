@@ -89,10 +89,10 @@ class Dialog {
     this.t += dt;
     if (this.lastI !== this.i) { this.lastI = this.i; this.announce(); }
     if (!this.line) return;
-    const full = this.line[1].length;
+    const msg = tr(this.line[1]), full = msg.length; // typed out in the chosen language
     const prev = Math.floor(this.chars);
     this.chars = Math.min(full, this.chars + dt * 48);
-    if (Math.floor(this.chars) > prev && this.line[1][prev] !== ' ' && this.blipN++ % 2 === 0) {
+    if (Math.floor(this.chars) > prev && msg[prev] !== ' ' && this.blipN++ % 2 === 0) {
       const who = this.line[0];
       tone(who === 'honk' ? 180 : who === 'daisy' ? 900 : who === 'duck' ? 600 : 400, 0.03, 'square', 0.025);
     }
@@ -104,7 +104,7 @@ class Dialog {
   finish() { if (this.finished) return; this.finished = true; this.done && this.done(); }
   draw() {
     if (!this.line) return;
-    const [who, msg] = this.line, sp = SPEAKERS[who] || SPEAKERS.narr;
+    const who = this.line[0], msg = tr(this.line[1]), sp = SPEAKERS[who] || SPEAKERS.narr;
     const bw = Math.min(W - 12, 320), bh = 42, bx = Math.floor((W - bw) / 2), by = H - bh - 6;
     const k = Ease.outBack(Math.min(1, this.t / 0.25));
     const yy = by + Math.round((1 - k) * 30);
@@ -114,7 +114,7 @@ class Dialog {
     const tx = bx + (hasP ? 42 : 10), tw = bw - (hasP ? 50 : 20);
     if (sp.name) { const nw = textW(sp.name) + 8; panel(tx - 2, yy - 6, nw, 10, sp.col, OUT, null, false); text(sp.name, tx + 2, yy - 4, OUT, 1, 0, null); }
     const shown = msg.slice(0, Math.floor(this.chars));
-    wrapText(shown, tw).slice(0, 4).forEach((ln, i) => text(ln, tx, yy + 8 + i * 8, C.white, 1, 0));
+    wrapText(RAW + shown, tw).slice(0, 4).forEach((ln, i) => text(ln, tx, yy + 8 + i * 8, C.white, 1, 0));
     if (this.chars >= msg.length && (this.t * 3 | 0) % 2) text('>', bx + bw - 9, yy + bh - 9, C.gold, 1, 0);
   }
 }
@@ -395,7 +395,7 @@ function drawTowerFar(x, y) {
 // big text that can scale smoothly (rendered once, drawn scaled)
 const zoomCache = new Map();
 function drawZoomText(str, x, y, sc, col, rot = 0) {
-  const key = str + col;
+  const key = LANG + str + col;
   let c = zoomCache.get(key);
   if (!c) { c = textCanvas(str, col, 1, true); zoomCache.set(key, c); }
   const w = c.width * sc, h = c.height * sc;

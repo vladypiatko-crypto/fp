@@ -108,7 +108,7 @@ class GameScene {
   begin() {
     this.state = 'play'; this.dialog = null;
     Music.play('battle');
-    banner(this.level ? 'LEVEL ' + this.level.n + ': ' + this.level.name : 'SURVIVE!', C.gold, 2.4, this.level ? 'SURVIVE UNTIL THE BOSS ARRIVES' : '');
+    banner(this.level ? fmt('LEVEL {0}: {1}', this.level.n, this.level.name) : 'SURVIVE!', C.gold, 2.4, this.level ? 'SURVIVE UNTIL THE BOSS ARRIVES' : '');
     for (let i = 0; i < 5; i++) spawnEnemy('bolt', spawnPos());
   }
   newPlayer(id, lo0, name) {
@@ -323,7 +323,7 @@ class GameScene {
     text(title, W / 2, py + 8, r.won ? C.gold : C.red, tsc, 1, 'outline');
     let y = py + 12 + tsc * 5 + 6;
     if (!r.won) { text(this.mode === 'story' ? 'THE ROBOTS GOT YOU... TRY AGAIN!' : 'THE ROBOTS WON THIS TIME...', W / 2, y, C.white, 1, 1); y += 10; }
-    else if (this.mode === 'story') { text(this.level.name + ' IS SAFE AGAIN!', W / 2, y, C.white, 1, 1); y += 10; }
+    else if (this.mode === 'story') { text(fmt('{0} IS SAFE AGAIN!', this.level.name), W / 2, y, C.white, 1, 1); y += 10; }
     const row = (a, b, col = C.white) => { text(a, px + 14, y, C.gray, 1, 0); text(b, px + pw - 14, y, col, 1, 2); y += 8; };
     row('TIME', fmtTime(r.t));
     row('ROBOTS SCRAPPED', r.kills);
@@ -337,7 +337,7 @@ class GameScene {
     if (r.reward) {
       const it = itemOf(r.reward.cat, r.reward.id);
       drawSprX(GUN_ART[r.reward.id], px + 18, y + 4, { sc: 2 });
-      text('NEW WEAPON: ' + it.name + '!', px + 32, y + 1, RARITY[it.rarity].col, 1, 0);
+      text(fmt('NEW WEAPON: {0}!', it.name), px + 32, y + 1, RARITY[it.rarity].col, 1, 0);
       y += 13;
     }
     // ducks cheering or crying
@@ -497,7 +497,7 @@ function bossDefeated(e) {
   for (let i = 0; i < 18; i++) dropAt(e.x + rand(-24, 24), e.y + rand(-24, 24), 'coin', 2);
   R.items.push({ k: 'heart', x: e.x + 10, y: e.y, t: 0 });
   for (let i = 0; i < R.np; i++) R.items.push({ k: 'goldegg', x: e.x - 10 + i * 6, y: e.y + 8, t: 0 });
-  banner(e.d.name + ' DESTROYED!', C.gold, 2.6);
+  banner(fmt('{0} DESTROYED!', e.d.name), C.gold, 2.6);
   R.boss = null;
   if (R.mode === 'story') { R.state = 'clear'; R.stateT = 0; Music.play(null); sfx.win(); for (const p of R.players) if (p.down) { p.down = false; p.hp = p.maxHp * 0.5; } }
   else Music.play('battle');
@@ -526,7 +526,7 @@ function hurtPlayer(p, dmg) {
   if (p.hp <= 0) {
     p.hp = 0; p.down = true; p.reviveT = 0; Impact.trigger('huge');
     burst(p.x, p.y, ['#fff8e7', '#ffd23f'], 20, 90, 0.7);
-    if (alivePlayers().length) banner('P' + (p.id + 1) + ' IS DOWN!', PCOL[p.id], 2, 'STAND NEXT TO THEIR EGG TO REVIVE');
+    if (alivePlayers().length) banner(fmt('{0} IS DOWN!', R.online ? keep(p.name) : 'P' + (p.id + 1)), PCOL[p.id], 2, 'STAND NEXT TO THEIR EGG TO REVIVE');
   }
 }
 
@@ -1016,7 +1016,7 @@ function applyUpgrade(p, u) {
   sfx.pickup();
   if (u.k === 'snack') p.hp = Math.min(p.maxHp, p.hp + 40);
   else { p.up[u.k] = lvl(p, u.k) + 1; if (u.k === 'heart') { p.maxHp += 20; p.hp = Math.min(p.maxHp, p.hp + 30); } }
-  floatText(p.x, p.y - 18, u.name + '!', PCOL[p.id], 1.1);
+  floatText(p.x, p.y - 18, fmt('{0}!', u.name), PCOL[p.id], 1.1);
   if (p.choice) p.picked = { choice: p.choice, sel: Math.max(0, p.choice.indexOf(u)), t: 0 };
   p.pending--; p.choice = null; p.squash = 0.25;
 }
@@ -1297,7 +1297,7 @@ function drawPlayer(p) {
     pring(p.x, p.y - 7, r, PCOL[p.id]);
     ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(p.x + Math.cos(a) * r), Math.round(p.y - 7 + Math.sin(a) * r), 2, 2);
   }
-  if (R.players.length > 1) text(R.online ? p.name : 'P' + (p.id + 1), p.x, p.y - 26 - (p.lo.hat === 'wizard' || p.lo.hat === 'viking' ? 6 : 0), PCOL[p.id], 1, 1);
+  if (R.players.length > 1) text(R.online ? keep(p.name) : 'P' + (p.id + 1), p.x, p.y - 26 - (p.lo.hat === 'wizard' || p.lo.hat === 'viking' ? 6 : 0), PCOL[p.id], 1, 1);
 }
 
 // ---------------------------------------------------------------- HUD
@@ -1318,8 +1318,8 @@ function drawHud(v, p, cx, cy) {
   ghostBar(x + 7, y, hpW, 7, p.hp / p.maxHp, p.hpG / p.maxHp, p.hp / p.maxHp < 0.3 ? '#ff4d6d' : '#51cf66');
   text(Math.ceil(p.hp), x + 9, y + 1, C.white, 1, 0, null);
   bar(x, y + 9, hpW + 7, 5, p.xp / p.xpNext, PCOL[p.id]);
-  text('LV' + p.level, x + hpW + 11, y + 9, PCOL[p.id], 1, 0);
-  text(p.kills + ' KO', x, y + 17, C.white, 1, 0);
+  text(fmt('LV{0}', p.level), x + hpW + 11, y + 9, PCOL[p.id], 1, 0);
+  text(fmt('{0} KO', p.kills), x, y + 17, C.white, 1, 0);
   // weapons owned
   let ix = v.x + 4;
   const iy = v.y + v.h - 12;
@@ -1400,7 +1400,7 @@ function drawTopBar() {
   if (R.mode === 'story' && !R.bossSpawned) {
     const left = Math.max(0, R.level.time - R.t);
     panel(cx - 34, 2, 68, 18, C.ui, OUT, C.uiL);
-    text('BOSS IN ' + fmtTime(left), cx, 5, C.white, 1, 1, null);
+    text(fmt('BOSS IN {0}', fmtTime(left)), cx, 5, C.white, 1, 1, null);
     bar(cx - 30, 12, 60, 5, R.t / R.level.time, '#e8343b');
   } else {
     panel(cx - 20, 2, 40, 13, C.ui, OUT, C.uiL);

@@ -46,10 +46,15 @@ class TitleScene {
   constructor(skipIntro = false) {
     this.t = skipIntro ? 3 : 0; this.T = 0; this.ui = new UI(); this.modal = null; this.modalUI = new UI(); this.modalT = 0;
     this.shake = 0; this.flash = 0; this.landed = skipIntro; this.parts = [];
-    this.words = [['QUACK', C.gold], ['ATTACK!', '#ff8c1a']].map(([w, col]) => ({ w, whole: textCanvas(w, col, 1, true), white: textCanvas(w, '#ffffff', 1, false) }));
+    this.buildWords();
     this.ducks = [0, 1].map(i => ({ x: W * (0.3 + i * 0.4), y: H * 0.86, tx: 0, ty: 0, wait: rand(0.5, 2), facing: 'down', frame: 0, anim: rand(0, 5), hop: 0, turnT: 0, quackT: 0 }));
     this.ship = { x: -80, t: 6 };
     Music.play('title');
+  }
+  // the logo words (in QUACK language even the logo quacks); rebuilt when the language changes
+  buildWords() {
+    this.wordsLang = LANG;
+    this.words = [['QUACK', C.gold], ['ATTACK!', '#ff8c1a']].map(([w, col]) => ({ w: tr(w), whole: textCanvas(w, col, 1, true), white: textCanvas(w, '#ffffff', 1, false) }));
   }
   layout() {
     // each word image is 10 rows: 2 padding, 5 letter, 3 outline + drop shadow
@@ -108,6 +113,7 @@ class TitleScene {
     });
   }
   draw() {
+    if (this.wordsLang !== LANG) this.buildWords();
     const { s, ty } = this.layout();
     ctx.save();
     if (this.shake) ctx.translate(Math.round(rand(-this.shake, this.shake)), Math.round(rand(-this.shake, this.shake)));
@@ -193,7 +199,7 @@ class TitleScene {
     if (fsSupported()) iconButton(this.ui, 'fs', W - 33, 4, drawFsIcon, toggleFullscreen);
     iconButton(this.ui, 'set', W - (fsSupported() ? 49 : 33), 4, drawGearIcon, () => this.openModal('settings'));
     const b = Save.data.best;
-    if (b.e1 || b.e2) text('BEST ENDLESS  1P ' + fmtTime(b.e1) + '  2P ' + fmtTime(b.e2), W / 2, H - 9, C.white, 1, 1, 'outline');
+    if (b.e1 || b.e2) text(fmt('BEST ENDLESS  1P {0}  2P {1}', fmtTime(b.e1), fmtTime(b.e2)), W / 2, H - 9, C.white, 1, 1, 'outline');
     if (this.modal === 'settings') this.drawSettings();
     else if (this.modal === 'online') this.drawWip();
     else if (this.modal) this.drawModal();
@@ -232,17 +238,22 @@ class TitleScene {
   drawSettings() {
     ctx.fillStyle = 'rgba(15,10,26,0.7)'; ctx.fillRect(0, 0, W, H);
     const k = Ease.outBack(Math.min(1, this.modalT / 0.3));
-    const pw = Math.min(W - 20, 190), ph = 112, px = Math.floor(W / 2 - pw / 2), py = Math.floor(H / 2 - ph / 2 + (1 - k) * 30);
+    const rowH = Math.min(18, Math.floor((H - 70) / 5));
+    const pw = Math.min(W - 20, 200), ph = 50 + rowH * 5, px = Math.floor(W / 2 - pw / 2), py = Math.floor(H / 2 - ph / 2 + (1 - k) * 30);
     panel(px, py, pw, ph, C.uiD, OUT, C.uiL);
     text('SETTINGS', W / 2, py + 7, C.gold, 2, 1, 'outline');
     const ui = this.modalUI; ui.begin();
     const st = Save.data.settings;
     [['shake', 'SCREEN SHAKE'], ['flash', 'IMPACT FLASH'], ['music', 'MUSIC']].forEach(([key, label], i) => {
       const on = st[key];
-      drawButton(ui, 'set_' + key, px + 10, py + 26 + i * 18, pw - 20, 15, label + ': ' + (on ? 'ON' : 'OFF'),
+      drawButton(ui, 'set_' + key, px + 10, py + 26 + i * rowH, pw - 20, rowH - 3, fmt('{0}: {1}', label, on ? 'ON' : 'OFF'),
         { def: i === 0, col: on ? C.ui : '#2a2535', tcol: on ? C.white : C.gray,
           on: () => { st[key] = !st[key]; Save.write(); if (key === 'music' && AU.musicBus) AU.musicBus.gain.value = st.music ? 0.42 : 0; } });
     });
+    // language: ENGLISH > DEUTSCH > РУССКИЙ > QUACK
+    drawButton(ui, 'set_lang', px + 10, py + 26 + 3 * rowH, pw - 20, rowH - 3, fmt('{0}: {1}  >', 'LANGUAGE', keep(langName())), {
+      on: () => { const i = LANGS.findIndex(l => l[0] === LANG), next = LANGS[(i + 1) % LANGS.length][0]; st.lang = next; Save.write(); setLang(next); } });
+    drawButton(ui, 'set_name', px + 10, py + 26 + 4 * rowH, pw - 20, rowH - 3, fmt('{0}: {1}  >', 'NAME', keep(Save.data.name)), { on: () => Scenes.push(new NameScene()) });
     drawButton(ui, 'set_back', Math.floor(W / 2 - 30), py + ph - 20, 60, 13, 'BACK', { on: () => { this.modal = null; } });
   }
   drawModal() {
@@ -368,10 +379,10 @@ class MapScene {
     text('STORY - SAVE PRINCESS DAISY!', W / 2, 5, C.gold, 1, 1);
     const lv = LEVELS[this.sel], pw = Math.min(W - 12, 260), px = Math.floor(W / 2 - pw / 2), py = H - 50;
     panel(px, py, pw, 44, C.uiD, OUT, C.uiL);
-    text('LEVEL ' + lv.n + ': ' + lv.name, px + 8, py + 6, C.gold, 1, 0);
-    text('BOSS: ' + BOSSES[lv.boss].name, px + 8, py + 15, C.white, 1, 0);
+    text(fmt('LEVEL {0}: {1}', lv.n, lv.name), px + 8, py + 6, C.gold, 1, 0);
+    text(fmt('BOSS: {0}', BOSSES[lv.boss].name), px + 8, py + 15, C.white, 1, 0);
     const cleared = Save.data.story.cleared[lv.n];
-    if (!Save.has('weapon', lv.reward)) { text('REWARD:', px + 8, py + 24, C.gray, 1, 0); drawSprX(GUN_ART[lv.reward], px + 46, py + 27, { sc: 1 }); text(itemOf('weapon', lv.reward).name, px + 56, py + 24, RARITY[itemOf('weapon', lv.reward).rarity].col, 1, 0); }
+    if (!Save.has('weapon', lv.reward)) { const rw = textW('REWARD:'); text('REWARD:', px + 8, py + 24, C.gray, 1, 0); drawSprX(GUN_ART[lv.reward], px + 18 + rw, py + 27, { sc: 1 }); text(itemOf('weapon', lv.reward).name, px + 28 + rw, py + 24, RARITY[itemOf('weapon', lv.reward).rarity].col, 1, 0); }
     else text(cleared ? 'CLEARED! @' : 'REWARD ALREADY UNLOCKED', px + 8, py + 24, cleared ? C.gold : C.gray, 1, 0);
     drawButton(this.ui, 'play', px + pw - 58, py + 6, 50, 16, 'PLAY', { on: () => this.play(), icon: ICON.play, col: '#3d2f63' });
     drawButton(this.ui, 'locker', px + pw - 58, py + 25, 50, 13, 'LOCKER', { on: () => Trans.go(() => Scenes.push(new LockerScene({}))) });
@@ -508,7 +519,7 @@ class LockerScene {
       if (Save.anyNew(c)) drawNewTag(L.gx + i * (tw + 2) + tw / 2, L.gy - (L.port ? 0 : 16) - 1, T + i * 0.13);
     });
     const catLabelY = L.gy - (L.port ? 0 : 16) + 17;
-    text(CAT_NAME[this.cat] + 'S', L.gx + 2, catLabelY, C.gold, 1, 0);
+    text(CAT_NAME[this.cat] === 'WEAPON' ? 'WEAPONS' : CAT_NAME[this.cat] + 'S', L.gx + 2, catLabelY, C.gold, 1, 0);
     const owned = COSMETICS[this.cat].filter(it => Save.has(this.cat, it.id)).length;
     text(owned + '/' + COSMETICS[this.cat].length, L.gx + L.gw - 2, catLabelY, C.gray, 1, 2);
     // item grid
@@ -546,8 +557,8 @@ class LockerScene {
       text(info.name, L.gx + 4, iy + 3, rc.col, 1, 0);
       text(rc.name, L.gx + L.gw - 4, iy + 3, rc.col, 1, 2);
       let line = info.desc || '';
-      if (!has) line = this.cat === 'weapon' && LEVELS.find(l => l.reward === info.id) ? 'BEAT STORY LEVEL ' + LEVELS.find(l => l.reward === info.id).n + ' OR OPEN CHESTS' : 'LOCKED - OPEN CHESTS TO FIND IT';
-      else if (lo[this.cat] === info.id) line = line || 'EQUIPPED ON P' + (this.pid + 1);
+      if (!has) line = this.cat === 'weapon' && LEVELS.find(l => l.reward === info.id) ? fmt('BEAT STORY LEVEL {0} OR OPEN CHESTS', LEVELS.find(l => l.reward === info.id).n) : 'LOCKED - OPEN CHESTS TO FIND IT';
+      else if (lo[this.cat] === info.id) line = line || fmt('EQUIPPED ON P{0}', this.pid + 1);
       else line = line || (Input.touch ? 'TAP TO EQUIP' : 'PRESS ENTER TO EQUIP');
       text(line, L.gx + 4, iy + 12, has ? C.white : C.gray, 1, 0, null);
     }
@@ -667,7 +678,7 @@ class ChestScene {
       let ly = y + 56;
       for (const r of ['common', 'rare', 'epic', 'legendary']) if (ch.odds[r]) { text(RARITY[r].name, x + 8, ly, RARITY[r].col, 1, 0); text(ch.odds[r] + '%', x + pw - 8, ly, C.white, 1, 2); ly += 7; }
       const can = Save.data.coins >= ch.price;
-      drawButton(this.ui, 'buy' + k, x + 8, y + ph - 20, pw - 16, 15, (can ? 'OPEN  ' : 'NEED ') + ch.price, { on: () => this.buy(k), col: can ? '#3d2f63' : '#2a2535', tcol: can ? C.gold : C.gray, def: i === 0 });
+      drawButton(this.ui, 'buy' + k, x + 8, y + ph - 20, pw - 16, 15, fmt(can ? 'OPEN  {0}' : 'NEED {0}', ch.price), { on: () => this.buy(k), col: can ? '#3d2f63' : '#2a2535', tcol: can ? C.gold : C.gray, def: i === 0 });
     });
     drawButton(this.ui, 'back', W / 2 - 24, H - 18, 48, 14, 'BACK', { on: () => Trans.go(() => Scenes.pop()), icon: ICON.back });
   }
@@ -700,10 +711,10 @@ class ChestScene {
         text(r.dup ? 'DUPLICATE!' : 'YOU OBTAINED:', W / 2, 10, r.dup ? C.gray : C.pink, 1, 1, 'outline');
         text(r.it.name, W / 2, 20, rc.col, 2, 1, 'outline');
         text(rc.name, W / 2, 34, rc.col, 1, 1);
-        if (r.dup) text('+' + Math.floor(CHESTS[this.kind].price * 0.4) + ' COINS BACK', W / 2, 44, C.gold, 1, 1);
+        if (r.dup) text(fmt('+{0} COINS BACK', Math.floor(CHESTS[this.kind].price * 0.4)), W / 2, 44, C.gold, 1, 1);
         const bw = 60, y = H - 20;
         const btns = [];
-        if (!r.dup) btns.push(['equip', 'EQUIP P' + (this.locker.pid + 1), () => { this.locker.equip(r.cat, r.it.id); this.locker.cat = r.cat; this.done(); }]);
+        if (!r.dup) btns.push(['equip', fmt('EQUIP P{0}', this.locker.pid + 1), () => { this.locker.equip(r.cat, r.it.id); this.locker.cat = r.cat; this.done(); }]);
         btns.push(['again', 'AGAIN', () => { this.st = 'pick'; this.ui = new UI(); }]);
         btns.push(['ok', 'OK', () => this.done()]);
         const tw = btns.length * bw + (btns.length - 1) * 6;
@@ -712,4 +723,60 @@ class ChestScene {
     }
   }
   done() { Trans.go(() => Scenes.pop()); }
+}
+
+// ================================================================ name: type your own (shown to friends online)
+class NameScene {
+  constructor() { this.T = 0; this.ui = new UI(); this.name = Save.data.name || ''; this.note = ''; this.shake = 0; this.rows = ['1234567890', 'QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM']; }
+  add(ch) { if (this.name.length < NAME_MAX && !(ch === ' ' && (!this.name || this.name.endsWith(' ')))) { this.name += ch; this.note = ''; } }
+  del() { this.name = this.name.slice(0, -1); this.note = ''; }
+  random() { const pool = NAMES.filter(n => n !== this.name); this.name = pool[Math.floor(Math.random() * pool.length)]; this.note = ''; }
+  save() {
+    const n = this.name.replace(/ +/g, ' ').trim();
+    if (n.length < 2) return this.nope('NAME IS TOO SHORT');
+    if (isBadName(n)) return this.nope("THAT NAME ISN'T ALLOWED");
+    Save.data.name = n; Save.write(); sfx.pickup();
+    Scenes.pop();
+  }
+  nope(msg) { this.note = msg; this.shake = 0.35; sfx.uiBack(); }
+  update(dt) {
+    this.T += dt; this.shake = Math.max(0, this.shake - dt);
+    const acts = Input.menu();
+    // a real keyboard types; then letters must not also move the focus or press buttons
+    if (Input.typed.length) {
+      for (const ch of Input.typed) { if (ch === '<') this.del(); else if (NAME_CHARS.includes(ch) || ch === ' ') this.add(ch); }
+      acts.up = acts.down = acts.left = acts.right = acts.ok = acts.back = false;
+    }
+    if (Input.anyHit(['Enter', 'NumpadEnter'])) { this.save(); return; }
+    if (Input.anyHit(['Escape']) || acts.back) { sfx.uiBack(); Scenes.pop(); return; }
+    this.ui.update(dt, acts);
+  }
+  draw() {
+    ctx.fillStyle = C.uiD; ctx.fillRect(0, 0, W, H);
+    for (let y = 0; y < H; y += 12) for (let x = (y / 12) % 2 ? 0 : 12; x < W; x += 24) { ctx.fillStyle = '#251d3a'; ctx.fillRect(x, y, 12, 12); }
+    this.ui.begin();
+    text('YOUR NAME', W / 2, 6, C.gold, 2, 1, 'outline');
+    text('SHOWN TO OTHER PLAYERS ONLINE', W / 2, 22, C.gray, 1, 1);
+    // the name field, with a blinking cursor
+    const fw = 6 * NAME_MAX + 16, fx = Math.floor(W / 2 - fw / 2) + Math.round(Math.sin(this.shake * 60) * this.shake * 8), fy = 32;
+    panel(fx, fy, fw, 16, C.ui, this.note ? C.red : C.gold, null, false);
+    const tw = textW(keep(this.name));
+    text(keep(this.name), fx + fw / 2, fy + 6, C.white, 1, 1, null);
+    if ((this.T * 2 | 0) % 2 === 0 && this.name.length < NAME_MAX) { ctx.fillStyle = C.gold; ctx.fillRect(Math.round(fx + fw / 2 + tw / 2 + 2), fy + 4, 1, 7); }
+    text(this.name.length + '/' + NAME_MAX, fx + fw + 4, fy + 6, C.gray, 1, 0, null);
+    if (this.note) text(this.note, W / 2, fy + 20, C.red, 1, 1, 'outline');
+    // on-screen keyboard
+    const kw = Math.min(17, Math.floor((W - 12) / 10) - 2), kh = 12, ky = 62;
+    this.rows.forEach((row, r) => {
+      const x0 = Math.floor(W / 2 - (row.length * (kw + 2) - 2) / 2);
+      [...row].forEach((ch, i) => drawButton(this.ui, 'k' + ch, x0 + i * (kw + 2), ky + r * (kh + 2), kw, kh, ch, { on: () => { this.add(ch); sfx.uiMove(); }, silent: true, def: ch === 'Q' }));
+    });
+    const by = ky + 4 * (kh + 2) + 2, bw = Math.min(60, Math.floor((W - 24) / 3));
+    drawButton(this.ui, 'space', Math.floor(W / 2 - bw * 1.5 - 4), by, bw, 13, 'SPACE', { on: () => this.add(' '), silent: true });
+    drawButton(this.ui, 'del', Math.floor(W / 2 - bw / 2), by, bw, 13, 'DEL', { on: () => this.del(), silent: true });
+    drawButton(this.ui, 'rand', Math.floor(W / 2 + bw / 2 + 4), by, bw, 13, 'RANDOM', { on: () => this.random() });
+    const sy = Math.min(H - 18, by + 20);
+    drawButton(this.ui, 'cancel', Math.floor(W / 2 - 74), sy, 70, 14, 'CANCEL', { on: () => Scenes.pop(), icon: ICON.back });
+    drawButton(this.ui, 'save', Math.floor(W / 2 + 4), sy, 70, 14, 'SAVE', { on: () => this.save(), col: '#3d2f63' });
+  }
 }
