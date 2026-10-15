@@ -117,6 +117,12 @@ const GUN_ART = {
   bubble: spr(['..bb....', '.bBb....', 'kkkkkkcc', 'kk......'], { b: '#7ecbff', B: '#ffffff', k: '#ff6fae', c: '#ffd23f' }),
   rang: spr(['ww....', '.ww...', '..wwrr'], { w: '#fff3dc', r: '#e8343b' }),
   minigun: spr(['.mmmmmmmm', 'MMMMMMMMk', '.mmmmmmmm', 'kk.......'], { m: '#8b8aa0', M: '#5a5872', k: '#3d3a52' }),
+  corn: spr(['...YyYyY.', '.ggyYyYyy', 'gggggggg.', 'gg.......'], { g: '#4f9a3a', y: '#ffd23f', Y: '#fff3b0' }),
+  frost: spr(['...c.c..', '.ccccccW', 'kkkkkC..', 'kk......'], { c: '#9fdcff', C: '#5ec8ff', W: '#ffffff', k: '#3d5a8a' }),
+  rocket: spr(['mmmmmmmmm', 'mppppppPm', 'mmmmmmmmm', '.kk......'], { m: '#3d3a52', p: '#ff6fae', P: '#ffd23f', k: '#5a5872' }),
+  tesla: spr(['..c.c.c..', '.kkkkkkcW', 'kkkkkk...', 'kk.......'], { c: '#7dfff5', k: '#4a4763', W: '#ffffff' }),
+  flame: spr(['rr......', 'rRmmmmmo', 'rrmm...y', 'kk......'], { r: '#e8343b', R: '#ff8c8c', m: '#8b8aa0', o: '#ff8c1a', y: '#ffd23f', k: '#3d3a52' }),
+  goldgun: spr(['.ggggggW', 'gGgggo..', 'go......'], { g: '#ffd23f', G: '#fff3b0', o: '#b07a00', W: '#ffffff' }),
 };
 const PROJ_ART = {
   rang: spr(['ww..', 'wwr.', '.www', '..ww'], { w: '#fff3dc', r: '#e8343b' }),
@@ -124,6 +130,10 @@ const PROJ_ART = {
   missile: spr(['.rr.', 'rwwr', 'rwwr', '.ff.'], { r: '#e8343b', w: '#d5dbe6', f: '#ffd23f' }),
   snowball: spr(['.ww.', 'wwww', 'wwwb', '.wb.'], { w: '#ffffff', b: '#bde6ff' }),
   feather: spr(['ww...', '.wwwW', '...ww'], { w: '#fff8e7', W: '#c9a6ff' }),
+  corn: spr(['.y.', 'yYy', '.y.'], { y: '#ffd23f', Y: '#fff3b0' }),
+  popcorn: spr(['ww', 'wy'], { w: '#fff8e7', y: '#ffd23f' }, null),
+  frost: spr(['.w.', 'wcw', '.w.'], { w: '#ffffff', c: '#5ec8ff' }),
+  rocket: spr(['.pp..', 'fpppw', '.pp..'], { p: '#ff6fae', w: '#fff8e7', f: '#ffd23f' }),
 };
 
 // ================================================================ robots (Dr. Honk's army). m/M/l are re-tinted per world.

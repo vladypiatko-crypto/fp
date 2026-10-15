@@ -64,6 +64,12 @@ const COSMETICS = {
     { id: 'rang', name: 'FEATHER-RANG', rarity: 'epic', desc: 'FLIES OUT AND COMES BACK' },
     { id: 'laser', name: 'BEAK BEAM', rarity: 'epic', desc: 'LASER THAT PIERCES EVERYTHING' },
     { id: 'minigun', name: 'QUACKINATOR', rarity: 'legendary', desc: 'BRRRRRRT' },
+    { id: 'corn', name: 'CORN CANNON', rarity: 'rare', desc: 'CORN THAT POPS INTO POPCORN' },
+    { id: 'frost', name: 'FROST BLASTER', rarity: 'rare', desc: 'FREEZES ROBOTS, SLOWS THEM DOWN' },
+    { id: 'rocket', name: 'FIREWORK LAUNCHER', rarity: 'epic', desc: 'ROCKETS THAT GO BOOM' },
+    { id: 'tesla', name: 'TESLA COIL', rarity: 'epic', desc: 'LIGHTNING JUMPS ROBOT TO ROBOT' },
+    { id: 'flame', name: 'DRAGON BREATH', rarity: 'legendary', desc: 'SHORT RANGE FIRE STORM' },
+    { id: 'goldgun', name: 'GOLDEN QUACKER', rarity: 'admin', desc: 'SHINY SHOTS THAT PIERCE', gift: true }, // only given by the admin
   ],
 };
 const CATS = ['skin', 'hat', 'halo', 'trail', 'weapon'];
@@ -95,6 +101,16 @@ const WEAPONS = {
   rang: { cd: 1.05, dmg: 12, n: 1, spread: 0.5, speed: 210, life: 1.0, r: 3, kb: 70, range: 120, col: '#fff3dc' },
   laser: { cd: 0.85, dmg: 16, n: 1, spread: 0.12, range: 150, kb: 30, col: '#c06bff' },
   minigun: { cd: 0.085, dmg: 3.6, n: 1, spread: 0.12, speed: 300, life: 0.55, r: 1, kb: 25, range: 140, col: '#fff36b', jitter: 0.12 },
+  // pops into `pop` popcorn shards when it hits or runs out
+  corn: { cd: 0.72, dmg: 15, n: 1, spread: 0.22, speed: 190, life: 0.6, r: 2, kb: 60, range: 135, col: '#ffd23f', pop: 6 },
+  // robots it hits move at 45% speed for `slow` seconds
+  frost: { cd: 0.46, dmg: 10, n: 1, spread: 0.15, speed: 230, life: 0.7, r: 2, kb: 15, range: 145, col: '#9fdcff', slow: 1.6 },
+  // starts slow, speeds up, steers a little and explodes
+  rocket: { cd: 1.25, dmg: 30, n: 1, spread: 0.35, speed: 60, life: 1.2, r: 2, kb: 0, range: 165, aoe: 26, col: '#ff6fae' },
+  // instant lightning that jumps to `chain` more robots
+  tesla: { cd: 0.68, dmg: 14, n: 1, chain: 3, range: 135, kb: 20, col: '#7dfff5' },
+  flame: { cd: 0.07, dmg: 3.3, n: 1, spread: 0.3, speed: 160, life: 0.42, r: 3, kb: 8, range: 92, col: '#ff8c1a', jitter: 0.2 },
+  goldgun: { cd: 0.3, dmg: 15, n: 1, spread: 0.14, speed: 320, life: 0.7, r: 1, kb: 80, range: 165, col: '#ffd23f' },
 };
 
 // ================================================================ upgrades offered on level-up

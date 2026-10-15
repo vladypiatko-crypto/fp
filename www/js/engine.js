@@ -363,6 +363,12 @@ const sfx = {
     else if (kind === 'bubble') { tone(500 * p, 0.08, 'sine', 0.07, 900); }
     else if (kind === 'rang') { noise(0.15, 0.04, 1200, 0, null, 'bandpass'); }
     else if (kind === 'minigun') { if (every('mg' + pid, 0.07)) tone(700 * p, 0.035, 'square', 0.022, 350); }
+    else if (kind === 'corn') { tone(260 * p, 0.09, 'square', 0.05, 520); noise(0.05, 0.04, 2000); }
+    else if (kind === 'frost') { tone(1800 * p, 0.07, 'sine', 0.05, 2600); tone(2400 * p, 0.05, 'triangle', 0.025, 1600, atime(0.03)); }
+    else if (kind === 'rocket') { noise(0.3, 0.06, 900, 0, null, 'bandpass'); tone(140 * p, 0.25, 'sawtooth', 0.03, 420); }
+    else if (kind === 'tesla') { tone(90 * p, 0.12, 'sawtooth', 0.04, 60); noise(0.08, 0.05, 7000, 0, null, 'highpass'); }
+    else if (kind === 'flame') { if (every('fl' + pid, 0.09)) noise(0.12, 0.035, 900, 0, null, 'bandpass'); }
+    else if (kind === 'goldgun') { tone(1320 * p, 0.07, 'square', 0.025, 1760); tone(1980 * p, 0.09, 'sine', 0.03, 0, atime(0.04)); }
     else tone(880 * p, 0.06, 'square', 0.025, 420 * p);
   },
   hit() { if (every('hit', 0.03)) noise(0.04, 0.05, 3500); },

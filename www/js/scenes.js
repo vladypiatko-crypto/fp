@@ -705,7 +705,7 @@ function drawItemIcon(cat, id, x, y, t, lo) {
     else drawDuck(x, y + 11, { skin: lo.skin, hat: id, facing: 'down', t, blink: t % 3 > 2.9 });
   } else if (cat === 'halo') { if (id === 'none') text('-', x, y - 2, C.gray, 1, 1, null); else { drawHalo(id, x, y - 2, 2, t, 'back'); drawHalo(id, x, y - 2, 2, t, 'front'); } }
   else if (cat === 'trail') { if (id === 'none') text('-', x, y - 2, C.gray, 1, 1, null); else drawTrailIcon(id, x, y, t); }
-  else if (cat === 'weapon') drawSprX(GUN_ART[id], x, y, { sc: id === 'minigun' || id === 'shotgun' ? 1 : 2 });
+  else if (cat === 'weapon') drawSprX(GUN_ART[id], x, y, { sc: GUN_ART[id].w >= 11 ? 1 : 2 });
 }
 
 // ================================================================ chests

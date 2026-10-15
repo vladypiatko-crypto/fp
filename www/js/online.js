@@ -491,7 +491,7 @@ GameScene.prototype.buildSnapshot = function () {
       (p.choice || []).map(c => c.k), r2(p.hurtFlash), r2(p.squash), r2(p.spd), Object.keys(p.over)]),
     // enemies: [id, type, x, y, hp, maxHp, bits, z, state, flash, fuse, rot]
     e: this.enemies.filter(e => !e.dead).map(e => [e.id, NET_TYPES.indexOf(e.type), r1(e.x), r1(e.y), Math.ceil(e.hp), Math.ceil(e.maxHp),
-      (e.flip ? 1 : 0) | (e.boss ? 2 : 0) | (e.spawnT > 0 ? 4 : 0) | (e.fuse >= 0 ? 8 : 0) | (e.phase === 2 ? 16 : 0),
+      (e.flip ? 1 : 0) | (e.boss ? 2 : 0) | (e.spawnT > 0 ? 4 : 0) | (e.fuse >= 0 ? 8 : 0) | (e.phase === 2 ? 16 : 0) | (e.slowT > 0 ? 32 : 0),
       r1(e.z || 0), stIdx(e.bs || e.st), r2(e.flash || 0), r2(Math.max(0, e.fuse)), r2(e.rot || 0)]),
     // shots: [kind, x, y, vx, vy, life, max, r, col, ownerPid, weapon, rot, ang, back, sp]
     s: this.shots.map(b => [b.kind, r1(b.x), r1(b.y), r1(b.vx), r1(b.vy), r2(b.life), b.max, b.r, b.col, b.owner.id, b.owner.weapon, r2(b.rot), r2(b.ang || 0), b.back ? 1 : 0, r1(b.sp || 0)]),
@@ -551,7 +551,7 @@ GameScene.prototype.applySnapshot = function (s) {
     e.tx = a[2]; e.ty = a[3];
     if (e.x === undefined) { e.x = a[2]; e.y = a[3]; }
     e.hp = a[4]; e.maxHp = a[5]; e.flip = !!(a[6] & 1); e.spawnT = a[6] & 4 ? 0.3 : 0;
-    e.fuse = a[10] > 0 ? a[10] : -1; e.phase = a[6] & 16 ? 2 : 1;
+    e.fuse = a[10] > 0 ? a[10] : -1; e.phase = a[6] & 16 ? 2 : 1; e.slowT = a[6] & 32 ? 1 : 0;
     e.z = a[7]; e.bs = e.st = NET_STATES[a[8]] || ''; e.flash = Math.max(e.flash, a[9]); e.rot = a[11];
     next.set(id, e); list.push(e);
   }
@@ -651,7 +651,11 @@ GameScene.prototype.clientTick = function (dt) {
     e.anim += dt; e.flash = Math.max(0, e.flash - dt);
     if (e.tx !== undefined) { e.x += (e.tx - e.x) * Math.min(1, dt * 12); e.y += (e.ty - e.y) * Math.min(1, dt * 12); }
   }
-  for (const b of this.shots) { b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; b.rot += dt * 18; }
+  for (const b of this.shots) {
+    if (b.kind === 'flame') { const k = Math.pow(0.08, dt); b.vx *= k; b.vy *= k; b.r = 2 + (1 - b.life / b.max) * 4; }
+    else if (b.kind === 'rocket') rocketSmoke(b);
+    b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; b.rot += dt * 18;
+  }
   this.shots = this.shots.filter(b => b.life > 0);
   for (const b of this.eshots) { if (b.wait > 0) b.wait -= dt; else { b.x += b.vx * dt; b.y += b.vy * dt; } b.life -= dt; }
   this.eshots = this.eshots.filter(b => b.life > 0);

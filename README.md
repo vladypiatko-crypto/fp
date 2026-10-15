@@ -26,7 +26,7 @@ Each chapter has an animated intro and ending, and the map has a page per chapte
 ## Features
 
 - **Online with friends**: host a lobby and share its 4-letter code, or join a friend's. Up to 4 ducks, each on their own device. No server to set up: devices connect directly. Pick story or endless, ready up, and start.
-- **6 weapons**: Blaster, Quackshot, Bubble Gun, Feather-rang, Beak Beam laser, Quackinator minigun
+- **12 weapons**: Blaster, Quackshot, Bubble Gun, Feather-rang, Beak Beam laser, Quackinator minigun, Corn Cannon (pops into popcorn), Frost Blaster (slows robots), Firework Launcher (homing rockets that explode), Tesla Coil (chain lightning), Dragon Breath flamethrower, and the admin-only Golden Quacker
 - **Level-up cards**: gun and duck upgrades (multi shot, piercing, speed, regen, dash attack…) plus **7 power-ups**: egg orbit, bread bombs, chain lightning, mega quack, feather darts, splash puddles and bubble shield. You get **3 power-up slots**; once they are full only those three come back. Eggs block bullets and push robots away.
 - **Overcharge**: after a power-up is maxed, a rare red glowing OVERCHARGE card can show up and makes it much stronger (giant fast-spinning eggs, splitting bread storms, lightning that jumps to everything, lava lakes, mirror shields…).
 - **Robot army**: Bolt Bots, Boom Bots, Goo Blobs, Tank Bots, Zap Drones and Saw Bots, each with its own behaviour. Bosses telegraph charges, jumps, bullet rings and missile strikes.

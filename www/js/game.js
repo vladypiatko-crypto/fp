@@ -813,17 +813,54 @@ function fireMain(p, tgt, wd) {
     }
     return;
   }
+  if (p.weapon === 'tesla') { // lightning: hits the target, then jumps on (multi shot and piercing add jumps)
+    let cur = tgt, d = dmg;
+    const pts = [[mx, my]], hit = new Set();
+    for (let i = 0; i <= wd.chain + multi + lvl(p, 'pierce') && cur; i++) {
+      hit.add(cur); pts.push([cur.x, cur.y - 2]);
+      const k = Math.atan2(cur.y - p.y, cur.x - p.x);
+      hurtEnemy(cur, d, Math.cos(k), Math.sin(k), wd.kb, p);
+      burst(cur.x, cur.y, ['#7dfff5', '#ffffff'], 2, 40, 0.2);
+      d *= 0.85; cur = nearestEnemy(cur.x, cur.y, 62, hit);
+    }
+    R.fx.push({ k: 'zap', pts, t: 0, dur: 0.14, col: '#7dfff5' });
+    return;
+  }
+  const kind = { bubble: 'bubble', rang: 'rang', corn: 'corn', frost: 'frost', rocket: 'rocket', flame: 'flame', goldgun: 'goldgun' }[p.weapon] || 'bullet';
   for (let i = 0; i < n; i++) {
     let a = base + (i - (n - 1) / 2) * wd.spread;
     if (wd.jitter) a += rand(-wd.jitter, wd.jitter);
     if (p.weapon === 'shotgun') a += rand(-0.05, 0.05);
-    const sp = wd.speed * (p.weapon === 'shotgun' ? rand(0.85, 1.1) : 1);
-    const shot = { kind: p.weapon === 'bubble' ? 'bubble' : p.weapon === 'rang' ? 'rang' : 'bullet', x: mx, y: my, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-      life: wd.life, max: wd.life, dmg, pierce: lvl(p, 'pierce') + (p.weapon === 'rang' ? 99 : 0), hit: new Set(), owner: p, r: wd.r + (pw >= 3 && p.weapon === 'blaster' ? 1 : 0), col, kb: wd.kb, aoe: wd.aoe, rot: 0 };
-    if (shot.kind === 'rang') { shot.ang = a; shot.sp = sp; shot.back = false; }
+    const sp = wd.speed * (p.weapon === 'shotgun' || p.weapon === 'flame' ? rand(0.85, 1.1) : 1);
+    const shot = { kind, x: mx, y: my, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+      life: wd.life, max: wd.life, dmg, pierce: lvl(p, 'pierce') + (p.weapon === 'rang' || p.weapon === 'flame' ? 99 : p.weapon === 'goldgun' ? 2 : 0), hit: new Set(), owner: p, r: wd.r + (pw >= 3 && p.weapon === 'blaster' ? 1 : 0), col, kb: wd.kb, aoe: wd.aoe, rot: 0 };
+    if (kind === 'rang') { shot.ang = a; shot.sp = sp; shot.back = false; }
+    if (kind === 'rocket') { shot.tgt = tgt; shot.pierce = 0; }
     R.shots.push(shot);
   }
   if (p.weapon === 'shotgun') burst(mx, my, ['#ffd23f', '#fff8e7'], 4, 50, 0.15);
+  else if (p.weapon === 'rocket') burst(mx, my, ['#ffd23f', '#fff8e7', '#ff6fae'], 5, 50, 0.2);
+}
+function rocketSmoke(b) { if (Math.random() < 0.6) R.parts.push({ x: b.x - b.vx * 0.02, y: b.y - b.vy * 0.02, vx: rand(-8, 8), vy: rand(-12, -2), life: 0.35, max: 0.35, col: pick(['#d5dbe6', '#fff8e7', '#ffd23f']), size: 1, grav: 0 }); }
+// shots that do something special when they hit or run out
+function shotEnd(b, hitE) {
+  if (b.ended) return; b.ended = true;
+  if (b.kind === 'bubble') popBubble(b);
+  else if (b.kind === 'corn') { // pop into popcorn that flies everywhere
+    const n = WEAPONS.corn.pop, a0 = rand(0, TAU);
+    R.fx.push({ k: 'ring', x: b.x, y: b.y, r: 10, t: 0, dur: 0.15, col: '#fff8e7' });
+    burst(b.x, b.y, ['#fff8e7', '#ffd23f'], 5, 60, 0.25);
+    for (let i = 0; i < n; i++) {
+      const a = a0 + i / n * TAU, sp = rand(150, 190);
+      const s = { kind: 'popcorn', x: b.x, y: b.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.28, max: 0.28, dmg: b.dmg * 0.45, pierce: 0, hit: new Set(), owner: b.owner, r: 1, col: '#fff8e7', kb: 30, rot: rand(0, TAU) };
+      if (hitE) s.hit.add(hitE.id);
+      R.shots.push(s);
+    }
+    sfx.pop();
+  } else if (b.kind === 'rocket') { // firework!
+    explode(b.x, b.y, b.aoe, b.dmg, b.owner);
+    burst(b.x, b.y, pick([['#ff6fae', '#ffd23f'], ['#5ec8ff', '#fff8e7'], ['#51cf66', '#ffd23f'], ['#c06bff', '#ff6fae']]), 16, 140, 0.55, 1, 40);
+  }
 }
 function updateShots(dt) {
   for (const b of R.shots) {
@@ -843,18 +880,28 @@ function updateShots(dt) {
         if (b.life <= 0 && dl >= 8) b.life = 0.01;
       } else { const k = Math.max(0.15, (tLeft - 0.55) / 0.45); b.vx = Math.cos(b.ang) * b.sp * k; b.vy = Math.sin(b.ang) * b.sp * k; }
     }
+    if (b.kind === 'rocket') { // speeds up and steers towards its target, leaving smoke
+      if (!b.tgt || b.tgt.dead) b.tgt = nearestEnemy(b.x, b.y, 120);
+      const sp = Math.min(300, Math.hypot(b.vx, b.vy) + 420 * dt);
+      let a = Math.atan2(b.vy, b.vx);
+      if (b.tgt) { let da = Math.atan2(b.tgt.y - b.y, b.tgt.x - b.x) - a; da = Math.atan2(Math.sin(da), Math.cos(da)); a += clamp(da, -dt * 4, dt * 4); }
+      b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp;
+      rocketSmoke(b);
+    } else if (b.kind === 'flame') { const k = Math.pow(0.08, dt); b.vx *= k; b.vy *= k; b.r = 2 + (1 - b.life / b.max) * 4; }
     b.x += b.vx * dt; b.y += b.vy * dt;
-    if (b.life <= 0) { if (b.kind === 'bubble') popBubble(b); continue; }
+    if (b.life <= 0) { shotEnd(b); continue; }
     forNear(b.x, b.y, 18, e => {
       if (b.hit.has(e.id)) return;
       const rr = e.r + b.r + 1;
       if (d2(b.x, b.y, e.x, e.y) < rr * rr) {
-        if (b.kind === 'bubble') { popBubble(b); b.life = 0; return true; }
+        if (b.kind === 'bubble' || b.kind === 'rocket') { b.life = 0; shotEnd(b, e); return true; }
         b.hit.add(e.id);
         const l = Math.hypot(b.vx, b.vy) || 1;
         hurtEnemy(e, b.dmg, b.vx / l, b.vy / l, b.kb, b.owner);
-        burst(b.x, b.y, [b.col, '#fff8e7'], 2, 40, 0.2);
-        if (b.pierce-- <= 0) { b.life = 0; return true; }
+        if (b.kind === 'frost') { e.slowT = WEAPONS.frost.slow; burst(b.x, b.y, ['#9fdcff', '#ffffff'], 4, 50, 0.3); }
+        else if (b.kind === 'flame') { if (Math.random() < 0.3) burst(b.x, b.y, ['#ff8c1a', '#ffd23f'], 1, 30, 0.2); }
+        else burst(b.x, b.y, [b.col, '#fff8e7'], 2, 40, 0.2);
+        if (b.pierce-- <= 0) { b.life = 0; shotEnd(b, e); return true; }
       }
     });
   }
@@ -995,6 +1042,7 @@ function updateEnemies(dt) {
       const ddx = e.x - o.x, ddy = e.y - o.y, rr = e.r + o.r, dd = ddx * ddx + ddy * ddy;
       if (dd < rr * rr && dd > 0.0001) { const d = Math.sqrt(dd), push = (rr - d) / rr; sx += ddx / d * push; sy += ddy / d * push; }
     });
+    if (e.slowT > 0) { e.slowT -= dt; const k = e.boss ? 0.7 : 0.45; mx *= k; my *= k; } // frozen by the frost blaster
     const sepK = e.boss ? 10 : 50;
     e.x = clamp(e.x + (mx + e.kx + sx * sepK) * dt, 6, WORLD_SIZE - 6);
     e.y = clamp(e.y + (my + e.ky + sy * sepK) * dt, 6, WORLD_SIZE - 6);
@@ -1271,6 +1319,23 @@ function drawView(v) {
     if (b.kind === 'bubble') { pcirc(b.x, b.y, b.r, 'rgba(189,230,255,0.45)'); pring(b.x, b.y, b.r, '#bde6ff'); ctx.fillStyle = '#fff'; ctx.fillRect(Math.round(b.x - 2), Math.round(b.y - 2), 1, 1); }
     else if (b.kind === 'rang') drawSprX(PROJ_ART.rang, b.x, b.y, { rot: b.rot });
     else if (b.kind === 'feather') drawSprX(PROJ_ART.feather, b.x, b.y, { rot: Math.atan2(b.vy, b.vx) });
+    else if (b.kind === 'corn') drawSprX(PROJ_ART.corn, b.x, b.y, { rot: b.rot * 0.3 });
+    else if (b.kind === 'popcorn') drawSprX(PROJ_ART.popcorn, b.x, b.y, { rot: b.rot });
+    else if (b.kind === 'frost') {
+      const l = Math.hypot(b.vx, b.vy) || 1;
+      pline(b.x, b.y, b.x - b.vx / l * 7, b.y - b.vy / l * 7, 'rgba(159,220,255,0.6)', 2);
+      drawSprX(PROJ_ART.frost, b.x, b.y, { rot: b.rot * 0.5 });
+    } else if (b.kind === 'rocket') drawSprX(PROJ_ART.rocket, b.x, b.y, { rot: Math.atan2(b.vy, b.vx) });
+    else if (b.kind === 'flame') { // yellow, then orange, red and finally smoke
+      const k = 1 - b.life / b.max, c = k < 0.25 ? '#fff36b' : k < 0.5 ? '#ffd23f' : k < 0.75 ? '#ff8c1a' : '#e8343b';
+      ctx.globalAlpha = k > 0.75 ? (1 - k) * 4 : 1;
+      pcirc(b.x, b.y, b.r, c); if (k < 0.6) pcirc(b.x, b.y, b.r * 0.45, '#fff8e7');
+      ctx.globalAlpha = 1;
+    } else if (b.kind === 'goldgun') {
+      const l = Math.hypot(b.vx, b.vy) || 1;
+      pline(b.x, b.y, b.x - b.vx / l * 6, b.y - b.vy / l * 6, '#ffd23f', 2); pline(b.x, b.y, b.x - b.vx / l * 3, b.y - b.vy / l * 3, '#ffffff');
+      if ((b.rot * 3 | 0) % 2) { ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(b.x + rand(-3, 3)), Math.round(b.y + rand(-3, 3)), 1, 1); }
+    }
     else if (b.owner.weapon === 'minigun' || b.r <= 1 && b.owner.weapon === 'shotgun') {
       const l = Math.hypot(b.vx, b.vy) || 1;
       pline(b.x, b.y, b.x - b.vx / l * 4, b.y - b.vy / l * 4, b.col);
@@ -1292,7 +1357,7 @@ function drawView(v) {
     else if (f.k === 'zap') {
       for (let i = 0; i < f.pts.length - 1; i++) {
         const [x0, y0] = f.pts[i], [x1, y1] = f.pts[i + 1], mx = (x0 + x1) / 2 + rand(-6, 6), my = (y0 + y1) / 2 + rand(-6, 6);
-        pline(x0, y0, mx, my, '#fff36b', 2); pline(mx, my, x1, y1, '#fff36b', 2); pline(x0, y0, mx, my, '#fff'); pline(mx, my, x1, y1, '#fff');
+        pline(x0, y0, mx, my, f.col || '#fff36b', 2); pline(mx, my, x1, y1, f.col || '#fff36b', 2); pline(x0, y0, mx, my, '#fff'); pline(mx, my, x1, y1, '#fff');
       }
     } else if (f.k === 'beam') {
       const th = k < 0.5 ? 3 : 2;
@@ -1372,6 +1437,10 @@ function drawEnemy(e) {
   if (e.d.ai === 'charger') drawSprX(s, e.x, e.y + bob, { rot: e.rot, white: e.flash > 0 });
   else drawSprX(s, e.x, e.y + bob - e.z + s.h * sc / 2, { flip: e.flip, white: e.flash > 0, sc, sx, sy, ay: 1 });
   if (fuse) pring(e.x, e.y, 4 + (1 - e.fuse / 0.45) * 22, 'rgba(232,52,59,0.6)');
+  if (e.slowT > 0) { // frozen: icy ring and sparkles
+    pring(e.x, e.y + 1, e.r * sc + 2, 'rgba(159,220,255,0.75)');
+    if ((e.anim * 6 | 0) % 2) { ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(e.x + Math.sin(e.anim * 9) * e.r * sc), Math.round(e.y - e.r * sc + bob), 1, 1); }
+  }
   if (e.d.ai === 'charger' && e.st === 'wind') pline(e.x, e.y, e.x + (R.players[0].x - e.x) * 0.3, e.y + (R.players[0].y - e.y) * 0.3, 'rgba(232,52,59,0.5)');
   if (!e.boss && e.hp < e.maxHp && e.maxHp > 30) {
     const w = e.r * 2 + 2, x = Math.round(e.x - w / 2), y = Math.round(e.y - e.r - 7 + bob);

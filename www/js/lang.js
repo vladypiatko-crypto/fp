@@ -91,6 +91,12 @@ const PHRASES = [
   ['FEATHER-RANG', 'FEDER-RANG', 'ПЕРОРАНГ'], ['FLIES OUT AND COMES BACK', 'FLIEGT WEG UND KOMMT ZURÜCK', 'УЛЕТАЕТ И ВОЗВРАЩАЕТСЯ'],
   ['BEAK BEAM', 'SCHNABELSTRAHL', 'ЛУЧ КЛЮВА'], ['LASER THAT PIERCES EVERYTHING', 'LASER, DER ALLES DURCHBOHRT', 'ЛАЗЕР, ПРОБИВАЮЩИЙ ВСЁ'],
   ['QUACKINATOR', 'QUAKINATOR', 'КРЯКИНАТОР'], ['BRRRRRRT', 'BRRRRRRT', 'ТР-Р-Р-Р-Р'],
+  ['CORN CANNON', 'MAISKANONE', 'КУКУРУЗНАЯ ПУШКА'], ['CORN THAT POPS INTO POPCORN', 'MAIS, DER ZU POPCORN PLATZT', 'КУКУРУЗА ВЗРЫВАЕТСЯ ПОПКОРНОМ'],
+  ['FROST BLASTER', 'FROSTBLASTER', 'ЛЕДЯНОЙ БЛАСТЕР'], ['FREEZES ROBOTS, SLOWS THEM DOWN', 'FRIERT ROBOTER EIN UND BREMST SIE', 'ЗАМОРАЖИВАЕТ И ЗАМЕДЛЯЕТ РОБОТОВ'],
+  ['FIREWORK LAUNCHER', 'FEUERWERKSWERFER', 'САЛЮТОМЁТ'], ['ROCKETS THAT GO BOOM', 'RAKETEN, DIE BUMM MACHEN', 'РАКЕТЫ, КОТОРЫЕ ДЕЛАЮТ БУМ'],
+  ['TESLA COIL', 'TESLASPULE', 'КАТУШКА ТЕСЛЫ'], ['LIGHTNING JUMPS ROBOT TO ROBOT', 'BLITZ SPRINGT VON ROBOTER ZU ROBOTER', 'МОЛНИЯ ПРЫГАЕТ ПО РОБОТАМ'],
+  ['DRAGON BREATH', 'DRACHENATEM', 'ДЫХАНИЕ ДРАКОНА'], ['SHORT RANGE FIRE STORM', 'FEUERSTURM AUF KURZE DISTANZ', 'ОГНЕННЫЙ ШТОРМ ВБЛИЗИ'],
+  ['GOLDEN QUACKER', 'GOLDENER QUAKER', 'ЗОЛОТОЙ КРЯКЕР'], ['SHINY SHOTS THAT PIERCE', 'GLÄNZENDE SCHÜSSE, DIE DURCHBOHREN', 'БЛЕСТЯЩИЕ ПРОБИВАЮЩИЕ ВЫСТРЕЛЫ'],
   // locker categories
   ['SKIN', 'SKIN', 'СКИН'], ['HAT', 'HUT', 'ШЛЯПА'], ['HALO', 'HALO', 'НИМБ'], ['TRAIL', 'SPUR', 'СЛЕД'], ['WEAPON', 'WAFFE', 'ОРУЖИЕ'],
   ['SKINS', 'SKINS', 'СКИНЫ'], ['HATS', 'HÜTE', 'ШЛЯПЫ'], ['HALOS', 'HALOS', 'НИМБЫ'], ['TRAILS', 'SPUREN', 'СЛЕДЫ'], ['WEAPONS', 'WAFFEN', 'ОРУЖИЕ'],
