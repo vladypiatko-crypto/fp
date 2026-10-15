@@ -1,14 +1,16 @@
 'use strict';
-/* QUACK ATTACK! — online play.
- * Lobbies run on the server (see server/). One player hosts: their device runs the real simulation.
- * Everyone else sends their inputs to the host and draws the host's snapshots ~12 times a second.
- * The host's own duck is the first player; friends join as P2..P4 and each gets their own screen. */
+/* QUACK ATTACK! — online play, phone to phone.
+ * There is no game server. The free PeerJS service only introduces the devices to each other (the host
+ * registers its 4-letter lobby code there), then they talk directly over WebRTC.
+ * The host's device runs the lobby (Hub below) and the real simulation. Everyone else sends their inputs
+ * to the host and draws the host's snapshots ~12 times a second. The host's own duck is the first player;
+ * friends join as P2..P4 and each gets their own screen. */
 
-// Where the server lives when the game isn't served by it (the Windows / Android apps, or a file opened locally).
-// After you deploy server/ somewhere, put its address here, e.g. 'wss://quack.example.com/ws'.
-const DEFAULT_SERVER = '';
-// false: the title screen's ONLINE button shows an "under construction" sign instead of the lobbies
-const ONLINE_READY = false;
+// false: the title screen's ONLINE button shows an "under construction" sign instead
+const ONLINE_READY = true;
+const PEER_PREFIX = 'quackattack-v2-'; // lobby code ABCD is the PeerJS id quackattack-v2-ABCD
+const MAX_PLAYERS = 4;
+const KEEPALIVE = 2, NET_TIMEOUT = 12; // seconds: ping interval, and silence before a device counts as gone
 
 const NAMES = ['QUACKER', 'PUDDLE', 'WADDLE', 'FEATHER', 'MALLARD', 'SPLASH', 'NUGGET', 'BISCUIT', 'WIGGLE', 'SNORKEL'];
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -21,53 +23,241 @@ const stIdx = s => { const i = NET_STATES.indexOf(s || ''); return i < 0 ? NET_S
 const findUpgrade = k => (k === 'snack' ? SNACK : UPGRADES.find(u => u.k === k));
 const bossDef = name => Object.assign({ xp: 0, fx: BOSSES[name].fx || 'metal', heavy: 0.05 }, BOSSES[name]);
 const worldFromSeed = seed => Object.keys(WORLD_THEME)[seed % Object.keys(WORLD_THEME).length];
+const makeCode = () => { let c = ''; for (let i = 0; i < 4; i++) c += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]; return c; };
+const nowS = () => performance.now() / 1000;
 
-function serverUrl() {
-  const q = new URLSearchParams(location.search).get('server');
-  if (q) return q;
-  // the Windows and Android apps (and a file opened from disk) use the configured address;
-  // the Android app's "https://localhost" is the phone itself, not our server
-  if (window.Capacitor || location.protocol === 'file:') return DEFAULT_SERVER;
-  if (location.protocol === 'http:' || location.protocol === 'https:') return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
-  return DEFAULT_SERVER;
+// ?peer=host:port points at your own PeerJS server (used for testing); otherwise the free public one
+function peerOptions() {
+  const o = { debug: 0 };
+  const q = new URLSearchParams(location.search).get('peer');
+  if (q) { const [host, port] = q.split(':'); Object.assign(o, { host, port: Number(port) || 9000, path: '/', secure: false }); }
+  return o;
 }
+const PEER_ERRORS = {
+  'browser-incompatible': "THIS DEVICE CAN'T PLAY ONLINE", 'network': 'NO INTERNET CONNECTION?', 'server-error': "CAN'T REACH THE MATCHMAKER",
+  'socket-error': "CAN'T REACH THE MATCHMAKER", 'socket-closed': 'LOST THE MATCHMAKER', 'webrtc': "COULDN'T CONNECT TO YOUR FRIEND",
+};
+function peerErrorText(e) { return PEER_ERRORS[e && e.type] || "COULDN'T CONNECT"; }
+
+// ================================================================ the lobby, run by the host's device
+// (what a server would normally do: members, ready flags, mode, start, and passing game messages along)
+function cleanName(str, max, fallback) { const s = String(str || '').replace(/[^A-Za-z0-9 ]/g, '').trim().slice(0, max); return s || fallback; }
+function cleanLoadout(lo) {
+  const out = {};
+  for (const k of ['skin', 'hat', 'halo', 'trail', 'weapon']) out[k] = String((lo && lo[k]) || 'none').replace(/[^a-z_]/g, '').slice(0, 24);
+  return out;
+}
+const Hub = {
+  room: null, nextId: 2,
+  open(code, name, lo) {
+    const host = { id: 'p1', conn: null, name: cleanName(name, 12, 'DUCK'), lo: cleanLoadout(lo), ready: false };
+    this.room = { code, name: host.name + "'S LOBBY", state: 'lobby', mode: 'endless', level: 1, hostId: host.id, members: [host] };
+    this.nextId = 2;
+    this.to(host, { t: 'hello', id: host.id });
+    this.to(host, { t: 'joined', code });
+    this.sync();
+  },
+  shut() { this.room = null; },
+  view() {
+    const r = this.room;
+    return { code: r.code, name: r.name, state: r.state, mode: r.mode, level: r.level,
+      members: r.members.map(m => ({ id: m.id, name: m.name, lo: m.lo, ready: m.ready, host: m.id === r.hostId })) };
+  },
+  // send to one member: the host's own messages are delivered locally, friends get them over their connection
+  to(mem, m, str) {
+    if (!mem.conn) { Promise.resolve().then(() => Net.onMsg(m)); return; }
+    if (mem.conn.open) try { mem.conn.send(str || JSON.stringify(m)); } catch (e) { /* closing */ }
+  },
+  all(m) { const str = JSON.stringify(m); for (const mem of this.room.members) this.to(mem, m, str); },
+  sync() { if (this.room) this.all({ t: 'room', room: this.view() }); },
+  // a friend's device connected: it becomes a member once it says who it is
+  accept(conn) {
+    let mem = null;
+    conn.last = nowS();
+    conn.on('data', raw => {
+      conn.last = nowS();
+      if (typeof raw !== 'string' || raw.length > 4096) return;
+      let m; try { m = JSON.parse(raw); } catch (e) { return; }
+      if (!m || typeof m !== 'object' || !this.room) return;
+      if (mem) { this.handle(mem, m); return; }
+      if (m.t !== 'join') return;
+      const r = this.room, fail = msg => { try { conn.send(JSON.stringify({ t: 'error', msg })); } catch (e) { /* gone */ } setTimeout(() => conn.close(), 500); };
+      if (r.state !== 'lobby') { fail('THAT GAME HAS ALREADY STARTED'); return; }
+      if (r.members.length >= MAX_PLAYERS) { fail('THAT LOBBY IS FULL'); return; }
+      mem = { id: 'p' + (this.nextId++), conn, name: cleanName(m.name, 12, 'DUCK'), lo: cleanLoadout(m.lo), ready: false };
+      r.members.push(mem);
+      this.to(mem, { t: 'hello', id: mem.id });
+      this.to(mem, { t: 'joined', code: r.code });
+      this.sync();
+    });
+    const gone = () => { if (mem) { const m = mem; mem = null; this.leave(m); } };
+    conn.on('close', gone);
+    conn.on('error', gone);
+    conn.gone = gone;
+  },
+  leave(mem) {
+    const r = this.room;
+    if (!r) return;
+    const idx = r.members.indexOf(mem);
+    if (idx < 0) return;
+    r.members.splice(idx, 1);
+    if (mem.conn) setTimeout(() => mem.conn.close(), 300);
+    if (mem.id === r.hostId) { this.all({ t: 'closed', reason: 'HOST LEFT' }); this.room = null; return; }
+    this.all({ t: 'left', id: mem.id });
+    this.sync();
+  },
+  handle(mem, m) {
+    const r = this.room;
+    if (!r) return;
+    const isHost = mem.id === r.hostId;
+    switch (m.t) {
+      case 'set': // host changes the mode / level
+        if (!isHost || r.state !== 'lobby') break;
+        if (m.mode === 'endless' || m.mode === 'story') r.mode = m.mode;
+        if (Number.isInteger(m.level) && m.level >= 1 && m.level <= LEVELS.length) r.level = m.level;
+        this.sync(); break;
+      case 'ready':
+        if (r.state !== 'lobby') break;
+        mem.ready = !!m.ready; this.sync(); break;
+      case 'start': {
+        if (!isHost || r.state !== 'lobby') break;
+        r.state = 'game';
+        const seed = Math.floor(Math.random() * 2147483647) + 1;
+        this.all({ t: 'start', mode: r.mode, level: r.level, seed, members: r.members.map(x => ({ id: x.id, name: x.name, lo: x.lo })) });
+        this.sync(); break;
+      }
+      case 'back': // host takes everyone back to the lobby after a game
+        if (!isHost || r.state !== 'game') break;
+        r.state = 'lobby';
+        for (const x of r.members) x.ready = false;
+        this.all({ t: 'lobby' }); this.sync(); break;
+      case 'relay': { // game traffic: snapshots from the host to everyone, inputs from a friend to the host
+        if (r.state !== 'game') break;
+        const out = { t: 'relayed', from: mem.id, msg: m.msg };
+        if (m.to === 'all' && isHost) {
+          const str = JSON.stringify(out);
+          for (const x of r.members) {
+            if (x === mem) continue;
+            // a friend on a slow connection skips a snapshot rather than falling further and further behind
+            const dc = x.conn && x.conn.dataChannel;
+            if (m.msg && m.msg.t === 'snap' && dc && dc.bufferedAmount > 96 * 1024) continue;
+            this.to(x, out, str);
+          }
+        } else if (m.to === 'host' && !isHost) this.to(r.members[0], out);
+        break;
+      }
+      case 'leave': this.leave(mem); break;
+    }
+  },
+  // drop friends whose device went quiet (app closed, phone locked, lost signal)
+  tick() {
+    if (!this.room) return;
+    for (const mem of this.room.members.slice()) {
+      if (!mem.conn) continue;
+      try { mem.conn.send('{"t":"ka"}'); } catch (e) { /* closing */ }
+      if (nowS() - mem.conn.last > NET_TIMEOUT && mem.conn.gone) mem.conn.gone();
+    }
+  },
+};
 
 // ================================================================ connection
 Object.assign(Net, {
-  connect() {
-    if (this.open && this.ws) return Promise.resolve();
-    if (this.pending) return this.pending;
-    const url = serverUrl();
-    if (!url) return Promise.reject(new Error('NO SERVER SET UP YET'));
-    this.pending = new Promise((res, rej) => {
-      let ws;
-      try { ws = new WebSocket(url); } catch (e) { this.pending = null; rej(new Error('BAD SERVER ADDRESS')); return; }
-      this.ws = ws;
-      let opened = false;
-      ws.onopen = () => { opened = true; this.open = true; this.pending = null; res(); };
-      ws.onerror = () => { if (!opened) { this.pending = null; this.ws = null; rej(new Error("CAN'T REACH THE SERVER")); } };
-      ws.onclose = () => {
-        if (ws !== this.ws) return; // closed on purpose
-        this.ws = null; this.open = false; this.pending = null;
-        if (!opened) rej(new Error("CAN'T REACH THE SERVER"));
-        else this.onMsg({ t: 'closed', reason: 'CONNECTION LOST' });
-      };
-      ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (err) { return; } this.onMsg(m); };
+  peer: null, conn: null, last: 0, kaTimer: null, gen: 0, // gen changes on every close(), so a cancelled connect can't finish later
+  newPeer(id) {
+    return new Promise((res, rej) => {
+      if (typeof Peer === 'undefined' || typeof RTCPeerConnection === 'undefined') { rej(new Error("THIS DEVICE CAN'T PLAY ONLINE")); return; }
+      let peer;
+      try { peer = id ? new Peer(id, peerOptions()) : new Peer(peerOptions()); } catch (e) { rej(new Error("COULDN'T START ONLINE")); return; }
+      const t = setTimeout(() => { peer.destroy(); rej(new Error("CAN'T REACH THE MATCHMAKER")); }, 12000);
+      peer.on('open', () => { clearTimeout(t); res(peer); });
+      peer.on('error', e => { clearTimeout(t); peer.destroy(); rej(e); });
     });
-    return this.pending;
   },
-  send(m) { if (this.open && this.ws) this.ws.send(JSON.stringify(m)); },
+  // host a lobby: claim a free 4-letter code, then wait for friends
+  async host(name, lo) {
+    this.close();
+    const gen = this.gen;
+    let peer = null, code = '';
+    for (let tries = 0; tries < 6 && !peer; tries++) {
+      code = makeCode();
+      try { peer = await this.newPeer(PEER_PREFIX + code); } catch (e) {
+        if (gen !== this.gen) throw new Error('');
+        if (e.type === 'unavailable-id') continue; // somebody has that code: pick another
+        throw e instanceof Error && !e.type ? e : new Error(peerErrorText(e));
+      }
+    }
+    if (gen !== this.gen) { if (peer) peer.destroy(); throw new Error(''); }
+    if (!peer) throw new Error("COULDN'T MAKE A LOBBY CODE");
+    this.peer = peer; this.open = true; this.isHub = true;
+    peer.off('error');
+    peer.on('error', e => { if (e.type !== 'peer-unavailable') console.warn('peer', e.type); });
+    peer.on('connection', conn => { conn.on('open', () => Hub.accept(conn)); });
+    peer.on('disconnected', () => { if (this.peer === peer && !peer.destroyed) setTimeout(() => { if (this.peer === peer && !peer.destroyed) peer.reconnect(); }, 1500); });
+    Hub.open(code, name, lo);
+    this.startKeepalive();
+  },
+  // join a friend's lobby by its code
+  async join(code, name, lo) {
+    this.close();
+    const gen = this.gen;
+    let peer;
+    try { peer = await this.newPeer(null); } catch (e) { throw gen !== this.gen ? new Error('') : e instanceof Error && !e.type ? e : new Error(peerErrorText(e)); }
+    if (gen !== this.gen) { peer.destroy(); throw new Error(''); }
+    this.peer = peer;
+    await new Promise((res, rej) => {
+      const conn = peer.connect(PEER_PREFIX + code, { serialization: 'raw', reliable: true });
+      const t = setTimeout(() => rej(new Error("COULDN'T CONNECT - TRY AGAIN")), 20000);
+      peer.off('error');
+      peer.on('error', e => { clearTimeout(t); rej(new Error(e.type === 'peer-unavailable' ? 'NO LOBBY WITH CODE ' + code : peerErrorText(e))); });
+      conn.on('open', () => {
+        clearTimeout(t);
+        if (gen !== this.gen) { rej(new Error('')); return; }
+        this.conn = conn; this.open = true; this.last = nowS();
+        conn.on('data', raw => {
+          this.last = nowS();
+          if (typeof raw !== 'string') return;
+          let m; try { m = JSON.parse(raw); } catch (e) { return; }
+          if (m && m.t !== 'ka') this.onMsg(m);
+        });
+        conn.on('close', () => { if (this.conn === conn) this.lost('LOST THE HOST'); });
+        conn.send(JSON.stringify({ t: 'join', name, lo }));
+        res();
+      });
+      conn.on('error', () => { clearTimeout(t); rej(new Error("COULDN'T CONNECT TO YOUR FRIEND")); });
+    }).catch(e => { if (gen === this.gen) this.close(); throw e; });
+    // nobody needs the matchmaker any more once we're connected
+    try { peer.disconnect(); } catch (e) { /* fine */ }
+    this.startKeepalive();
+  },
+  startKeepalive() {
+    clearInterval(this.kaTimer);
+    this.kaTimer = setInterval(() => {
+      if (this.isHub) { Hub.tick(); return; }
+      if (!this.conn) return;
+      try { this.conn.send('{"t":"ka"}'); } catch (e) { /* closing */ }
+      if (nowS() - this.last > NET_TIMEOUT) this.lost('LOST THE HOST');
+    }, KEEPALIVE * 1000);
+  },
+  lost(reason) { if (!this.open) return; this.close(); this.onMsg({ t: 'closed', reason }); },
+  send(m) {
+    if (this.isHub) { if (Hub.room) Hub.handle(Hub.room.members[0], m); return; }
+    if (this.conn && this.conn.open) try { this.conn.send(JSON.stringify(m)); } catch (e) { /* closing */ }
+  },
   relay(to, msg) { this.send({ t: 'relay', to, msg }); },
   close() {
-    const ws = this.ws;
-    this.ws = null; this.open = false; this.pending = null; this.room = null; this.role = null;
-    if (ws) ws.close();
+    const peer = this.peer;
+    clearInterval(this.kaTimer); this.kaTimer = null; this.gen++;
+    this.peer = null; this.conn = null; this.open = false; this.isHub = false; this.room = null; this.role = null;
+    Hub.shut();
+    // a moment's grace so the last messages ("host left") still get out
+    if (peer) setTimeout(() => { try { peer.destroy(); } catch (e) { /* already gone */ } }, 400);
   },
   onMsg(m) {
     if (m.t === 'hello') { this.myId = m.id; return; }
+    if (m.t === 'closed') this.close(); // the host ended it: don't also report the connection dropping
     if (m.t === 'room') this.room = m.room;
-    const top = Scenes.top();
     if (m.t === 'start') { startOnlineGame(m); return; } // whatever screen we're on, a started game wins
+    const top = Scenes.top();
     if (top && top.onNet) top.onNet(m);
   },
 });
@@ -94,23 +284,16 @@ function drawChecker(alpha = 1) {
   ctx.globalAlpha = 1;
 }
 
-// ================================================================ online menu: browse lobbies, create one, or join with a code
+// ================================================================ online menu: host a lobby or join one with a code
 class OnlineScene {
   constructor(note = '') {
-    this.T = 0; this.ui = new UI(); this.rooms = []; this.pub = true; this.note = note; this.status = 'CONNECTING...';
-    this.joining = false; this.code = ''; this.refreshT = 0;
+    this.T = 0; this.ui = new UI(); this.note = note; this.busy = ''; this.joining = false; this.code = '';
     Music.play('calm');
-    this.connect();
-  }
-  connect() {
-    Net.connect().then(() => { this.status = 'CONNECTED'; this.note = this.note || ''; Net.send({ t: 'list' }); })
-      .catch(e => { this.status = 'OFFLINE'; this.note = e.message; });
   }
   onNet(m) {
-    if (m.t === 'rooms') { this.rooms = m.rooms; return true; }
-    if (m.t === 'joined') { Trans.go(() => Scenes.set(new RoomScene()), true); return true; }
-    if (m.t === 'error') { this.note = m.msg; sfx.uiBack(); return true; }
-    if (m.t === 'closed') { this.status = 'OFFLINE'; this.note = m.reason; return true; }
+    if (m.t === 'joined') { this.busy = ''; Trans.go(() => Scenes.set(new RoomScene()), true); return true; }
+    if (m.t === 'error') { this.busy = ''; this.note = m.msg; Net.close(); sfx.uiBack(); return true; }
+    if (m.t === 'closed') { this.busy = ''; this.note = m.reason; return true; }
     return false;
   }
   leave() { Net.close(); Trans.go(() => Scenes.set(new TitleScene(true))); }
@@ -118,15 +301,23 @@ class OnlineScene {
     const i = NAMES.indexOf(Save.data.name);
     Save.data.name = NAMES[(i + 1) % NAMES.length]; Save.write(); sfx.uiMove();
   }
+  cancel() { Net.close(); this.busy = ''; sfx.uiBack(); }
+  hostGame() {
+    if (this.busy) return;
+    this.busy = 'MAKING A LOBBY...'; this.note = '';
+    Net.host(Save.data.name, Save.data.loadout[0]).catch(e => { if (!e.message) return; this.busy = ''; this.note = e.message; sfx.uiBack(); }); // no message: cancelled
+  }
   submitCode() {
+    if (this.busy) return;
     if (this.code.length < 4) { this.note = 'TYPE ALL 4 CODE LETTERS'; sfx.uiBack(); return; }
-    this.joining = false;
-    Net.send({ t: 'join', code: this.code, name: Save.data.name, lo: Save.data.loadout[0] });
-    this.code = '';
+    const code = this.code;
+    this.busy = 'LOOKING FOR LOBBY ' + code + '...'; this.note = '';
+    Net.join(code, Save.data.name, Save.data.loadout[0]).catch(e => { if (!e.message) return; this.busy = ''; this.note = e.message; sfx.uiBack(); }); // no message: cancelled
   }
   update(dt) {
     this.T += dt;
     const acts = Input.menu();
+    if (this.busy) { if (acts.back) this.cancel(); else this.ui.update(dt, acts); return; }
     if (this.joining) {
       for (const ch of Input.typed) {
         if (ch === '<') this.code = this.code.slice(0, -1);
@@ -138,49 +329,52 @@ class OnlineScene {
     }
     if (acts.back) { sfx.uiBack(); this.leave(); return; }
     this.ui.update(dt, acts);
-    if (this.status === 'CONNECTED') { this.refreshT -= dt; if (this.refreshT <= 0) { this.refreshT = 4; Net.send({ t: 'list' }); } }
-  }
-  connectThen(fn) {
-    Net.connect().then(() => { this.status = 'CONNECTED'; fn(); }).catch(e => { this.status = 'OFFLINE'; this.note = e.message; sfx.uiBack(); });
   }
   draw() {
     drawChecker();
     this.ui.begin();
-    if (this.joining) { this.drawJoin(); return; }
+    if (this.joining) this.drawJoin(); else this.drawMenu();
+    if (this.busy) {
+      ctx.fillStyle = 'rgba(15,10,26,0.75)'; ctx.fillRect(0, 0, W, H);
+      const dots = '.'.repeat(1 + Math.floor(this.T * 3) % 3);
+      text(this.busy.replace(/\.\.\.$/, dots), W / 2, H / 2 - 4, C.white, 1, 1, 'outline');
+      for (let i = 0; i < 3; i++) drawDuck(W / 2 - 16 + i * 16, H / 2 + 26 - Math.abs(Math.sin(this.T * 6 + i)) * 4, { skin: Save.data.loadout[0].skin, facing: 'down', t: this.T, frame: Math.floor(this.T * 8 + i) % 2 });
+      this.ui.begin(); // only the cancel button while we wait
+      drawButton(this.ui, 'cancelwait', Math.floor(W / 2 - 30), H - 24, 60, 14, 'CANCEL', { on: () => this.cancel(), def: true, icon: ICON.back });
+    }
+  }
+  drawMenu() {
     text('ONLINE', W / 2, 6, C.gold, 2, 1, 'outline');
-    const sc = this.status === 'CONNECTED' ? C.green : this.status === 'OFFLINE' ? C.red : C.gray;
-    text(this.status, W / 2, 22, sc, 1, 1);
-    // name + public toggle + actions
+    text('PLAY TOGETHER, EACH ON YOUR OWN PHONE OR PC', W / 2, 22, C.white, 1, 1);
     const nameW = Math.min(W - 20, 170);
-    drawButton(this.ui, 'name', Math.floor(W / 2 - nameW / 2), 32, nameW, 14, 'YOUR NAME: ' + Save.data.name + '  >', { on: () => this.cycleName() });
-    const bw = Math.min(90, Math.floor((W - 24) / 3) - 3), by = 50;
-    const x0 = Math.floor(W / 2 - (bw * 3 + 6) / 2);
-    drawButton(this.ui, 'create', x0, by, bw, 15, 'CREATE', { on: () => this.connectThen(() => Net.send({ t: 'create', pub: this.pub, name: Save.data.name, lo: Save.data.loadout[0] })), def: true, col: '#3d2f63' });
-    drawButton(this.ui, 'pub', x0 + bw + 3, by, bw, 15, this.pub ? 'PUBLIC: YES' : 'PUBLIC: NO', { on: () => { this.pub = !this.pub; sfx.uiMove(); } });
-    drawButton(this.ui, 'code', x0 + (bw + 3) * 2, by, bw, 15, 'JOIN CODE', { on: () => { this.joining = true; this.note = ''; } });
-    // public lobbies
-    const top = 72, listH = H - top - 26, rowH = 18, maxRows = Math.max(1, Math.floor((listH - 14) / rowH));
-    panel(8, top, W - 16, listH, C.uiD, OUT, C.uiL);
-    text('PUBLIC LOBBIES', 14, top + 4, C.gold, 1, 0);
-    if (!this.rooms.length) text(this.status === 'CONNECTED' ? 'NONE RIGHT NOW - CREATE ONE!' : 'NO LOBBIES TO SHOW', W / 2, top + 22, C.gray, 1, 1);
-    this.rooms.slice(0, maxRows).forEach((r, i) => {
-      const y = top + 14 + i * rowH;
-      text(r.name.slice(0, 16), 14, y + 4, C.white, 1, 0);
-      text(r.count + '/' + r.max, W - 72, y + 4, C.white, 1, 0);
-      drawButton(this.ui, 'j' + r.code, W - 52, y + 1, 42, 13, 'JOIN', { on: () => this.connectThen(() => Net.send({ t: 'join', code: r.code, name: Save.data.name, lo: Save.data.loadout[0] })) });
+    drawButton(this.ui, 'name', Math.floor(W / 2 - nameW / 2), 34, nameW, 14, 'YOUR NAME: ' + Save.data.name + '  >', { on: () => this.cycleName() });
+    // the two big choices
+    const bw = Math.min(150, Math.floor((W - 30) / 2)), bh = Math.min(64, H - 120), by = 56;
+    const x0 = Math.floor(W / 2 - bw - 5), x1 = Math.floor(W / 2 + 5);
+    [['host', 'HOST A GAME', 'GET A CODE FOR YOUR FRIENDS', () => this.hostGame()],
+      ['join', 'JOIN A FRIEND', 'TYPE THEIR 4 LETTER CODE', () => { this.joining = true; this.note = ''; }]].forEach(([id, label, sub, on], i) => {
+      const x = i ? x1 : x0, f = this.ui.isFocus(id), dn = this.ui.isDown(id), lift = dn ? 1 : f ? -1 : 0;
+      panel(x, by + lift, bw, bh, f ? C.uiSel : i ? C.ui : '#3d2f63', f ? C.gold : OUT, C.uiL, !dn);
+      for (let d = 0; d < (i ? 2 : 1); d++) {
+        const lo = Save.data.loadout[d];
+        drawDuck(x + bw / 2 + (i ? (d ? 10 : -10) : 0), by + lift + bh - 26 - (f ? Math.abs(Math.sin(this.T * 7 + d)) * 2 : 0), { skin: i && d ? 'snowy' : lo.skin, hat: i && d ? 'bandana_b' : lo.hat, facing: i ? (d ? 'left' : 'right') : 'down', t: this.T, sc: 1.5 });
+      }
+      text(label, x + bw / 2, by + lift + bh - 20, C.white, 1, 1);
+      text(sub, x + bw / 2, by + lift + bh - 11, C.gray, 1, 1, null);
+      this.ui.add(id, x, by, bw, bh, on, { def: i === 0 });
     });
+    text('NO SERVER NEEDED - DEVICES CONNECT DIRECTLY OVER THE INTERNET', W / 2, by + bh + 8, C.gray, 1, 1, null);
     drawButton(this.ui, 'back', 4, H - 17, 40, 13, 'BACK', { on: () => this.leave(), icon: ICON.back });
-    drawButton(this.ui, 'refresh', W - 58, H - 17, 54, 13, 'REFRESH', { on: () => Net.send({ t: 'list' }) });
-    if (this.note) text(this.note, W / 2, H - 13, C.red, 1, 1, 'outline');
+    if (this.note) text(this.note, W / 2, H - 30, C.red, 1, 1, 'outline');
   }
   drawJoin() {
     text('JOIN A FRIEND', W / 2, 8, C.gold, 2, 1, 'outline');
     text('ASK THEM FOR THEIR 4 LETTER CODE', W / 2, 24, C.white, 1, 1);
     // the code, four slots
     for (let i = 0; i < 4; i++) {
-      const x = Math.floor(W / 2 - 4 * 15 + i * 15), y = 36;
+      const x = Math.floor(W / 2 - 30 + i * 15), y = 36;
       panel(x, y, 13, 15, C.ui, i === this.code.length ? C.gold : OUT, null, false);
-      if (this.code[i]) text(this.code[i], x + 6, y + 4, C.white, 1, 1, null);
+      if (this.code[i]) text(this.code[i], x + 7, y + 5, C.white, 1, 1, null);
     }
     // keypad: 8 x 4 letters and digits
     const kw = 17, kh = 12, cols = 8, gx = Math.floor(W / 2 - (cols * (kw + 2)) / 2);
@@ -190,7 +384,7 @@ class OnlineScene {
     });
     const yb = 56 + 4 * (kh + 2) + 4;
     drawButton(this.ui, 'del', gx, yb, 40, 13, 'DEL', { on: () => { this.code = this.code.slice(0, -1); } });
-    drawButton(this.ui, 'go', W / 2 - 20, yb, 40, 13, 'JOIN', { on: () => this.connectThen(() => this.submitCode()), def: true, col: '#3d2f63' });
+    drawButton(this.ui, 'go', W / 2 - 20, yb, 40, 13, 'JOIN', { on: () => this.submitCode(), def: true, col: '#3d2f63' });
     drawButton(this.ui, 'cancel', gx + cols * (kw + 2) - 40, yb, 40, 13, 'CANCEL', { on: () => { this.joining = false; this.code = ''; } });
     if (this.note) text(this.note, W / 2, yb + 18, C.red, 1, 1, 'outline');
   }
@@ -206,7 +400,7 @@ class RoomScene {
     if (m.t === 'lobby' || m.t === 'room') return true;
     return false;
   }
-  leave() { Net.send({ t: 'leave' }); Net.room = null; Trans.go(() => Scenes.set(new OnlineScene())); }
+  leave() { Net.send({ t: 'leave' }); Net.close(); Trans.go(() => Scenes.set(new OnlineScene())); }
   modes() { const out = [{ mode: 'endless', level: 1 }]; for (let i = 1; i <= LEVELS.length; i++) out.push({ mode: 'story', level: i }); return out; }
   cycleMode(room) {
     const list = this.modes(), i = list.findIndex(x => x.mode === room.mode && x.level === room.level);
@@ -226,7 +420,7 @@ class RoomScene {
     if (!room) { text('CONNECTING TO THE LOBBY...', W / 2, H / 2, C.white, 1, 1); return; }
     const me = room.members.find(m => m.id === Net.myId), isHost = !!(me && me.host);
     text('LOBBY ' + room.code, W / 2, 6, C.gold, 2, 1, 'outline');
-    text(room.pub ? 'PUBLIC - SHOWN IN THE BROWSER' : 'PRIVATE - SHARE THE CODE', W / 2, 22, C.white, 1, 1);
+    text(isHost ? 'TELL YOUR FRIENDS TO JOIN WITH CODE ' + room.code : 'IN ' + room.name, W / 2, 22, isHost ? C.white : C.gray, 1, 1);
     const top = 32, rowH = 30;
     for (let i = 0; i < 4; i++) {
       const mem = room.members[i], y = top + i * rowH;
