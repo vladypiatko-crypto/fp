@@ -58,9 +58,8 @@ function trPlain(s) {
 }
 const trMissing = new Set(); // for testing: English strings a language has no translation for
 
-// duck: every word becomes a quack of about the same length (numbers, symbols and single letters stay)
-function quackWord(n) { return n <= 3 ? 'QUA' : n <= 5 ? 'QUACK' : 'QU' + 'A'.repeat(Math.min(4, n - 4)) + 'CK'; }
-function quackify(s) { return s.replace(/[A-ZÄÖÜА-ЯЁ][A-ZÄÖÜА-ЯЁ']*/gi, w => (w.length < 2 ? w : quackWord(w.replace(/'/g, '').length))); }
+// duck: every word is QUACK (numbers, symbols and single letters like the P in P1 stay)
+function quackify(s) { return s.replace(/[A-ZÄÖÜА-ЯЁ][A-ZÄÖÜА-ЯЁ']*/gi, w => (w.length < 2 ? w : 'QUACK')); }
 
 // ================================================================ translations: [English, Deutsch, Русский]
 const PHRASES = [

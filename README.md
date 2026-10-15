@@ -26,7 +26,7 @@ The story has an animated intro and ending. **Endless** mode is a pure survival 
 - **Honks and quacks**: Dr. Honk honks, the ducks quack. Both are synthesised in the browser, no sound files.
 - **Locker**: customise each duck's **skin, hat, halo, trail and weapon**. Every hat sways, sparkles and has its own little extras (twinkling crown, floating notes, chef steam).
 - **Chests**: spend the coins you earn on Duck Chests or Royal Chests. **Unlocks are shared by both players.** New items get a bouncing red NEW! on their locker tab and a red ! on the item until you tap it.
-- **Settings** (gear icon): turn off screen shake, impact flashes or music, pick your **language** (English, Deutsch, Русский, or QUACK, where every word is a quack) and set your **name**.
+- **Settings** (gear icon): turn off screen shake, impact flashes or music, pick your **language** (English, Deutsch, Русский, or QUACK, where every word is QUACK) and set your **name**.
 - **Your own name**: type any name up to 12 letters and numbers. Rude names (English, German and Russian, including l33t spellings) are refused, and the host filters friends' names too.
 - Ducks turn in 4 directions, blink, squash & stretch and leave afterimages when dashing.
 
