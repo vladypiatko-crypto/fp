@@ -302,7 +302,7 @@ function coinIcon(x, y, t = 0) {
 // ================================================================ audio (WebAudio chiptune, no files)
 const AU = { ctx: null, master: null, sfxBus: null, musicBus: null, muted: false, noise: null, last: {} };
 function audioInit() {
-  if (AU.ctx) { if (AU.ctx.state === 'suspended') AU.ctx.resume(); return; }
+  if (AU.ctx) { if (AU.ctx.state === 'suspended' && !AppState.away) AU.ctx.resume(); return; }
   const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
   const a = new AC(); AU.ctx = a;
   AU.master = a.createGain(); AU.master.gain.value = AU.muted ? 0 : 0.8; AU.master.connect(a.destination);
@@ -552,6 +552,21 @@ const SONGS = {
       74, 0, 0, 77, 0, 0, 79, 0, 82, 0, 81, 0, 79, 0, 77, 0, 76, 0, 77, 0, 79, 0, 72, 0, 76, 0, 79, 0, 82, 0, 0, 0],
   },
 };
+// the app went to the background or the phone screen turned off: silence all sound until it's back.
+// Browsers tell us with visibilitychange; the Android app also calls __appPause / __appResume itself (MainActivity.java)
+const AppState = { away: false, onAway: [] };
+function appAway(away) {
+  if (AppState.away === away) return;
+  AppState.away = away;
+  if (AU.ctx) { if (away) AU.ctx.suspend().catch(() => {}); else AU.ctx.resume().catch(() => {}); }
+  if (away) for (const f of AppState.onAway) f();
+}
+window.__appPause = () => appAway(true);
+window.__appResume = () => appAway(false);
+document.addEventListener('visibilitychange', () => appAway(document.hidden));
+window.addEventListener('pagehide', () => appAway(true));
+window.addEventListener('pageshow', () => appAway(document.hidden));
+
 const Music = {
   song: null, step: 0, seqT: 0, paused: false,
   play(name) { if (this.song === name) return; this.song = name; this.step = 0; if (AU.ctx) this.seqT = AU.ctx.currentTime + 0.08; },

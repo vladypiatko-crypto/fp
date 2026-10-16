@@ -16,6 +16,23 @@ public class MainActivity extends BridgeActivity {
         goFullscreen();
     }
 
+    // Home button, app switcher or screen off: tell the game, so it stops the music and pauses (engine.js appAway)
+    @Override
+    public void onPause() {
+        callGame("window.__appPause && window.__appPause()");
+        super.onPause();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        callGame("window.__appResume && window.__appResume()");
+    }
+
+    private void callGame(String js) {
+        if (getBridge() != null && getBridge().getWebView() != null) getBridge().getWebView().evaluateJavascript(js, null);
+    }
+
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);

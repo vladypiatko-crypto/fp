@@ -10,10 +10,7 @@ Save.data.name = cleanName(Save.data.name, 'QUACKER');
 onResize.push(() => { for (const s of Scenes.stack) if (s.resize) s.resize(); });
 resize();
 window.addEventListener('resize', resize);
-document.addEventListener('visibilitychange', () => {
-  const top = Scenes.top();
-  if (document.hidden && top instanceof GameScene && top.state === 'play') top.pause();
-});
+AppState.onAway.push(() => { const top = Scenes.top(); if (top instanceof GameScene && top.state === 'play') top.pause(); }); // leaving the app pauses the game
 window.addEventListener('blur', () => { const top = Scenes.top(); if (top instanceof GameScene && top.state === 'play') top.pause(); });
 
 // with accounts switched on, sign in first (first start: pick a name and username; banned: stop here)
