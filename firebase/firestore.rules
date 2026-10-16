@@ -23,8 +23,14 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // special events (Halloween...): everybody can see which are on, only the admin switches them
+    // special events (Halloween, Christmas, double coins...): everybody can see which are on, only the admin switches them
     match /meta/event {
+      allow get: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // what's in the shop (the admin's special offers and prices): everybody can see it, only the admin changes it
+    match /meta/shop {
       allow get: if signedIn();
       allow write: if isAdmin();
     }

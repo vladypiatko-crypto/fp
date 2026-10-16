@@ -116,6 +116,10 @@ function drawHalloweenView(v, T) {
   ctx.restore();
 }
 
+// everything the rest of the game needs to know about this event (see EVENTS in data.js)
+Object.assign(EVENTS.halloween, { level: HALLOWEEN_LEVEL, song: 'spooky', title: drawHalloweenTitle, view: drawHalloweenView, hat: DECO_ART.pumpkinS, icon: DECO_ART.bigpumpkin,
+  chest: 'pumpkin', boss: 'PUMPKIN KING', bg: '#3b2410', btn: '#8f4a00', tcol: '#ffd23f' });
+
 // ================================================================ translations
 addPhrases([
   ['HALLOWEEN', 'HALLOWEEN', 'ХЭЛЛОУИН'], ['HALLOWEEN EVENT', 'HALLOWEEN-EVENT', 'ХЭЛЛОУИН-ИВЕНТ'], ['HAUNTED POND', 'SPUKTEICH', 'ПРУД С ПРИВИДЕНИЯМИ'], ['PUMPKIN KING', 'KÜRBISKÖNIG', 'ТЫКВЕННЫЙ КОРОЛЬ'],

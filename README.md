@@ -46,10 +46,20 @@ Each chapter has an animated intro and ending, and the map has a page per chapte
 
 **Halloween event.** The admin starts and stops it (admin tab, EVENTS) and every player sees it live: a spooky title screen and music, night-time levels where the robots wear pumpkins, the **Haunted Pond** event level with the **Pumpkin King** (reward: Pumpkin Head), and the **Pumpkin Chest** full of **LIMITED** items (Skeleton and Vampire skins, Witch Hat, Bat Orbit, Candy Corn trail, Reaper Scythe, Candy Cannon). When the event stops, limited items can't be found any more; whoever has them keeps them.
 
+**Christmas event.** A snowy evening title screen with fairy lights, a big tree and a snowman, snow falling in every level, robots in santa hats, the **Snowy Village** event level with **Robo Santa** (reward: Elf Hat), a jingly Christmas song, and the **Present Chest** with LIMITED Gingerbread and Elf skins, Tree Hat, Snowflakes halo, Tinsel trail, Candy Cane (melee) and Snowball Blaster (slows robots).
+
+**More holidays**, each with its own look, event level, boss, reward and LIMITED chest:
+- **Easter**: Egg Hunt Meadow vs. the Easter Egg King (Bunny Ears), Chick and Pastel skins, Egg Ring halo, Carrot Launcher
+- **Valentine's Day**: Sweetheart Candy Land vs. the Love Crab (Heart Crown), Lovebird skin, Rose Petals trail, Cupid's Bow (homing hearts)
+- **Summer**: Summer Splash Beach vs. the Surf Shark (Straw Hat), Surfer skin, Splash trail, Super Soaker
+- **New Year**: Countdown City vs. the Midnight Clock (Party Hat), Disco skin, Fireworks halo, Confetti trail, Firecracker
+
+**Bonus events** change the rules for everyone while they run: **Double Coins**, **Double XP**, **Chest Sale** (all chests half price) and the **Admin Sale** (every admin item can be bought in the shop, for a lot of coins). Any mix of events can run at once; with several event levels, the title screen gets an EVENTS button.
+
 ## Features
 
 - **Online with friends**: host a lobby and share its 4-letter code, or join a friend's. Up to 4 ducks, each on their own device. No server to set up: devices connect directly. Pick story or endless, ready up, and start.
-- **Lots of weapons**: Blaster, Quackshot, Bubble Gun, Feather-rang, Beak Beam laser, Quackinator minigun, Corn Cannon (pops into popcorn), Frost Blaster (slows robots), Firework Launcher (homing rockets that explode), Tesla Coil (chain lightning), Dragon Breath flamethrower, Egg Launcher (lobbed exploding eggs), Saw Launcher (saws bounce robot to robot), Duck Sniper (one huge shot through a whole line), Black Hole (sucks robots in, then pops), Mine Layer, Quack Sword (melee slashes), Prism Laser (three rainbow beams), Ninja Stars, Bee Hive (homing bees), Harpoon Gun, Meteor Staff (meteors from the sky), the limited Halloween weapons, and the admin-only Golden Quacker and Ban Hammer
+- **Lots of weapons**: Blaster, Quackshot, Bubble Gun, Feather-rang, Beak Beam laser, Quackinator minigun, Corn Cannon (pops into popcorn), Frost Blaster (slows robots), Firework Launcher (homing rockets that explode), Tesla Coil (chain lightning), Dragon Breath flamethrower, Egg Launcher (lobbed exploding eggs), Saw Launcher (saws bounce robot to robot), Duck Sniper (one huge shot through a whole line), Black Hole (sucks robots in, then pops), Mine Layer, Quack Sword (melee slashes), Prism Laser (three rainbow beams), Ninja Stars, Bee Hive (homing bees), Harpoon Gun, Meteor Staff (meteors from the sky), the limited event weapons (Halloween, Christmas, Easter, Valentine's, Summer, New Year), and the admin-only Golden Quacker and Ban Hammer
 - **Level-up cards**: gun and duck upgrades (multi shot, piercing, speed, regen, dash attack…) plus **10 power-ups**: egg orbit, bread bombs, chain lightning, mega quack, feather darts, splash puddles, bubble shield, duck turret, sun beam and frost nova. More gun cards (big bullets, lucky shot crits, eagle eye range) and duck cards (tough feathers, bookworm, lucky coins, vampire bite, second wind). You get **3 power-up slots**; once they are full only those three come back. Eggs block bullets and push robots away.
 - **Overcharge**: after a power-up is maxed, a rare red glowing OVERCHARGE card can show up and makes it much stronger (giant fast-spinning eggs, splitting bread storms, lightning that jumps to everything, lava lakes, mirror shields…).
 - **Robot army**: Bolt Bots, Boom Bots, Goo Blobs, Tank Bots, Zap Drones and Saw Bots, each with its own behaviour. Bosses telegraph charges, jumps, bullet rings and missile strikes.
@@ -62,6 +72,7 @@ Each chapter has an animated intro and ending, and the map has a page per chapte
   - **Training**: permanent upgrades, 5 levels each, more expensive every level: Tougher Duck (+10 max HP), Sharper Beak (+6% damage), Faster Feet (+4% speed), Bigger Magnet, Quick Learner (+5% XP) and Piggy Bank (+10% coins from games). Training also works online; every duck brings their own.
   - **Daily deals**: 4 items you don't have yet, to buy straight away. New ones every day.
   - **Boosters** for one game: Double Coins, Head Start (2 free upgrade cards) and Extra Life. Switch them on and they're used at the start of your next game, online too.
+  - **The admin decides what's in the shop** (admin tab → SHOP): pick up to 8 items as special offers with your own prices (instead of the random daily deals), and set the Admin Sale price and booster prices. Saved for every player at once.
 - **Settings** (gear icon): turn off screen shake, impact flashes or music, pick your **language** (English, Deutsch, Русский, or QUACK, where every word is QUACK) and set your **name**.
 - **Your own name**: type any name up to 12 letters and numbers. Rude names (English, German and Russian, including l33t spellings) are refused, and the host filters friends' names too.
 - Ducks turn in 4 directions, blink, squash & stretch and leave afterimages when dashing.
@@ -132,7 +143,7 @@ Online, each device controls its own duck with the controls above (keyboard play
 - `www/js/game.js`: gameplay (the host runs this; online friends run the same code path but only draw)
 - `www/js/online.js`: peer-to-peer connections, the host's lobby, online menu and room screen, snapshots and the online game
 - `www/js/vendor/peerjs.min.js`: [PeerJS](https://github.com/peers/peerjs) 1.5.5 (MIT)
-- `www/js/story.js`: dialog boxes and cutscenes · `www/js/chapter2.js` to `chapter5.js`: chapters 2 to 5 · `www/js/halloween.js`: the Halloween event (worlds, bosses, levels, cutscenes, rewards)
+- `www/js/story.js`: dialog boxes and cutscenes · `www/js/chapter2.js` to `chapter5.js`: chapters 2 to 5 · `www/js/halloween.js`, `christmas.js`, `holidays.js`: the events (worlds, bosses, levels, rewards, bonus events)
 - `www/js/scenes.js`: title, map, locker, chests, settings
 - `www/js/shop.js`: the shop (training, daily deals, boosters) and the Mega Chest art
 - `main.js`: Electron wrapper (Windows) · `android/`: Capacitor project · `scripts/build-single-html.js`: one-file web build

@@ -100,10 +100,16 @@ function defaultSave() {
     newItems: [], // unlocked cosmetics nobody has clicked in the locker yet
   };
 }
-// special events (Halloween...): switched on and off by the admin, read from the database (cloud.js)
+// special events: switched on and off by the admin, read from the database (cloud.js).
+// HOLIDAY events (halloween.js, christmas.js, holidays.js) bring a look and LIMITED items and can have:
+//   level (played from the title screen), song, title(gy, T) and view(v, T) overlays, hat (a sprite robots wear), icon, chest
+// BONUS events (holidays.js) change the rules for everyone while they run: double coins, double XP, chest sale, admin sale
 const EVENT_STATE = {};
 const eventOn = id => !!EVENT_STATE[id];
-const EVENTS = { halloween: { name: 'HALLOWEEN', col: '#ff8c1a' } };
+const EVENTS = { halloween: { name: 'HALLOWEEN', col: '#ff8c1a', kind: 'holiday' } };
+const runningEvents = () => Object.keys(EVENTS).filter(eventOn);
+// the first running holiday event that has this (e.g. eventHas('song'))
+const eventHas = k => { const id = runningEvents().find(e => EVENTS[e][k]); return id ? EVENTS[id] : null; };
 const CHESTS = {
   wood: { name: 'DUCK CHEST', price: 100, odds: { common: 55, rare: 32, epic: 11, legendary: 2 } },
   gold: { name: 'ROYAL CHEST', price: 300, odds: { rare: 50, epic: 36, legendary: 14 } },

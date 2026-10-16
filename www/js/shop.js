@@ -29,6 +29,25 @@ const BOOSTERS = [
   { k: 'start', name: 'HEAD START', d: 'START WITH 2 FREE UPGRADE CARDS', price: 120, icon: () => ICON.rapid },
   { k: 'life', name: 'EXTRA LIFE', d: 'GET BACK UP ONCE WITH HALF HP', price: 200, icon: () => ICON.phoenix },
 ];
+
+// ================================================================ what the admin put in the shop (meta/shop in the database, see cloud.js)
+//   deals: the admin's own picks with prices (null = 4 random items every day), adminPrice: ADMIN SALE price, boost: booster prices
+const SHOP_PICK_MAX = 8;
+const PRICE_STEPS = [0, 10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 650, 800, 1000, 1250, 1500, 2000, 2500, 3000, 4000, 5000, 7500,
+  10000, 15000, 20000, 25000, 35000, 50000, 75000, 100000, 250000, 500000, 1000000];
+function cleanShopCfg(d) {
+  const price = (v, def) => { if (typeof v !== 'number') return def; v = Math.floor(v); return v >= 0 && v <= 1e7 ? v : def; };
+  const out = { deals: null, adminPrice: price(d && d.adminPrice, 50000), boost: {} };
+  for (const b of BOOSTERS) out.boost[b.k] = price(d && d.boost && d.boost[b.k], b.price);
+  if (d && Array.isArray(d.deals) && d.deals.length) {
+    out.deals = d.deals.filter(x => x && COSMETICS[x.cat] && itemOf(x.cat, x.id)).slice(0, SHOP_PICK_MAX).map(x => ({ cat: x.cat, id: x.id, price: price(x.price, 300) }));
+    if (!out.deals.length) out.deals = null;
+  }
+  return out;
+}
+let SHOP_CFG = cleanShopCfg(null);
+const boostPrice = b => SHOP_CFG.boost[b.k];
+const adminItems = () => { const out = []; for (const cat of CATS) for (const it of COSMETICS[cat]) if (it.rarity === 'admin') out.push({ cat, id: it.id, price: SHOP_CFG.adminPrice }); return out; };
 // the boosters this device has switched on and still owns, e.g. { double: 1, life: 1 }
 function armedBoosters() {
   const d = Save.data, out = {};
@@ -57,10 +76,10 @@ GameScene.prototype.useBoosters = function () {
 };
 // coins at the end of a game, with this device's training (and the double coins booster)
 function payRun(res, client) {
-  const base = res.coins + res.bonus, dbl = R && R.boost && R.boost.double;
-  const total = Math.round(base * (1 + 0.1 * (cleanTrain(Save.data.train).coin || 0)) * (dbl ? 2 : 1));
+  const base = res.coins + res.bonus, dbl = R && R.boost && R.boost.double, ev = eventOn('doublecoins');
+  const total = Math.round(base * (1 + 0.1 * (cleanTrain(Save.data.train).coin || 0)) * (dbl ? 2 : 1) * (ev ? 2 : 1));
   Save.addCoins(total);
-  if (R) { R.myPerk = total - base; R.myPerkDouble = !!dbl; }
+  if (R) { R.myPerk = total - base; R.myPerkLabel = dbl && ev ? 'BONUS (X4 COINS!)' : ev ? 'DOUBLE COINS EVENT!' : dbl ? 'SHOP BONUS (X2 COINS!)' : 'SHOP BONUS'; }
   return total - base;
 }
 
@@ -68,6 +87,8 @@ function payRun(res, client) {
 const DEAL_PRICE = { common: 120, rare: 260, epic: 650, legendary: 1500 };
 const dayNumber = () => Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 86400000);
 function dailyDeals() {
+  // the admin's own picks win over the random ones
+  if (SHOP_CFG.deals) return { picked: true, items: SHOP_CFG.deals.map(x => x.cat + ':' + x.id), prices: Object.fromEntries(SHOP_CFG.deals.map(x => [x.cat + ':' + x.id, x.price])) };
   const d = Save.data, day = dayNumber();
   if (!d.deals || d.deals.day !== day || !d.deals.items) {
     // a fresh set of 4 things you don't have yet (the same all day)
@@ -117,12 +138,18 @@ class ShopScene {
     for (let i = 0; i < W / 12 + 1; i++) { ctx.fillStyle = i % 2 ? '#fff8e7' : '#e8343b'; ctx.fillRect(i * 12, 0, 12, 7); ctx.beginPath(); ctx.arc(i * 12 + 6, 7, 6, 0, Math.PI); ctx.fill(); }
     text('SHOP', W / 2, 16, C.gold, 2, 1, 'outline');
     drawCoins(4, 16, Save.data.coins, T);
-    const tabs = [['train', 'TRAINING'], ['deals', 'DAILY DEALS'], ['boost', 'BOOSTERS']];
-    const tw = Math.min(90, Math.floor((W - 20) / 3) - 4), tx0 = Math.floor(W / 2 - (tw * 3 + 8) / 2);
-    tabs.forEach(([id, label], i) => drawButton(this.ui, 'tab' + id, tx0 + i * (tw + 4), 32, tw, 13, label, { col: this.tab === id ? '#4b3a72' : C.ui, def: this.tab === id, on: () => { this.tab = id; sfx.uiMove(); } }));
+    const tabs = [['train', 'TRAINING'], ['deals', SHOP_CFG.deals ? 'SPECIAL OFFERS' : 'DAILY DEALS'], ['boost', 'BOOSTERS']];
+    if (eventOn('adminsale')) tabs.push(['admin', 'ADMIN SALE']); else if (this.tab === 'admin') this.tab = 'train';
+    const nt = tabs.length, tw = Math.min(90, Math.floor((W - 20) / nt) - 4), tx0 = Math.floor(W / 2 - (tw * nt + 4 * (nt - 1)) / 2);
+    tabs.forEach(([id, label], i) => {
+      const x = tx0 + i * (tw + 4);
+      drawButton(this.ui, 'tab' + id, x, 32, tw, 13, label, { col: this.tab === id ? (id === 'admin' ? '#6b2a6b' : '#4b3a72') : C.ui, def: this.tab === id, on: () => { this.tab = id; this.page = 0; sfx.uiMove(); } });
+      if (id === 'admin') { ctx.fillStyle = rarityCol('admin', T); ctx.fillRect(x + 2, 43, tw - 4, 1); drawNewTag(x + tw - 8, 32, T); }
+    });
     const top = 50;
     if (this.tab === 'train') this.drawTraining(top);
     else if (this.tab === 'deals') this.drawDeals(top);
+    else if (this.tab === 'admin') this.drawAdminSale(top);
     else this.drawBoosters(top);
     for (const q of this.parts) { ctx.fillStyle = q.col; ctx.fillRect(Math.round(q.x), Math.round(q.y), 2, 2); }
     if (this.noteT > 0) text(this.note, W / 2, H - 28, C.gold, 1, 1, 'outline');
@@ -146,28 +173,51 @@ class ShopScene {
     });
     text('TRAINING STAYS FOREVER, ALSO ONLINE', W / 2, top + Math.ceil(TRAINING.length / cols) * (ch + 3) + 3, C.gray, 1, 1, null);
   }
-  // four items to buy straight away
+  // items to buy straight away: 4 random ones every day, or the admin's own picks
   drawDeals(top) {
-    const deals = dailyDeals(), T = this.T, n = Math.max(1, deals.items.length), gap = 6;
-    const cw = Math.min(84, Math.floor((W - 16 - gap * (n - 1)) / n)), ch = Math.min(96, H - top - 34), x0 = Math.floor(W / 2 - (cw * n + gap * (n - 1)) / 2);
-    if (!deals.items.length) text('YOU HAVE EVERYTHING! COME BACK TOMORROW', W / 2, top + 30, C.gold, 1, 1);
-    deals.items.forEach((key, i) => {
-      const [cat, id] = key.split(':'), it = itemOf(cat, id); if (!it) return;
-      const x = x0 + i * (cw + gap), y = top, has = Save.has(cat, id), price = DEAL_PRICE[it.rarity] || 300, rc = rarityCol(it.rarity, T + i * 0.2);
-      panel(x, y, cw, ch, has ? '#1c1528' : C.ui, rc, C.uiL, false);
-      ctx.save(); ctx.beginPath(); ctx.rect(x + 2, y + 6, cw - 4, 40); ctx.clip();
-      ctx.translate(x + cw / 2, y + 28); ctx.scale(2, 2); ctx.translate(-(x + cw / 2), -(y + 28));
-      drawItemIcon(cat, id, x + cw / 2, y + 28, T, Save.data.loadout[0]);
-      ctx.restore();
-      text(it.name, x + cw / 2, y + 50, rc, 1, 1, null);
-      text(RARITY[it.rarity].name, x + cw / 2, y + 59, C.gray, 1, 1, null);
-      drawButton(this.ui, 'deal' + i, x + 5, y + ch - 18, cw - 10, 13, has ? 'OWNED' : fmt('{0} C', price), { disabled: has, col: Save.data.coins >= price ? '#3d2f63' : '#2a2535', tcol: C.gold, def: i === 0,
-        on: () => { if (this.pay(price)) { Save.unlock(cat, id); deals.bought.push(key); Save.write(); this.say(fmt('NEW ITEM: {0}!', it.name), true); sfx.chestOpen(it.rarity); } } });
-    });
+    const deals = dailyDeals();
+    if (!deals.items.length) { text('YOU HAVE EVERYTHING! COME BACK TOMORROW', W / 2, top + 30, C.gold, 1, 1); return; }
+    const list = deals.items.map(key => { const [cat, id] = key.split(':'), it = itemOf(cat, id); return { cat, id, price: deals.prices ? deals.prices[key] : DEAL_PRICE[it.rarity] || 300 }; });
+    const bottom = this.drawItemGrid(list, top, 'deal');
+    if (deals.picked) { text('HANDPICKED BY THE ADMIN', W / 2, bottom + 4, C.pink, 1, 1, null); return; }
     // time until tomorrow's deals
     const now = new Date(), next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1), left = Math.max(0, Math.floor((next - now) / 1000));
     const hh = String(Math.floor(left / 3600)).padStart(2, '0'), mm = String(Math.floor(left / 60) % 60).padStart(2, '0'), ss = String(left % 60).padStart(2, '0');
-    text(fmt('NEW DEALS IN {0}', hh + ':' + mm + ':' + ss), W / 2, top + ch + 4, C.gray, 1, 1, null);
+    text(fmt('NEW DEALS IN {0}', hh + ':' + mm + ':' + ss), W / 2, bottom + 4, C.gray, 1, 1, null);
+  }
+  // the ADMIN SALE event: every admin item, for a ton of coins
+  drawAdminSale(top) {
+    const bottom = this.drawItemGrid(adminItems(), top, 'adm');
+    text('ONLY WHILE THE ADMIN SALE IS ON!', W / 2, bottom + 4, rarityCol('admin', this.T), 1, 1, null);
+  }
+  // cards with an item, its name and a buy button; up to 2 rows, more go on pages. Returns where the cards end.
+  drawItemGrid(list, top, pre) {
+    const T = this.T, gap = 6, maxCols = W >= 300 ? 4 : 3, cols = Math.min(maxCols, list.length || 1), rows = list.length > cols ? 2 : 1;
+    const per = cols * rows, pages = Math.max(1, Math.ceil(list.length / per)); this.page = clamp(this.page || 0, 0, pages - 1);
+    const avail = H - top - 36, ch = rows === 1 ? Math.min(96, avail) : Math.floor((avail - gap) / 2), cw = Math.min(84, Math.floor((W - 40 - gap * (cols - 1)) / cols));
+    const x0 = Math.floor(W / 2 - (cw * cols + gap * (cols - 1)) / 2), sc = ch >= 80 ? 2 : 1, iconY = rows === 1 ? 28 : 16;
+    list.slice(this.page * per, this.page * per + per).forEach((e, i) => {
+      const it = itemOf(e.cat, e.id); if (!it) return;
+      const x = x0 + (i % cols) * (cw + gap), y = top + Math.floor(i / cols) * (ch + gap), has = Save.has(e.cat, e.id), rc = rarityCol(it.rarity, T + i * 0.2);
+      panel(x, y, cw, ch, has ? '#1c1528' : C.ui, rc, C.uiL, false);
+      if (it.rarity === 'admin') { ctx.globalAlpha = 0.14 + Math.sin(T * 4 + i) * 0.05; ctx.fillStyle = rc; ctx.fillRect(x + 1, y + 1, cw - 2, ch - 2); ctx.globalAlpha = 1; }
+      ctx.save(); ctx.beginPath(); ctx.rect(x + 2, y + 3, cw - 4, ch - 36); ctx.clip();
+      ctx.translate(x + cw / 2, y + iconY); ctx.scale(sc, sc); ctx.translate(-(x + cw / 2), -(y + iconY));
+      drawItemIcon(e.cat, e.id, x + cw / 2, y + iconY, T, Save.data.loadout[0]);
+      ctx.restore();
+      ctx.save(); ctx.beginPath(); ctx.rect(x + 1, y, cw - 2, ch); ctx.clip();
+      text(it.name, x + cw / 2, y + ch - 32, rc, 1, 1, null);
+      text(RARITY[it.rarity].name, x + cw / 2, y + ch - 24, C.gray, 1, 1, null);
+      ctx.restore();
+      const can = Save.data.coins >= e.price;
+      drawButton(this.ui, pre + i, x + 4, y + ch - 16, cw - 8, 13, has ? 'OWNED' : e.price ? fmt('{0} C', e.price) : 'FREE', { disabled: has, col: can ? '#3d2f63' : '#2a2535', tcol: C.gold, def: i === 0,
+        on: () => { if (this.pay(e.price)) { Save.unlock(e.cat, e.id); Save.write(); this.say(fmt('NEW ITEM: {0}!', it.name), true); sfx.chestOpen(it.rarity === 'admin' ? 'legendary' : it.rarity); } } });
+    });
+    if (pages > 1) {
+      drawButton(this.ui, pre + 'p', 4, top + ch * rows / 2 - 8, 14, 16, '<', { on: () => { this.page = (this.page + pages - 1) % pages; sfx.uiMove(); } });
+      drawButton(this.ui, pre + 'n', W - 18, top + ch * rows / 2 - 8, 14, 16, '>', { on: () => { this.page = (this.page + 1) % pages; sfx.uiMove(); } });
+    }
+    return top + rows * ch + (rows - 1) * gap;
   }
   // one-run boosts: buy them, switch them on, they're used at the start of the next game
   drawBoosters(top) {
@@ -180,8 +230,9 @@ class ShopScene {
       text(b.d, px + 20, y + 14, C.gray, 1, 0, null);
       text(fmt('HAVE {0}', have), px + pw - 132, y + 4, have ? C.gold : C.gray, 1, 0, null);
       drawButton(this.ui, 'use' + b.k, px + pw - 132, y + 12, 44, 11, on ? 'USE: ON' : 'USE: OFF', { col: on ? '#1f5c3a' : C.ui, on: () => { d.armed[b.k] = !on; Save.write(); sfx.uiMove(); } });
-      drawButton(this.ui, 'buy' + b.k, px + pw - 84, y + 7, 78, 13, fmt('BUY {0} C', b.price), { col: d.coins >= b.price ? '#3d2f63' : '#2a2535', tcol: C.gold, def: i === 0,
-        on: () => { if (this.pay(b.price)) { d.boosters[b.k] = have + 1; if (!have) d.armed[b.k] = true; Save.write(); this.say(fmt('{0} +1', b.name), true); } } });
+      const price = boostPrice(b);
+      drawButton(this.ui, 'buy' + b.k, px + pw - 84, y + 7, 78, 13, price ? fmt('BUY {0} C', price) : 'FREE', { col: d.coins >= price ? '#3d2f63' : '#2a2535', tcol: C.gold, def: i === 0,
+        on: () => { if (this.pay(price)) { d.boosters[b.k] = have + 1; if (!have) d.armed[b.k] = true; Save.write(); this.say(fmt('{0} +1', b.name), true); } } });
     });
     text('SWITCHED-ON BOOSTERS ARE USED AT THE START OF YOUR NEXT GAME', W / 2, top + BOOSTERS.length * (ch + 4) + 2, C.gray, 1, 1, null);
   }
@@ -200,5 +251,7 @@ addPhrases([
   ['START WITH 2 FREE UPGRADE CARDS', 'STARTE MIT 2 GRATIS-KARTEN', 'НАЧНИ С 2 БЕСПЛАТНЫМИ КАРТАМИ'], ['EXTRA LIFE', 'EXTRALEBEN', 'ДОП. ЖИЗНЬ'], ['GET BACK UP ONCE WITH HALF HP', 'STEH EINMAL MIT HALBEN HP WIEDER AUF', 'ВСТАНЬ ОДИН РАЗ С ПОЛОВИНОЙ HP'],
   ['HAVE {0}', 'HAST {0}', 'ЕСТЬ {0}'], ['USE: ON', 'NUTZEN: AN', 'ИСП.: ВКЛ'], ['USE: OFF', 'NUTZEN: AUS', 'ИСП.: ВЫКЛ'], ['BUY {0} C', 'KAUFEN {0} M', 'КУПИТЬ {0} М'], ['{0} +1', '{0} +1', '{0} +1'],
   ['SWITCHED-ON BOOSTERS ARE USED AT THE START OF YOUR NEXT GAME', 'EINGESCHALTETE BOOSTER WERDEN BEIM NÄCHSTEN SPIEL VERBRAUCHT', 'ВКЛЮЧЁННЫЕ БУСТЕРЫ ТРАТЯТСЯ В НАЧАЛЕ СЛЕДУЮЩЕЙ ИГРЫ'],
-  ['SHOP BONUS', 'LADEN-BONUS', 'БОНУС МАГАЗИНА'], ['SHOP BONUS (X2 COINS!)', 'LADEN-BONUS (X2 MÜNZEN!)', 'БОНУС МАГАЗИНА (X2 МОНЕТ!)'], ['MEGA CHEST', 'MEGA-TRUHE', 'МЕГА-СУНДУК'],
+  ['SHOP BONUS', 'LADEN-BONUS', 'БОНУС МАГАЗИНА'], ['BONUS (X4 COINS!)', 'BONUS (X4 MÜNZEN!)', 'БОНУС (X4 МОНЕТ!)'], ['DOUBLE COINS EVENT!', 'DOPPELTE-MÜNZEN-EVENT!', 'ИВЕНТ ДВОЙНЫХ МОНЕТ!'],
+  ['SPECIAL OFFERS', 'SONDERANGEBOTE', 'СПЕЦПРЕДЛОЖЕНИЯ'], ['HANDPICKED BY THE ADMIN', 'VOM ADMIN AUSGESUCHT', 'ВЫБРАНО АДМИНОМ'], ['ONLY WHILE THE ADMIN SALE IS ON!', 'NUR SOLANGE DER ADMIN-VERKAUF LÄUFT!', 'ТОЛЬКО ПОКА ИДЁТ АДМИН-РАСПРОДАЖА!'],
+  ['FREE', 'GRATIS', 'БЕСПЛАТНО'], ['SHOP BONUS (X2 COINS!)', 'LADEN-BONUS (X2 MÜNZEN!)', 'БОНУС МАГАЗИНА (X2 МОНЕТ!)'], ['MEGA CHEST', 'MEGA-TRUHE', 'МЕГА-СУНДУК'],
 ]);

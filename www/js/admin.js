@@ -61,10 +61,11 @@ class AdminScene {
     if (!this.kb.value && list.length) text('NEWEST PLAYERS', W / 2, H - 13, C.grayD, 1, 1, null);
     drawButton(this.ui, 'back', 4, H - 17, 40, 13, 'BACK', { on: () => Trans.go(() => Scenes.pop()), icon: ICON.back });
     drawButton(this.ui, 'events', 4, 22, 40, 14, 'EVENTS', { on: () => Trans.go(() => Scenes.push(new EventAdminScene())), col: '#8f4a00' });
+    drawButton(this.ui, 'shopadm', W - 44, 22, 40, 14, 'SHOP', { on: () => Trans.go(() => Scenes.push(new ShopAdminScene())), col: '#7a1f24' });
   }
 }
 
-// ================================================================ events: switch Halloween (and later ones) on and off for everyone
+// ================================================================ events: switch holidays and bonus events on and off for everyone
 class EventAdminScene {
   constructor() { this.T = 0; this.ui = new UI(); this.note = ''; this.noteT = 0; this.busy = null; }
   update(dt) {
@@ -82,16 +83,29 @@ class EventAdminScene {
   }
   draw() {
     drawChecker(); this.ui.begin();
+    const T = this.T;
     text('EVENTS', W / 2, 5, '#ff8c1a', 2, 1, 'outline');
-    text('EVERY PLAYER SEES THE EVENT AS SOON AS YOU SWITCH IT ON', W / 2, 24, C.gray, 1, 1, null);
-    Object.keys(EVENTS).forEach((id, i) => {
-      const ev = EVENTS[id], on = eventOn(id), y = 40 + i * 30, pw = Math.min(W - 24, 260), px = Math.floor(W / 2 - pw / 2);
-      panel(px, y, pw, 24, on ? '#3b2410' : C.ui, on ? ev.col : OUT, C.uiL, false);
-      if (id === 'halloween') drawSprX(DECO_ART.bigpumpkin, px + 14, y + 20, { ay: 1 });
-      text(ev.name, px + 30, y + 5, ev.col, 1, 0, null);
-      text(on ? 'RUNNING NOW' : 'OFF', px + 30, y + 14, on ? C.green : C.gray, 1, 0, null);
-      drawButton(this.ui, 'ev' + id, px + pw - 66, y + 5, 60, 14, this.busy === id ? '...' : on ? 'STOP' : 'START', { col: on ? '#6b1f2a' : '#1f5c3a', def: i === 0, on: () => this.toggle(id) });
+    text('EVERY PLAYER SEES THE EVENT AS SOON AS YOU SWITCH IT ON', W / 2, 22, C.gray, 1, 1, null);
+    // two columns of cards (one on narrow screens), more on pages
+    const ids = Object.keys(EVENTS), cols = W >= 300 ? 2 : 1, gap = 4, rh = 26, top = 32;
+    const rows = Math.max(1, Math.floor((H - top - 22) / (rh + gap))), per = rows * cols, pages = Math.ceil(ids.length / per);
+    this.page = clamp(this.page || 0, 0, pages - 1);
+    const cw = Math.min(200, Math.floor((W - 16 - gap * (cols - 1)) / cols)), x0 = Math.floor(W / 2 - (cw * cols + gap * (cols - 1)) / 2);
+    ids.slice(this.page * per, this.page * per + per).forEach((id, i) => {
+      const ev = EVENTS[id], on = eventOn(id), x = x0 + (i % cols) * (cw + gap), y = top + Math.floor(i / cols) * (rh + gap), col = ev.rainbow ? rarityCol('admin', T) : ev.col;
+      panel(x, y, cw, rh, on ? '#2f3a1f' : C.ui, on ? col : OUT, C.uiL, false);
+      if (ev.icon) { ctx.save(); ctx.beginPath(); ctx.rect(x + 2, y + 2, 20, rh - 4); ctx.clip(); drawSprX(ev.icon, x + 12, y + rh - 3, { ay: 1, sc: ev.icon.h > 12 ? 1 : 2 }); ctx.restore(); }
+      else coinIcon(x + 8, y + 9, T + i * 0.3);
+      ctx.save(); ctx.beginPath(); ctx.rect(x + 24, y, cw - 24 - 50, rh); ctx.clip();
+      text(ev.name, x + 25, y + 5, col, 1, 0, null);
+      text(on ? 'RUNNING NOW' : ev.desc || 'HOLIDAY EVENT', x + 25, y + 15, on ? C.green : C.gray, 1, 0, null);
+      ctx.restore();
+      drawButton(this.ui, 'ev' + id, x + cw - 48, y + 6, 44, 14, this.busy === id ? '...' : on ? 'STOP' : 'START', { col: on ? '#6b1f2a' : '#1f5c3a', def: i === 0, on: () => this.toggle(id) });
     });
+    if (pages > 1) {
+      drawButton(this.ui, 'pp', W - 64, H - 17, 26, 13, '<', { on: () => { this.page = (this.page + pages - 1) % pages; } });
+      drawButton(this.ui, 'pn', W - 34, H - 17, 26, 13, '>', { on: () => { this.page = (this.page + 1) % pages; } });
+    }
     if (this.noteT > 0) text(this.note, W / 2, H - 32, C.gold, 1, 1, 'outline');
     drawButton(this.ui, 'back', 4, H - 17, 40, 13, 'BACK', { on: () => Trans.go(() => Scenes.pop()), icon: ICON.back });
   }
@@ -299,3 +313,136 @@ class MessageScene {
     drawButton(this.ui, 'save', Math.floor(W / 2 + 42), sy, 70, 14, 'SAVE', { on: () => this.save(), col: '#3d2f63', def: true });
   }
 }
+
+// ================================================================ the shop editor: what's for sale, and for how much (for everyone)
+// one step up or down the price list
+function stepPrice(v, dir) {
+  let i = PRICE_STEPS.findIndex(p => p >= v); if (i < 0) i = PRICE_STEPS.length - 1;
+  if (dir < 0 && PRICE_STEPS[i] > v) return PRICE_STEPS[Math.max(0, i - 1)];
+  return PRICE_STEPS[clamp(i + dir, 0, PRICE_STEPS.length - 1)];
+}
+const defaultPickPrice = it => it.rarity === 'admin' ? 50000 : it.rarity === 'limited' ? 1500 : DEAL_PRICE[it.rarity] || 300;
+class ShopAdminScene {
+  constructor() {
+    this.T = 0; this.ui = new UI(); this.note = ''; this.noteT = 0; this.busy = false;
+    this.picks = (SHOP_CFG.deals || []).map(x => Object.assign({}, x));
+    this.mode = SHOP_CFG.deals ? 'picks' : 'random';
+    this.adminPrice = SHOP_CFG.adminPrice; this.boost = Object.assign({}, SHOP_CFG.boost);
+  }
+  say(m) { this.note = m; this.noteT = 2.5; }
+  cfg() { return { deals: this.mode === 'picks' && this.picks.length ? this.picks : null, adminPrice: this.adminPrice, boost: this.boost }; }
+  save() {
+    if (this.busy) return;
+    this.busy = true;
+    const cfg = this.cfg();
+    Cloud.setShop(cfg).then(() => { SHOP_CFG = cleanShopCfg(cfg); this.say('THE SHOP IS UPDATED FOR EVERYONE!'); sfx.chestOpen('epic'); })
+      .catch(e => { this.say(e.message === 'timeout' ? 'NO INTERNET CONNECTION?' : 'UPDATE THE DATABASE RULES FIRST'); sfx.uiBack(); })
+      .then(() => { this.busy = false; });
+  }
+  update(dt) {
+    this.T += dt; this.noteT = Math.max(0, this.noteT - dt);
+    const acts = Input.menu();
+    if (acts.back) { sfx.uiBack(); Trans.go(() => Scenes.pop()); return; }
+    this.ui.update(dt, acts);
+  }
+  // a price with - and + buttons
+  priceRow(id, x, y, label, v, set, col = C.white) {
+    text(label, x, y + 3, col, 1, 0, null);
+    const bx = Math.min(W - 100, x + 110);
+    drawButton(this.ui, id + '-', bx, y, 16, 12, '-', { on: () => { set(stepPrice(v, -1)); sfx.uiMove(); } });
+    text(v ? fmt('{0} C', v) : 'FREE', bx + 42, y + 3, C.gold, 1, 1, null);
+    drawButton(this.ui, id + '+', bx + 68, y, 16, 12, '+', { on: () => { set(stepPrice(v, 1)); sfx.uiMove(); } });
+  }
+  draw() {
+    drawChecker(); this.ui.begin();
+    const T = this.T;
+    text('SHOP EDITOR', W / 2, 4, C.gold, 2, 1, 'outline');
+    // special offers: random every day, or the admin's picks
+    let y = 22;
+    text('SPECIAL OFFERS:', 8, y + 3, C.white, 1, 0, null);
+    drawButton(this.ui, 'mode', 92, y, 120, 12, this.mode === 'picks' ? 'MY PICKS' : 'RANDOM EVERY DAY', { col: this.mode === 'picks' ? '#7a2a5c' : C.ui, def: true,
+      on: () => { this.mode = this.mode === 'picks' ? 'random' : 'picks'; sfx.uiMove(); } });
+    y += 16;
+    const tw = 38, th = 44;
+    if (this.mode === 'picks') {
+      const perRow = Math.max(1, Math.floor((W - 16 + 2) / (tw + 2))), n = this.picks.length + (this.picks.length < SHOP_PICK_MAX ? 1 : 0);
+      for (let i = 0; i < n; i++) {
+        const x = 8 + (i % perRow) * (tw + 2), ty = y + Math.floor(i / perRow) * (th + 2);
+        if (i === this.picks.length) { // the add tile
+          drawButton(this.ui, 'add', x, ty, tw, th, '+', { col: '#3d2f63', on: () => Trans.go(() => Scenes.push(new ShopPickScene(this))) });
+          text('ADD', x + tw / 2, ty + th - 10, C.gray, 1, 1, null);
+          continue;
+        }
+        const e = this.picks[i], it = itemOf(e.cat, e.id), rc = rarityCol(it.rarity, T + i * 0.2);
+        panel(x, ty, tw, th, C.ui, rc, null, false);
+        ctx.save(); ctx.beginPath(); ctx.rect(x + 1, ty + 1, tw - 2, 22); ctx.clip(); drawItemIcon(e.cat, e.id, x + tw / 2, ty + 12, T, Save.data.loadout[0]); ctx.restore();
+        text(e.price ? String(e.price) : 'FREE', x + tw / 2, ty + 24, C.gold, 1, 1, null);
+        drawButton(this.ui, 'pm' + i, x + 2, ty + th - 13, 11, 11, '-', { on: () => { e.price = stepPrice(e.price, -1); sfx.uiMove(); } });
+        drawButton(this.ui, 'pp' + i, x + 13, ty + th - 13, 11, 11, '+', { on: () => { e.price = stepPrice(e.price, 1); sfx.uiMove(); } });
+        drawButton(this.ui, 'px' + i, x + 25, ty + th - 13, 11, 11, 'X', { col: '#6b1f2a', on: () => { this.picks.splice(i, 1); sfx.uiBack(); } });
+      }
+      y += Math.ceil(n / perRow) * (th + 2) + 4;
+    } else { text('4 NEW RANDOM ITEMS EVERY DAY, PRICED BY RARITY', 8, y + 2, C.gray, 1, 0, null); y += 14; }
+    // prices
+    this.priceRow('adm', 8, y, 'ADMIN SALE PRICE', this.adminPrice, v => { this.adminPrice = v; }, rarityCol('admin', T)); y += 15;
+    for (const b of BOOSTERS) { this.priceRow('b' + b.k, 8, y, b.name, this.boost[b.k], v => { this.boost[b.k] = v; }); y += 15; }
+    text(eventOn('adminsale') ? 'THE ADMIN SALE IS ON' : 'START THE ADMIN SALE IN EVENTS', 8, y + 2, eventOn('adminsale') ? C.green : C.gray, 1, 0, null);
+    if (this.noteT > 0) text(this.note, W / 2, H - 30, C.gold, 1, 1, 'outline');
+    // bottom bar
+    const by = H - 17;
+    drawButton(this.ui, 'back', 8, by, 44, 14, 'BACK', { on: () => Trans.go(() => Scenes.pop()), icon: ICON.back });
+    drawButton(this.ui, 'reset', 56, by, 70, 14, 'NORMAL SHOP', { on: () => { this.mode = 'random'; this.picks = []; this.adminPrice = 50000; for (const b of BOOSTERS) this.boost[b.k] = b.price; sfx.uiBack(); } });
+    drawButton(this.ui, 'save', W - 8 - 120, by, 120, 14, this.busy ? 'SAVING...' : 'SAVE FOR EVERYONE', { col: '#1f5c3a', on: () => this.save() });
+  }
+}
+// pick the items for the special offers (every item in the game, admin and limited ones too)
+class ShopPickScene {
+  constructor(owner) { this.owner = owner; this.T = 0; this.ui = new UI(); this.tab = 'admin'; this.page = 0; this.note = ''; this.noteT = 0; }
+  has(key) { return this.owner.picks.some(x => x.cat + ':' + x.id === key); }
+  toggle(cat, it) {
+    const key = cat + ':' + it.id, list = this.owner.picks;
+    if (this.has(key)) { list.splice(list.findIndex(x => x.cat + ':' + x.id === key), 1); sfx.uiBack(); return; }
+    if (list.length >= SHOP_PICK_MAX) { this.note = fmt('MAX {0} ITEMS', SHOP_PICK_MAX); this.noteT = 2; sfx.uiBack(); return; }
+    list.push({ cat, id: it.id, price: defaultPickPrice(it) }); sfx.uiMove();
+  }
+  update(dt) {
+    this.T += dt; this.noteT = Math.max(0, this.noteT - dt);
+    const acts = Input.menu();
+    if (acts.back) { sfx.uiBack(); Trans.go(() => Scenes.pop()); return; }
+    this.ui.update(dt, acts);
+  }
+  draw() {
+    drawChecker(); this.ui.begin();
+    const T = this.T, tabs = GIFT_TABS.filter(t => t !== 'coins');
+    text(fmt('PICK UP TO {0} ITEMS ({1}/{0})', SHOP_PICK_MAX, this.owner.picks.length), W / 2, 4, C.gold, 1, 1, 'outline');
+    const tw = Math.floor((W - 16 - (tabs.length - 1) * 2) / tabs.length), ty = 15;
+    tabs.forEach((t, i) => drawButton(this.ui, 'tab' + t, 8 + i * (tw + 2), ty, tw, 13, GIFT_TAB_NAME[t], { col: this.tab === t ? '#4b3a72' : C.ui, on: () => { this.tab = t; this.page = 0; } }));
+    const cells = GiftPickScene.prototype.cells(this.tab), gy = ty + 18;
+    let cs, cols, rows;
+    for (const sz of [32, 28, 25, 22]) { cs = sz; cols = Math.max(1, Math.floor((W - 16 + 2) / (cs + 2))); rows = Math.max(1, Math.floor((H - 22 - gy) / (cs + 2))); if (cols * rows >= cells.length) break; }
+    const per = cols * rows, pages = Math.max(1, Math.ceil(cells.length / per)); this.page = clamp(this.page, 0, pages - 1);
+    const gx = Math.floor(W / 2 - (Math.min(cells.length, cols) * (cs + 2) - 2) / 2);
+    cells.slice(this.page * per, this.page * per + per).forEach(([cat, it], i) => {
+      const x = gx + (i % cols) * (cs + 2), y = gy + Math.floor(i / cols) * (cs + 2), on = this.has(cat + ':' + it.id), rc = rarityCol(it.rarity, T + i * 0.1);
+      panel(x, y, cs, cs, on ? '#4b3a72' : C.ui, on ? C.gold : rc, null, false);
+      ctx.save(); ctx.beginPath(); ctx.rect(x + 1, y + 1, cs - 2, cs - 2); ctx.clip(); drawItemIcon(cat, it.id, x + cs / 2, y + cs / 2, T, Save.data.loadout[0]); ctx.restore();
+      if (on) GiftPickScene.prototype.tick(x + cs - 7, y + 3);
+      this.ui.add('g' + cat + it.id, x, y, cs, cs, () => this.toggle(cat, it), { silent: true, def: i === 0 });
+    });
+    if (pages > 1) {
+      drawButton(this.ui, 'pp', W - 64, H - 17, 26, 13, '<', { on: () => { this.page = (this.page + pages - 1) % pages; } });
+      drawButton(this.ui, 'pn', W - 34, H - 17, 26, 13, '>', { on: () => { this.page = (this.page + 1) % pages; } });
+    }
+    if (this.noteT > 0) text(this.note, W / 2, H - 13, C.gold, 1, 1, 'outline');
+    drawButton(this.ui, 'done', 8, H - 17, 50, 14, 'DONE', { col: '#1f5c3a', on: () => Trans.go(() => Scenes.pop()) });
+  }
+}
+
+addPhrases([
+  ['SHOP EDITOR', 'LADEN-EDITOR', 'РЕДАКТОР МАГАЗИНА'], ['SPECIAL OFFERS:', 'SONDERANGEBOTE:', 'СПЕЦПРЕДЛОЖЕНИЯ:'], ['MY PICKS', 'MEINE AUSWAHL', 'МОЙ ВЫБОР'], ['RANDOM EVERY DAY', 'JEDEN TAG ZUFÄLLIG', 'СЛУЧАЙНО КАЖДЫЙ ДЕНЬ'],
+  ['ADD', 'DAZU', 'ДОБАВИТЬ'], ['4 NEW RANDOM ITEMS EVERY DAY, PRICED BY RARITY', 'JEDEN TAG 4 NEUE ZUFALLS-SACHEN, PREIS NACH SELTENHEIT', '4 СЛУЧАЙНЫХ ПРЕДМЕТА В ДЕНЬ, ЦЕНА ПО РЕДКОСТИ'],
+  ['ADMIN SALE PRICE', 'ADMIN-VERKAUFSPREIS', 'ЦЕНА АДМИН-РАСПРОДАЖИ'], ['THE ADMIN SALE IS ON', 'DER ADMIN-VERKAUF LÄUFT', 'АДМИН-РАСПРОДАЖА ИДЁТ'], ['START THE ADMIN SALE IN EVENTS', 'STARTE DEN ADMIN-VERKAUF BEI EVENTS', 'ЗАПУСТИ АДМИН-РАСПРОДАЖУ В ИВЕНТАХ'],
+  ['NORMAL SHOP', 'NORMALER LADEN', 'ОБЫЧНЫЙ МАГАЗИН'], ['SAVE FOR EVERYONE', 'FÜR ALLE SPEICHERN', 'СОХРАНИТЬ ДЛЯ ВСЕХ'], ['SAVING...', 'SPEICHERT...', 'СОХРАНЯЮ...'],
+  ['THE SHOP IS UPDATED FOR EVERYONE!', 'DER LADEN IST FÜR ALLE AKTUALISIERT!', 'МАГАЗИН ОБНОВЛЁН ДЛЯ ВСЕХ!'], ['MAX {0} ITEMS', 'MAXIMAL {0} SACHEN', 'МАКСИМУМ {0} ПРЕДМЕТОВ'],
+  ['PICK UP TO {0} ITEMS ({1}/{0})', 'WÄHLE BIS ZU {0} SACHEN ({1}/{0})', 'ВЫБЕРИ ДО {0} ПРЕДМЕТОВ ({1}/{0})'], ['DONE', 'FERTIG', 'ГОТОВО'], ['HOLIDAY EVENT', 'FEIERTAGS-EVENT', 'ПРАЗДНИЧНЫЙ ИВЕНТ'],
+]);

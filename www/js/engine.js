@@ -355,10 +355,13 @@ function honkVoice(f, dur, vol, when = 0) {
   o.connect(bp); bp.connect(g); g.connect(AU.sfxBus);
   o.start(t); lfo.start(t); o.stop(t + dur + 0.05); lfo.stop(t + dur + 0.05);
 }
+// shooting sounds other files can add: SHOOT_SFX[weapon] = p => { ... } (p: pitch)
+const SHOOT_SFX = {};
 const sfx = {
   shoot(kind, pid) {
     if (!every('shoot' + pid, 0.05)) return;
     const p = pid ? 1.15 : 1;
+    if (SHOOT_SFX[kind]) { SHOOT_SFX[kind](p); return; }
     if (kind === 'shotgun') { noise(0.12, 0.09, 2500); tone(180 * p, 0.1, 'square', 0.05, 70); }
     else if (kind === 'laser') { tone(1400 * p, 0.12, 'sawtooth', 0.035, 300); }
     else if (kind === 'bubble') { tone(500 * p, 0.08, 'sine', 0.07, 900); }

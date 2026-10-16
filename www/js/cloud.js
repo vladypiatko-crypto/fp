@@ -97,7 +97,7 @@ const Cloud = {
     const acc = Save.data.account = Object.assign({ resetSeen: 0 }, Save.data.account, { uid: this.uid, username: d.username, banned: !!d.banned });
     // the admin reset this player's progress: start over, keeping name, settings and account
     if (d.resetAt && d.resetAt > (acc.resetSeen || 0)) {
-      const keep = { name: Save.data.name, settings: Save.data.settings, muted: Save.data.muted, account: acc, giftsTaken: Save.data.giftsTaken, events: Save.data.events };
+      const keep = { name: Save.data.name, settings: Save.data.settings, muted: Save.data.muted, account: acc, giftsTaken: Save.data.giftsTaken, events: Save.data.events, shopCfg: Save.data.shopCfg };
       Save.data = Object.assign(defaultSave(), keep);
       acc.resetSeen = d.resetAt;
       this.popups.push({ notice: 'THE ADMIN RESET YOUR PROGRESS' });
@@ -125,9 +125,15 @@ const Cloud = {
       for (const k of Object.keys(EVENTS)) EVENT_STATE[k] = !!d[k];
       Save.data.events = Object.assign({}, EVENT_STATE); Save.write(true);
     }, () => {}));
+    // what the admin has put in the shop (special offers, admin sale price, booster prices)
+    this.unsubs.push(this.db.doc('meta/shop').onSnapshot(s => {
+      SHOP_CFG = cleanShopCfg(s.exists ? s.data() : null);
+      Save.data.shopCfg = s.exists ? s.data() : null; Save.write(true);
+    }, () => {}));
     this.pushTimer = setInterval(() => this.push(), 5000);
   },
   setEvent(id, on) { return withTimeout(this.db.doc('meta/event').set({ [id]: !!on }, { merge: true }), 12000); },
+  setShop(cfg) { return withTimeout(this.db.doc('meta/shop').set(cfg), 12000); },
   // a gift from the admin: apply it to the save straight away, remember it so it can't count twice, delete it
   takeGift(doc) {
     const g = doc.data(), taken = Save.data.giftsTaken = Save.data.giftsTaken || [];

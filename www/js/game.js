@@ -299,10 +299,13 @@ class GameScene {
   // ------------------------------------------------------------ draw
   draw() {
     ctx.fillStyle = OUT; ctx.fillRect(0, 0, W, H);
+    // event looks (snow, bats, santa hats...): an event's own level only shows that event
+    const looks = this.level && this.level.event ? [this.level.event] : runningEvents().filter(id => EVENTS[id].kind === 'holiday');
+    const eh = looks.find(id => EVENTS[id].hat); this.eventHat = eh ? EVENTS[eh].hat : null;
     for (const v of this.views) {
       drawView(v);
       if (this.theme.underwater) drawUnderwaterView(v, this.t);
-      if (eventOn('halloween')) drawHalloweenView(v, this.t);
+      for (const id of looks) if (EVENTS[id].view) EVENTS[id].view(v, this.t);
     }
     if (this.views.length === 2) { ctx.fillStyle = OUT; if (W >= H) ctx.fillRect(this.views[0].w, 0, 2, H); else ctx.fillRect(0, this.views[1].h, W, 2); }
     this.ui.begin();
@@ -379,7 +382,7 @@ class GameScene {
     row('ROBOTS SCRAPPED', r.kills);
     row('COINS PICKED UP', r.coins, C.gold);
     row('BONUS', '+' + r.bonus, C.gold);
-    if (this.myPerk) row(this.myPerkDouble ? 'SHOP BONUS (X2 COINS!)' : 'SHOP BONUS', '+' + this.myPerk, C.gold);
+    if (this.myPerk) row(this.myPerkLabel || 'SHOP BONUS', '+' + this.myPerk, C.gold);
     if (r.best) { if ((this.stateT * 4 | 0) % 2) text('NEW BEST TIME!', W / 2, y, C.pink, 1, 1); y += 8; }
     y += 2;
     coinIcon(Math.floor(W / 2 - textW('+' + Math.floor(r.shown), 2) / 2 - 8), y + 1, this.stateT);
@@ -1017,7 +1020,7 @@ function fireMain(p, tgt, wd) {
     R.fx.push({ k: 'zap', pts, t: 0, dur: 0.14, col: '#7dfff5' });
     return;
   }
-  const kind = { shuriken: 'star', bees: 'bee', harpoon: 'harpoon', candycorn: 'candy', bubble: 'bubble', rang: 'rang', corn: 'corn', frost: 'frost', rocket: 'rocket', flame: 'flame', goldgun: 'goldgun', sawblade: 'saw', vortex: 'vortex' }[p.weapon] || 'bullet';
+  const kind = SHOT_KIND[p.weapon] || 'bullet', sx = SHOT_EXTRA[kind];
   for (let i = 0; i < n; i++) {
     let a = base + (i - (n - 1) / 2) * wd.spread;
     if (wd.jitter) a += rand(-wd.jitter, wd.jitter);
@@ -1033,11 +1036,18 @@ function fireMain(p, tgt, wd) {
     if (kind === 'harpoon') shot.pierce += 3;
     if (kind === 'bee') shot.tgt = tgt;
     if (kind === 'vortex') { shot.pierce = 999; shot.tick = 0; }
+    if (sx) { shot.pierce += sx.pierce || 0; if (sx.home) shot.tgt = tgt; }
     R.shots.push(shot);
   }
   if (p.weapon === 'shotgun') burst(mx, my, ['#ffd23f', '#fff8e7'], 4, 50, 0.15);
   else if (p.weapon === 'rocket') burst(mx, my, ['#ffd23f', '#fff8e7', '#ff6fae'], 5, 50, 0.2);
 }
+// which kind of shot each weapon fires (plain 'bullet' if it isn't here)
+const SHOT_KIND = { shuriken: 'star', bees: 'bee', harpoon: 'harpoon', candycorn: 'candy', bubble: 'bubble', rang: 'rang', corn: 'corn', frost: 'frost', rocket: 'rocket', flame: 'flame', goldgun: 'goldgun', sawblade: 'saw', vortex: 'vortex' };
+// shot kinds other files can add (event weapons): SHOT_KIND[weapon] = kind, then SHOT_EXTRA[kind] =
+//   { art: PROJ_ART key, spin: spin speed (or point where it flies), home: homes in, pierce: extra robots, slow: seconds of slow,
+//     boom: explodes on the first robot (with the weapon's aoe), cols: explosion colours }
+const SHOT_EXTRA = {};
 function rocketSmoke(b) { if (Math.random() < 0.6) R.parts.push({ x: b.x - b.vx * 0.02, y: b.y - b.vy * 0.02, vx: rand(-8, 8), vy: rand(-12, -2), life: 0.35, max: 0.35, col: pick(['#d5dbe6', '#fff8e7', '#ffd23f']), size: 1, grav: 0 }); }
 // shots that do something special when they hit or run out
 function shotEnd(b, hitE) {
@@ -1061,6 +1071,9 @@ function shotEnd(b, hitE) {
     burst(b.x, b.y, ['#9d5cff', '#c9a6ff', '#0c0a1a'], 18, 110, 0.5);
     forNear(b.x, b.y, 42, e => { if (d2(b.x, b.y, e.x, e.y) < (30 + e.r) ** 2) { const a = Math.atan2(e.y - b.y, e.x - b.x); hurtEnemy(e, b.dmg, Math.cos(a), Math.sin(a), 160, b.owner); } });
     shakeAt(b.x, b.y, 3); sfx.boom();
+  } else if (SHOT_EXTRA[b.kind] && SHOT_EXTRA[b.kind].boom) {
+    explode(b.x, b.y, b.aoe || 20, b.dmg, b.owner);
+    burst(b.x, b.y, SHOT_EXTRA[b.kind].cols || ['#ffd23f', '#fff8e7'], 14, 120, 0.5, 1, 40);
   } else if (b.kind === 'rocket') { // firework!
     explode(b.x, b.y, b.aoe, b.dmg, b.owner);
     burst(b.x, b.y, pick([['#ff6fae', '#ffd23f'], ['#5ec8ff', '#fff8e7'], ['#51cf66', '#ffd23f'], ['#c06bff', '#ff6fae']]), 16, 140, 0.55, 1, 40);
@@ -1070,7 +1083,7 @@ function updateShots(dt) {
   for (const b of R.shots) {
     b.life -= dt; b.rot += dt * 18;
     if (b.kind === 'bee') { b.vx += rand(-200, 200) * dt; b.vy += rand(-200, 200) * dt; } // bees wobble about
-    if (b.kind === 'feather' || (b.kind === 'bee' && b.max - b.life > 0.3)) { // home in on the target (or the nearest robot once it's gone)
+    if (b.kind === 'feather' || (b.kind === 'bee' && b.max - b.life > 0.3) || (SHOT_EXTRA[b.kind] && SHOT_EXTRA[b.kind].home && b.max - b.life > 0.12)) { // home in on the target (or the nearest robot once it's gone)
       if (!b.tgt || b.tgt.dead) b.tgt = nearestEnemy(b.x, b.y, 120);
       if (b.tgt) { const dx = b.tgt.x - b.x, dy = b.tgt.y - b.y, dl = Math.hypot(dx, dy) || 1, sp = 170; b.vx += (dx / dl * sp - b.vx) * Math.min(1, dt * 7); b.vy += (dy / dl * sp - b.vy) * Math.min(1, dt * 7); }
     }
@@ -1116,11 +1129,12 @@ function updateShots(dt) {
       if (b.kind === 'mine' && b.max - b.life < 0.4) return; // not armed yet
       const rr = e.r + b.r + 1;
       if (d2(b.x, b.y, e.x, e.y) < rr * rr) {
-        if (b.kind === 'bubble' || b.kind === 'rocket' || b.kind === 'mine') { b.life = 0; shotEnd(b, e); return true; }
+        if (b.kind === 'bubble' || b.kind === 'rocket' || b.kind === 'mine' || (SHOT_EXTRA[b.kind] && SHOT_EXTRA[b.kind].boom)) { b.life = 0; shotEnd(b, e); return true; }
         b.hit.add(e.id);
         const l = Math.hypot(b.vx, b.vy) || 1;
         hurtEnemy(e, b.dmg, b.vx / l, b.vy / l, b.kb, b.owner);
         if (b.kind === 'frost') { e.slowT = WEAPONS.frost.slow; burst(b.x, b.y, ['#9fdcff', '#ffffff'], 4, 50, 0.3); }
+        else if (SHOT_EXTRA[b.kind] && SHOT_EXTRA[b.kind].slow) { e.slowT = SHOT_EXTRA[b.kind].slow; burst(b.x, b.y, ['#ffffff', '#bde6ff'], 4, 50, 0.3); }
         else if (b.kind === 'flame') { if (Math.random() < 0.3) burst(b.x, b.y, ['#ff8c1a', '#ffd23f'], 1, 30, 0.2); }
         else burst(b.x, b.y, [b.col, '#fff8e7'], 2, 40, 0.2);
         if (b.pierce-- <= 0) { b.life = 0; shotEnd(b, e); return true; }
@@ -1169,7 +1183,7 @@ function updateBombs(dt) {
   R.bombs = R.bombs.filter(b => !b.done);
 }
 function gainXp(p, v) {
-  p.xp += v * (1 + 0.15 * lvl(p, 'wisdom')) * (1 + 0.05 * trainLv(p, 'xp'));
+  p.xp += v * (1 + 0.15 * lvl(p, 'wisdom')) * (1 + 0.05 * trainLv(p, 'xp')) * (eventOn('doublexp') ? 2 : 1);
   while (p.xp >= p.xpNext) {
     p.xp -= p.xpNext; p.level++; p.xpNext = xpFor(p.level); p.pending++;
     sfx.level(); floatText(p.x, p.y - 20, 'LEVEL UP!', C.gold, 1.2);
@@ -1218,7 +1232,7 @@ function updateDrops(dt) {
 function updateParticles(dt) {
   for (const q of R.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.vy += (q.grav || 0) * dt; q.vx *= 0.96; q.life -= dt; if (q.vr) q.rot += q.vr * dt; }
   R.parts = R.parts.filter(q => q.life > 0);
-  for (const q of R.tparts) { q.x += q.vx * dt + (q.sway !== undefined ? Math.sin(q.life * 6 + q.sway) * 0.3 : 0); q.y += q.vy * dt; q.life -= dt; }
+  for (const q of R.tparts) { q.x += q.vx * dt + (q.sway !== undefined ? Math.sin(q.life * 6 + q.sway) * 0.3 : 0); q.y += q.vy * dt; if (q.grav) q.vy += q.grav * dt; q.life -= dt; }
   R.tparts = R.tparts.filter(q => q.life > 0);
   for (const t of R.texts) { t.y += t.vy * dt; t.vy *= 0.94; t.life -= dt; }
   R.texts = R.texts.filter(t => t.life > 0);
@@ -1612,6 +1626,7 @@ function drawView(v) {
     else if (b.kind === 'corn') drawSprX(PROJ_ART.corn, b.x, b.y, { rot: b.rot * 0.3 });
     else if (b.kind === 'saw') drawSprX(PROJ_ART.saw, b.x, b.y, { rot: b.rot * 1.5 });
     else if (b.kind === 'candy') drawSprX(PROJ_ART.candycorn, b.x, b.y, { rot: Math.atan2(b.vy, b.vx) });
+    else if (SHOT_EXTRA[b.kind]) { const sx = SHOT_EXTRA[b.kind]; drawSprX(PROJ_ART[sx.art], b.x, b.y, { rot: sx.spin ? b.rot * sx.spin : Math.atan2(b.vy, b.vx) }); }
     else if (b.kind === 'star') drawSprX(PROJ_ART.star, b.x, b.y, { rot: b.rot * 2 });
     else if (b.kind === 'bee') { drawSprX(PROJ_ART.bee, b.x, b.y); if ((b.rot * 3 | 0) % 2) { ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(b.x - 1), Math.round(b.y - 2), 3, 1); } }
     else if (b.kind === 'harpoon') { const l = Math.hypot(b.vx, b.vy) || 1, ux = b.vx / l, uy = b.vy / l; pline(b.x - ux * 9, b.y - uy * 9, b.x, b.y, '#a0642d', 2); pline(b.x, b.y, b.x + ux * 3, b.y + uy * 3, '#ffffff', 2); }
@@ -1767,7 +1782,7 @@ function drawEnemy(e) {
   if (e.d.ai === 'charger') drawSprX(s, e.x, e.y + bob, { rot: e.rot, white: e.flash > 0 });
   else drawSprX(s, e.x, e.y + bob - e.z + s.h * sc / 2, { flip: e.flip, white: e.flash > 0, sc, sx, sy, ay: 1 });
   if (fuse) pring(e.x, e.y, 4 + (1 - e.fuse / 0.45) * 22, 'rgba(232,52,59,0.6)');
-  if (!e.boss && e.d.ai !== 'charger' && eventOn('halloween')) drawSprX(DECO_ART.pumpkinS, e.x, e.y + bob - e.z - s.h * sc / 2 + 3, { ay: 1 }); // Halloween: pumpkin hats
+  if (!e.boss && e.d.ai !== 'charger' && R.eventHat) drawSprX(R.eventHat, e.x, e.y + bob - e.z - s.h * sc / 2 + 3, { ay: 1 }); // events: pumpkins, santa hats...
   if (e.slowT > 0) { // frozen: icy ring and sparkles
     pring(e.x, e.y + 1, e.r * sc + 2, 'rgba(159,220,255,0.75)');
     if ((e.anim * 6 | 0) % 2) { ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(e.x + Math.sin(e.anim * 9) * e.r * sc), Math.round(e.y - e.r * sc + bob), 1, 1); }
