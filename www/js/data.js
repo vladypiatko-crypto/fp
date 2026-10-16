@@ -173,9 +173,23 @@ const UPGRADES = [
   { k: 'feather', name: 'FEATHER DARTS', max: 5, d: l => (l ? 'MORE DARTS, MORE DAMAGE' : 'HOMING FEATHERS HUNT ROBOTS') },
   { k: 'puddle', name: 'SPLASH PUDDLE', max: 5, d: l => (l ? 'BIGGER PUDDLES, MORE DAMAGE' : 'DROP PUDDLES THAT HURT ROBOTS') },
   { k: 'shield', name: 'BUBBLE SHIELD', max: 5, d: l => (l ? 'SHIELD COMES BACK FASTER' : 'BLOCKS A HIT, THEN RECHARGES') },
+  // more gun cards
+  { k: 'bigshot', name: 'BIG BULLETS', max: 3, d: () => 'BIGGER SHOTS, +12% DAMAGE' },
+  { k: 'crit', name: 'LUCKY SHOT', max: 5, d: () => '+8% CHANCE FOR DOUBLE DAMAGE' },
+  { k: 'reach', name: 'EAGLE EYE', max: 3, d: () => 'AIM AND SHOOT 15% FARTHER' },
+  // more duck cards
+  { k: 'armor', name: 'TOUGH FEATHERS', max: 5, d: () => 'TAKE 8% LESS DAMAGE' },
+  { k: 'wisdom', name: 'BOOKWORM', max: 4, d: () => '+15% XP FROM GEMS' },
+  { k: 'greed', name: 'LUCKY COINS', max: 4, d: () => 'ROBOTS DROP MORE COINS' },
+  { k: 'vamp', name: 'VAMPIRE BITE', max: 3, d: () => 'HEAL A LITTLE FOR EVERY ROBOT' },
+  { k: 'phoenix', name: 'SECOND WIND', max: 1, d: () => 'ONCE PER RUN: GET BACK UP WITH HALF HP' },
+  // more power-ups
+  { k: 'turret', name: 'DUCK TURRET', max: 5, d: l => (l ? 'TURRET SHOOTS FASTER, HITS HARDER' : 'A LITTLE TURRET FLIES WITH YOU') },
+  { k: 'sunbeam', name: 'SUN BEAM', max: 5, d: l => (l ? 'BEAMS COME FASTER, HIT HARDER' : 'BEAMS FROM THE SKY ZAP ROBOTS') },
+  { k: 'nova', name: 'FROST NOVA', max: 5, d: l => (l ? 'BIGGER, COLDER NOVA' : 'FREEZES ROBOTS AROUND YOU') },
 ];
 // power-ups: you can carry 3 of them per run; after that only those 3 show up (plus gun and duck upgrades)
-const SIDE_WEAPONS = ['egg', 'bread', 'zap', 'quack', 'feather', 'puddle', 'shield'];
+const SIDE_WEAPONS = ['egg', 'bread', 'zap', 'quack', 'feather', 'puddle', 'shield', 'turret', 'sunbeam', 'nova'];
 const POWER_SLOTS = 3;
 // a maxed power-up can (rarely) be OVERCHARGED: a red card that makes it much stronger
 const OVER_CHANCE = 0.16;
@@ -184,6 +198,8 @@ const OVERCHARGE = {
   zap: ['THUNDERSTORM', 'ZAPS JUMP TO EVERYTHING'], quack: ['SONIC QUACK', 'GIANT QUACK, TWICE AS OFTEN'],
   feather: ['FEATHER STORM', 'TWICE THE DARTS, THEY PIERCE'], puddle: ['LAVA LAKE', 'HUGE BURNING PUDDLES'],
   shield: ['MIRROR SHIELD', 'RECHARGES FAST, POPS BULLETS'],
+  turret: ['TWIN TURRETS', 'A SECOND TURRET, BOTH SHOOT FASTER'], sunbeam: ['SOLAR FLARE', 'THREE GIANT BEAMS AT ONCE'],
+  nova: ['BLIZZARD', 'HUGE NOVA, TWICE AS OFTEN, FREEZES LONGER'],
 };
 const overCard = k => ({ k: 'over:' + k, over: k, name: OVERCHARGE[k][0], max: 1, d: () => OVERCHARGE[k][1] });
 

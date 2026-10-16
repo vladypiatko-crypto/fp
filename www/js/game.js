@@ -35,6 +35,7 @@ function nearestEnemy(x, y, maxR, skip) {
 const lvl = (p, k) => p.up[k] || 0;
 const pSpeed = p => 70 * (1 + 0.1 * lvl(p, 'speed'));
 const pMagnet = p => 34 * (1 + 0.45 * lvl(p, 'magnet'));
+const reachMul = p => 1 + 0.15 * lvl(p, 'reach');
 const pDashCd = p => 1.2 * (1 - 0.12 * lvl(p, 'dash'));
 const xpFor = lv => Math.round(3 + lv * 4 + lv * lv * 0.45);
 const alivePlayers = () => R.players.filter(p => !p.down);
@@ -517,10 +518,12 @@ function director(dt) {
 // ================================================================ damage
 function hurtEnemy(e, dmg, kx, ky, kb, owner) {
   if (e.dead || e.spawnT > 0 || e.bs === 'burrow') return; // a burrowed boss is safe underground
+  const crit = owner && owner.up && lvl(owner, 'crit') && Math.random() < 0.08 * lvl(owner, 'crit');
+  if (crit) dmg *= 2; // lucky shot
   e.hp -= dmg; e.flash = 0.08;
   const res = e.d.heavy || 1;
   e.kx += kx * kb * res; e.ky += ky * kb * res;
-  floatText(e.x + rand(-3, 3), e.y - e.r - 6 - e.z, Math.round(dmg), dmg >= 40 ? C.gold : C.white, 0.45);
+  floatText(e.x + rand(-3, 3), e.y - e.r - 6 - e.z, Math.round(dmg) + (crit ? '!' : ''), crit ? '#ff8c1a' : dmg >= 40 ? C.gold : C.white, crit ? 0.6 : 0.45);
   if (e.boss && dmg > e.maxHp * 0.015) Impact.trigger('small');
   if (e.hp <= 0) killEnemy(e, owner); else if (e.d.fx === 'goo') sfx.squish(); else sfx.hit();
 }
@@ -539,7 +542,8 @@ function killEnemy(e, owner, quiet) {
   }
   if (quiet) return;
   if (e.d.xp) dropAt(e.x, e.y, 'xp', e.d.xp * xpMul());
-  const coinChance = e.type === 'tank' ? 0.2 : 0.06;
+  const coinChance = (e.type === 'tank' ? 0.2 : 0.06) * (1 + 0.5 * (owner && owner.up ? lvl(owner, 'greed') : 0));
+  if (owner && owner.up && lvl(owner, 'vamp') && !owner.down) owner.hp = Math.min(owner.maxHp, owner.hp + 0.4 * lvl(owner, 'vamp'));
   if (Math.random() < coinChance) dropAt(e.x + rand(-3, 3), e.y + rand(-3, 3), 'coin', 1);
   const luck = Math.random();
   if (luck < 0.011) R.items.push({ k: 'heart', x: e.x, y: e.y, t: 0 });
@@ -594,10 +598,19 @@ function hurtPlayer(p, dmg) {
     if (p.over.shield) for (const b of R.eshots) if (d2(p.x, p.y, b.x, b.y) < 60 * 60) b.life = 0;
     return;
   }
+  dmg *= 1 - 0.08 * lvl(p, 'armor'); // tough feathers
   p.hp -= dmg; p.iframes = 0.6; p.hurtFlash = 0.25; p.squash = 0.2;
   sfx.hurt(); shakeFor(p, 4);
   floatText(p.x, p.y - 16, '-' + Math.round(dmg), C.red, 0.7);
   burst(p.x, p.y - 4, ['#fff8e7', PCOL[p.id]], 6, 50, 0.4);
+  if (p.hp <= 0 && lvl(p, 'phoenix') && !p.phoenixUsed) { // second wind: once per run, straight back up
+    p.phoenixUsed = true; p.hp = p.maxHp * 0.5; p.iframes = 1.5;
+    R.fx.push({ k: 'ring', x: p.x, y: p.y - 6, r: 50, t: 0, dur: 0.5, col: '#ff8c1a' });
+    burst(p.x, p.y - 6, ['#ff8c1a', '#ffd23f', '#e8343b'], 26, 100, 0.7); sfx.revive();
+    forNear(p.x, p.y, 54, e => { const a = Math.atan2(e.y - p.y, e.x - p.x); hurtEnemy(e, 20 * tScale(), Math.cos(a), Math.sin(a), 300, p); });
+    banner('SECOND WIND!', '#ff8c1a', 1.6);
+    return;
+  }
   if (p.hp <= 0) {
     p.hp = 0; p.down = true; p.reviveT = 0; impactAt('huge', p.x, p.y);
     burst(p.x, p.y, ['#fff8e7', '#ffd23f'], 20, 90, 0.7);
@@ -679,7 +692,7 @@ function updatePlayer(p, dt) {
   }
 
   // auto-aim: lock on the nearest robot within range
-  const range = WEAPONS[p.weapon].range;
+  const range = WEAPONS[p.weapon].range * reachMul(p);
   const tgt = nearestEnemy(p.x, p.y, range);
   p.target = tgt;
   if (tgt) { p.aim = Math.atan2(tgt.y - p.y, tgt.x - p.x); p.ax = Math.cos(p.aim); p.ay = Math.sin(p.aim); }
@@ -806,6 +819,54 @@ function fireWeapons(p, dt, tgt) {
       } else p.tm.feather = 0.25;
     }
   }
+  // --- duck turret: a little turret floats next to you and shoots the closest robot
+  const tu = lvl(p, 'turret');
+  if (tu) {
+    p.tm.turret = (p.tm.turret || 0) - dt;
+    if (p.tm.turret <= 0) {
+      p.tm.turret = (0.95 - 0.1 * tu) * (p.over.turret ? 0.6 : 1);
+      for (const [tx, ty] of turretSpots(p)) {
+        const t = nearestEnemy(tx, ty, 140); if (!t) continue;
+        const a = Math.atan2(t.y - ty, t.x - tx);
+        R.shots.push({ kind: 'bullet', x: tx, y: ty, vx: Math.cos(a) * 240, vy: Math.sin(a) * 240, life: 0.7, max: 0.7, dmg: (6 + 3 * tu) * tScale(), pierce: 0, hit: new Set(), owner: p, r: 1, col: '#5ec8ff', kb: 30, rot: 0 });
+        R.fx.push({ k: 'muzzle', x: tx + Math.cos(a) * 3, y: ty + Math.sin(a) * 3, t: 0, dur: 0.06, col: '#5ec8ff' });
+      }
+    }
+  }
+  // --- sun beam: a beam from the sky hits a robot (three with the solar flare)
+  const sb = lvl(p, 'sunbeam');
+  if (sb) {
+    p.tm.sunbeam = (p.tm.sunbeam || 0) - dt;
+    if (p.tm.sunbeam <= 0) {
+      const near = R.enemies.filter(e => !e.dead && e.spawnT <= 0 && e.bs !== 'burrow' && d2(e.x, e.y, p.x, p.y) < 150 * 150);
+      if (near.length) {
+        const of = !!p.over.sunbeam;
+        p.tm.sunbeam = 3.2 - 0.3 * sb;
+        for (let i = 0; i < (of ? 3 : 1); i++) {
+          const t = pick(near), r = of ? 26 : 14;
+          R.fx.push({ k: 'sunbeam', x: t.x, y: t.y, r, t: 0, dur: 0.35 });
+          forNear(t.x, t.y, r + 8, e => { if (d2(t.x, t.y, e.x, e.y) < (r + e.r) ** 2) hurtEnemy(e, (20 + 12 * sb) * tScale() * (of ? 1.5 : 1), 0, 0, 0, p); });
+          burst(t.x, t.y, ['#ffd23f', '#fff3b0', '#ffffff'], 10, 70, 0.4);
+        }
+        sfx.zap();
+      } else p.tm.sunbeam = 0.3;
+    }
+  }
+  // --- frost nova: freezes and hurts robots around you
+  const nv = lvl(p, 'nova');
+  if (nv) {
+    p.tm.nova = (p.tm.nova || 0) - dt;
+    const bz = !!p.over.nova, rad = (40 + 6 * nv) * (bz ? 1.8 : 1);
+    if (p.tm.nova <= 0) {
+      if (nearestEnemy(p.x, p.y, rad)) {
+        p.tm.nova = (4.5 - 0.4 * nv) * (bz ? 0.5 : 1);
+        R.fx.push({ k: 'ring', x: p.x, y: p.y - 4, r: rad, t: 0, dur: 0.35, col: '#9fdcff' });
+        burst(p.x, p.y - 4, ['#9fdcff', '#ffffff'], 16, rad * 1.5, 0.4);
+        forNear(p.x, p.y, rad + 8, e => { if (d2(p.x, p.y, e.x, e.y) < (rad + e.r) ** 2) { hurtEnemy(e, (5 + 3 * nv) * tScale(), 0, 0, 0, p); e.slowT = (1.5 + 0.2 * nv) * (bz ? 1.6 : 1); } });
+        sfx.pop();
+      } else p.tm.nova = 0.25;
+    }
+  }
   // --- splash puddle: drop a puddle that hurts robots standing in it
   const pu = lvl(p, 'puddle');
   if (pu) {
@@ -849,7 +910,7 @@ function drawPuddle(q) {
 }
 function fireMain(p, tgt, wd) {
   const pw = lvl(p, 'power'), multi = lvl(p, 'spread');
-  const dmg = wd.dmg * (1 + 0.35 * pw) * tScale();
+  const dmg = wd.dmg * (1 + 0.35 * pw) * (1 + 0.12 * lvl(p, 'bigshot')) * tScale();
   const base = Math.atan2(tgt.y - p.y, tgt.x - p.x);
   const n = wd.n + multi * (p.weapon === 'shotgun' ? 2 : 1);
   const mx = p.x + Math.cos(base) * 7, my = p.y - 5 + Math.sin(base) * 7;
@@ -861,7 +922,7 @@ function fireMain(p, tgt, wd) {
     const rainbow = p.weapon === 'prism';
     for (let i = 0; i < n; i++) {
       const a = base + (i - (n - 1) / 2) * wd.spread, cx = Math.cos(a), cy = Math.sin(a);
-      const len = wd.range;
+      const len = wd.range * reachMul(p);
       for (const e of R.enemies) {
         if (e.dead || e.spawnT > 0) continue;
         const ex = e.x - mx, ey = e.y - my, proj = ex * cx + ey * cy;
@@ -907,7 +968,7 @@ function fireMain(p, tgt, wd) {
   }
   if (p.weapon === 'sniper') { // one big instant shot through everything in the line
     for (let i = 0; i < n; i++) {
-      const a = base + (i - (n - 1) / 2) * wd.spread, cx = Math.cos(a), cy = Math.sin(a), len = wd.range;
+      const a = base + (i - (n - 1) / 2) * wd.spread, cx = Math.cos(a), cy = Math.sin(a), len = wd.range * reachMul(p);
       let hits = 0;
       for (const e of R.enemies) {
         if (e.dead || e.spawnT > 0) continue;
@@ -961,6 +1022,7 @@ function fireMain(p, tgt, wd) {
     if (kind === 'rang') { shot.ang = a; shot.sp = sp; shot.back = false; }
     if (kind === 'rocket') { shot.tgt = tgt; shot.pierce = 0; }
     if (kind === 'saw') shot.pierce = wd.bounces + lvl(p, 'pierce');
+    shot.r += lvl(p, 'bigshot'); shot.life *= reachMul(p); shot.max = shot.life; // big bullets, eagle eye
     if (kind === 'candy' || kind === 'star') shot.pierce += 1;
     if (kind === 'harpoon') shot.pierce += 3;
     if (kind === 'bee') shot.tgt = tgt;
@@ -1101,7 +1163,7 @@ function updateBombs(dt) {
   R.bombs = R.bombs.filter(b => !b.done);
 }
 function gainXp(p, v) {
-  p.xp += v;
+  p.xp += v * (1 + 0.15 * lvl(p, 'wisdom'));
   while (p.xp >= p.xpNext) {
     p.xp -= p.xpNext; p.level++; p.xpNext = xpFor(p.level); p.pending++;
     sfx.level(); floatText(p.x, p.y - 20, 'LEVEL UP!', C.gold, 1.2);
@@ -1356,7 +1418,7 @@ const CARD_IN = 0.14, CARD_FLIP = 0.3, CARD_STAGGER = 0.12;
 const CARD_READY = CARD_IN + CARD_STAGGER * 2 + CARD_FLIP; // all three cards are face up
 const CARD_TIME = 12;                                       // auto-pick while the game keeps running
 const CARD_STYLE = { weapon: ['#ff6fae', 'POWER-UP'], main: ['#ffd23f', 'GUN'], stat: ['#5ec8ff', 'DUCK'], snack: ['#51cf66', 'SNACK'], over: ['#ff3b3b', 'OVERCHARGE'] };
-const cardKind = k => (k.startsWith('over:') ? 'over' : SIDE_WEAPONS.includes(k) ? 'weapon' : ['rapid', 'power', 'spread', 'pierce'].includes(k) ? 'main' : k === 'snack' ? 'snack' : 'stat');
+const cardKind = k => (k.startsWith('over:') ? 'over' : SIDE_WEAPONS.includes(k) ? 'weapon' : ['rapid', 'power', 'spread', 'pierce', 'bigshot', 'crit', 'reach'].includes(k) ? 'main' : k === 'snack' ? 'snack' : 'stat');
 const picking = p => p.pending > 0 && !p.down && !p.gone;
 function choosing() { return R.state === 'play' && R.players.some(picking); }
 function cardsPauseAll() {
@@ -1596,6 +1658,12 @@ function drawView(v) {
         const [x0, y0] = f.pts[i], [x1, y1] = f.pts[i + 1], mx = (x0 + x1) / 2 + rand(-6, 6), my = (y0 + y1) / 2 + rand(-6, 6);
         pline(x0, y0, mx, my, f.col || '#fff36b', 2); pline(mx, my, x1, y1, f.col || '#fff36b', 2); pline(x0, y0, mx, my, '#fff'); pline(mx, my, x1, y1, '#fff');
       }
+    } else if (f.k === 'sunbeam') { // a column of light from the sky
+      const w = f.r * (1 - k * 0.7);
+      ctx.globalAlpha = 0.85 * (1 - k);
+      ctx.fillStyle = '#fff3b0'; ctx.fillRect(Math.round(f.x - w / 2), Math.round(f.y - 220), Math.round(w), 220);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(f.x - w / 6), Math.round(f.y - 220), Math.max(1, Math.round(w / 3)), 220);
+      ctx.globalAlpha = 1; pring(f.x, f.y, f.r * (0.5 + k), '#ffd23f', 1, f.r * 0.4 * (0.5 + k));
     } else if (f.k === 'slash') { // a bright arc swept in the swing direction
       const n = 9, sweep = Math.min(1, k * 1.6);
       for (let i = 0; i < n - 1; i++) {
@@ -1705,6 +1773,12 @@ function drawEnemy(e) {
     ctx.fillStyle = '#e8343b'; ctx.fillRect(x, y, Math.max(1, Math.round(w * e.hp / e.maxHp)), 1);
   }
 }
+// where the duck turret(s) hover: beside the duck, bobbing
+function turretSpots(p) {
+  const b = Math.sin(p.anim * 3) * 2, out = [[p.x - 13, p.y - 16 + b]];
+  if (p.over && p.over.turret) out.push([p.x + 13, p.y - 16 - b]);
+  return out;
+}
 function drawPlayer(p) {
   if (p.down) {
     const set = duckSet(p.lo.skin);
@@ -1729,6 +1803,7 @@ function drawPlayer(p) {
     ember: (x, y) => R.tparts.push({ x, y, vx: rand(-4, 4), vy: rand(-18, -8), life: 0.4, max: 0.4, col: pick(['#ff8c1a', '#ffd23f']), size: 1 }),
   });
   for (const [x, y] of eggs) if (y >= p.y - 3) drawSprX(ART.eggOrb, x, y, { sc: eggSc });
+  if (lvl(p, 'turret')) for (const [x, y] of turretSpots(p)) { shadow(x, y + 12, 3); drawSprX(ICON.turret, x, y); }
   if (lvl(p, 'shield') && p.shieldT <= 0 && !p.choice) { // bubble shield is up
     const r = 11 + Math.sin(p.anim * 4) * 0.6, ov = p.over && p.over.shield;
     ctx.globalAlpha = 0.16; pcirc(p.x, p.y - 7, r, ov ? '#ffd1e6' : '#9fdcff'); ctx.globalAlpha = 0.8;
