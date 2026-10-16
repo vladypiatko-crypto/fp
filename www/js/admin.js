@@ -60,6 +60,40 @@ class AdminScene {
     if (this.note) text(this.note, W / 2, top + 10, C.gray, 1, 1);
     if (!this.kb.value && list.length) text('NEWEST PLAYERS', W / 2, H - 13, C.grayD, 1, 1, null);
     drawButton(this.ui, 'back', 4, H - 17, 40, 13, 'BACK', { on: () => Trans.go(() => Scenes.pop()), icon: ICON.back });
+    drawButton(this.ui, 'events', 4, 22, 40, 14, 'EVENTS', { on: () => Trans.go(() => Scenes.push(new EventAdminScene())), col: '#8f4a00' });
+  }
+}
+
+// ================================================================ events: switch Halloween (and later ones) on and off for everyone
+class EventAdminScene {
+  constructor() { this.T = 0; this.ui = new UI(); this.note = ''; this.noteT = 0; this.busy = null; }
+  update(dt) {
+    this.T += dt; this.noteT = Math.max(0, this.noteT - dt);
+    const acts = Input.menu();
+    if (acts.back) { sfx.uiBack(); Trans.go(() => Scenes.pop()); return; }
+    this.ui.update(dt, acts);
+  }
+  toggle(id) {
+    if (this.busy) return;
+    const on = !eventOn(id); this.busy = id;
+    Cloud.setEvent(id, on).then(() => { EVENT_STATE[id] = on; this.note = on ? fmt('{0} IS ON FOR EVERYONE!', EVENTS[id].name) : fmt('{0} IS OVER', EVENTS[id].name); sfx.chestOpen(on ? 'legendary' : 'rare'); })
+      .catch(e => { this.note = e.message === 'timeout' ? 'NO INTERNET CONNECTION?' : 'UPDATE THE DATABASE RULES FIRST'; sfx.uiBack(); })
+      .then(() => { this.busy = null; this.noteT = 3; });
+  }
+  draw() {
+    drawChecker(); this.ui.begin();
+    text('EVENTS', W / 2, 5, '#ff8c1a', 2, 1, 'outline');
+    text('EVERY PLAYER SEES THE EVENT AS SOON AS YOU SWITCH IT ON', W / 2, 24, C.gray, 1, 1, null);
+    Object.keys(EVENTS).forEach((id, i) => {
+      const ev = EVENTS[id], on = eventOn(id), y = 40 + i * 30, pw = Math.min(W - 24, 260), px = Math.floor(W / 2 - pw / 2);
+      panel(px, y, pw, 24, on ? '#3b2410' : C.ui, on ? ev.col : OUT, C.uiL, false);
+      if (id === 'halloween') drawSprX(DECO_ART.bigpumpkin, px + 14, y + 20, { ay: 1 });
+      text(ev.name, px + 30, y + 5, ev.col, 1, 0, null);
+      text(on ? 'RUNNING NOW' : 'OFF', px + 30, y + 14, on ? C.green : C.gray, 1, 0, null);
+      drawButton(this.ui, 'ev' + id, px + pw - 66, y + 5, 60, 14, this.busy === id ? '...' : on ? 'STOP' : 'START', { col: on ? '#6b1f2a' : '#1f5c3a', def: i === 0, on: () => this.toggle(id) });
+    });
+    if (this.noteT > 0) text(this.note, W / 2, H - 32, C.gold, 1, 1, 'outline');
+    drawButton(this.ui, 'back', 4, H - 17, 40, 13, 'BACK', { on: () => Trans.go(() => Scenes.pop()), icon: ICON.back });
   }
 }
 

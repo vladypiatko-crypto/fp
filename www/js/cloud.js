@@ -97,7 +97,7 @@ const Cloud = {
     const acc = Save.data.account = Object.assign({ resetSeen: 0 }, Save.data.account, { uid: this.uid, username: d.username, banned: !!d.banned });
     // the admin reset this player's progress: start over, keeping name, settings and account
     if (d.resetAt && d.resetAt > (acc.resetSeen || 0)) {
-      const keep = { name: Save.data.name, settings: Save.data.settings, muted: Save.data.muted, account: acc, giftsTaken: Save.data.giftsTaken };
+      const keep = { name: Save.data.name, settings: Save.data.settings, muted: Save.data.muted, account: acc, giftsTaken: Save.data.giftsTaken, events: Save.data.events };
       Save.data = Object.assign(defaultSave(), keep);
       acc.resetSeen = d.resetAt;
       this.popups.push({ notice: 'THE ADMIN RESET YOUR PROGRESS' });
@@ -119,8 +119,15 @@ const Cloud = {
       // only gifts the database has confirmed (a gift written by this device itself would be refused there)
       qs.docChanges().forEach(ch => { if ((ch.type === 'added' || ch.type === 'modified') && !ch.doc.metadata.hasPendingWrites) this.takeGift(ch.doc); });
     }, () => {}));
+    // events (Halloween...) the admin has switched on, live for everyone
+    this.unsubs.push(this.db.doc('meta/event').onSnapshot(s => {
+      const d = s.exists ? s.data() : {};
+      for (const k of Object.keys(EVENTS)) EVENT_STATE[k] = !!d[k];
+      Save.data.events = Object.assign({}, EVENT_STATE); Save.write(true);
+    }, () => {}));
     this.pushTimer = setInterval(() => this.push(), 5000);
   },
+  setEvent(id, on) { return withTimeout(this.db.doc('meta/event').set({ [id]: !!on }, { merge: true }), 12000); },
   // a gift from the admin: apply it to the save straight away, remember it so it can't count twice, delete it
   takeGift(doc) {
     const g = doc.data(), taken = Save.data.giftsTaken = Save.data.giftsTaken || [];

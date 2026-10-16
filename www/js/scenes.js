@@ -51,7 +51,7 @@ class TitleScene {
     this.news = ONLINE_READY && Save.data.onlineNewsSeen === false ? { t: 0 } : null;
     this.ducks = [0, 1].map(i => ({ x: W * (0.3 + i * 0.4), y: H * 0.86, tx: 0, ty: 0, wait: rand(0.5, 2), facing: 'down', frame: 0, anim: rand(0, 5), hop: 0, turnT: 0, quackT: 0 }));
     this.ship = { x: -80, t: 6 };
-    Music.play('title');
+    Music.play(eventOn('halloween') ? 'spooky' : 'title');
   }
   // the logo words (in QUACK language even the logo quacks); rebuilt when the language changes
   buildWords() {
@@ -132,6 +132,7 @@ class TitleScene {
     const kind = this.modal;
     Trans.go(() => {
       if (kind === 'endless') Scenes.set(new GameScene({ mode: 'endless', np }));
+      else if (kind === 'event') Scenes.set(new GameScene({ mode: 'story', level: HALLOWEEN_LEVEL, np }));
       else if (!Save.data.introSeen) { Save.data.introSeen = true; Save.write(); Scenes.set(new CutsceneScene('intro', () => Scenes.set(new MapScene(np)), np)); }
       else Scenes.set(new MapScene(np));
     });
@@ -152,6 +153,7 @@ class TitleScene {
     ctx.fillStyle = pondPat; ctx.fillRect(0, gy, W, H - gy);
     pellipse(W * 0.12, gy + 18, 34, 9, OUT); pellipse(W * 0.12, gy + 18, 33, 8, '#2f6fb3'); pellipse(W * 0.12 - 4, gy + 16, 20, 3, '#4f95d8');
     drawSpr(DECO_ART.tree, W * 0.04, gy - 2); drawSpr(DECO_ART.tree, W * 0.96, gy + 4); drawSpr(DECO_ART.cattail, W * 0.24, gy + 16);
+    if (eventOn('halloween')) drawHalloweenTitle(gy, this.T);
     // ducks wandering around
     if (this.t > 1.6) {
       const order = this.ducks.map((d, i) => [d, i]).sort((a, b) => a[0].y - b[0].y);
@@ -204,6 +206,7 @@ class TitleScene {
     // main buttons slide up one after another
     const labels = [['story', 'STORY', ICON.play, () => this.openModal('story')], ['endless', 'ENDLESS', null, () => this.openModal('endless')],
       ['online', 'ONLINE', null, () => ONLINE_READY ? Trans.go(() => Scenes.set(new OnlineScene())) : this.openModal('online')], ['locker', 'LOCKER', ICON.locker, () => Trans.go(() => Scenes.push(new LockerScene({})))]];
+    if (eventOn('halloween')) labels.push(['event', 'HALLOWEEN', null, () => this.openModal('event')]);
     const stack = W < 300, n = labels.length;
     const bw = stack ? 96 : Math.min(84, Math.floor((W - 40) / n)), bh = 18, gap = 6;
     const rowW = stack ? bw : bw * n + gap * (n - 1);
@@ -215,7 +218,8 @@ class TitleScene {
       const ui = this.modal ? new UI() : this.ui;
       if (id === 'online' && !ONLINE_READY) drawWipButton(ui, id, x, y, bw, bh, label, this.T, on);
       else if (id === 'online' && this.news && this.news.t < 1.1) { this.onlineXY = [x + bw / 2, y + bh / 2]; this.drawUnveil(x, y, bw, bh, label); }
-      else drawButton(ui, id, x, y, bw, bh, label, { on, icon, def: i === 0, col: i === 0 ? '#3d2f63' : C.ui });
+      else drawButton(ui, id, x, y, bw, bh, label, { on, icon, def: i === 0, col: id === 'event' ? '#8f4a00' : i === 0 ? '#3d2f63' : C.ui, tcol: id === 'event' ? '#ffd23f' : undefined });
+      if (id === 'event') { drawSprX(DECO_ART.pumpkinS, x + 4, y + 2 + Math.round(Math.sin(this.T * 4)), { ay: 1 }); drawNewTag(x + bw - 10, y, this.T); }
       if (id === 'locker' && Save.anyNew()) drawNewTag(x + bw - 10, y, this.T);
     });
     // corner widgets
@@ -315,7 +319,7 @@ class TitleScene {
     const k = Ease.outBack(Math.min(1, this.modalT / 0.3));
     const pw = Math.min(W - 20, 200), ph = 96, px = Math.floor(W / 2 - pw / 2), py = Math.floor(H / 2 - ph / 2 + (1 - k) * 30);
     panel(px, py, pw, ph, C.uiD, OUT, C.uiL);
-    text(this.modal === 'story' ? 'STORY MODE' : 'ENDLESS MODE', W / 2, py + 6, C.gold, 1, 1);
+    text(this.modal === 'story' ? 'STORY MODE' : this.modal === 'event' ? 'HALLOWEEN EVENT' : 'ENDLESS MODE', W / 2, py + 6, this.modal === 'event' ? '#ff8c1a' : C.gold, 1, 1);
     text('HOW MANY DUCKS?', W / 2, py + 16, C.white, 2, 1, 'outline');
     const ui = this.modalUI; ui.begin();
     const bw = Math.floor((pw - 24) / 2), bh = 40;
@@ -332,6 +336,7 @@ class TitleScene {
     });
     drawButton(ui, 'back', W / 2 - 30, py + ph - 20, 60, 13, 'BACK', { on: () => { this.modal = null; } });
     if (this.modal === 'story') text('2 DUCKS = SPLIT SCREEN CO-OP!', W / 2, py + ph + 6, C.white, 1, 1, 'outline');
+    if (this.modal === 'event') { text('LIMITED ITEMS - ONLY WHILE THE EVENT IS ON!', W / 2, py + ph + 6, '#ff8c1a', 1, 1, 'outline'); text('PUMPKIN CHEST IN THE LOCKER!', W / 2, py + ph + 15, C.white, 1, 1, 'outline'); }
   }
 }
 // yellow and black construction stripes, slowly scrolling
@@ -670,7 +675,9 @@ class LockerScene {
       text(info.name, L.gx + 4, iy + 3, rcol, 1, 0);
       text(rc.name, L.gx + L.gw - 4, iy + 3, rcol, 1, 2);
       let line = info.desc || '';
-      if (!has && info.story) line = fmt('BEAT STORY LEVEL {0} TO GET IT', info.story);
+      if (!has && info.eventReward) line = 'BEAT THE PUMPKIN KING IN THE HALLOWEEN EVENT';
+      else if (!has && info.event) line = 'LIMITED - ONLY DURING THE HALLOWEEN EVENT';
+      else if (!has && info.story) line = fmt('BEAT STORY LEVEL {0} TO GET IT', info.story);
       else if (!has) line = this.cat === 'weapon' && LEVELS.find(l => l.reward === info.id) ? fmt('BEAT STORY LEVEL {0} OR OPEN CHESTS', LEVELS.find(l => l.reward === info.id).n) : info.rarity === 'admin' ? 'ONLY THE ADMIN CAN GIVE THIS' : info.gift ? 'A SPECIAL GIFT - NOT IN CHESTS' : 'LOCKED - OPEN CHESTS TO FIND IT';
       else if (lo[this.cat] === info.id) line = line || fmt('EQUIPPED ON P{0}', this.pid + 1);
       else line = line || (Input.touch ? 'TAP TO EQUIP' : 'PRESS ENTER TO EQUIP');
@@ -715,12 +722,17 @@ function drawItemIcon(cat, id, x, y, t, lo) {
 function rollChest(kind) {
   const odds = CHESTS[kind].odds;
   const all = [];
-  for (const cat of CATS) for (const it of COSMETICS[cat]) if (it.id !== 'none' && !it.gift && !it.story) all.push({ cat, it }); // gifts and story rewards never come from chests
+  const ev = CHESTS[kind].event;
+  for (const cat of CATS) for (const it of COSMETICS[cat]) {
+    if (it.id === 'none' || it.gift || it.story || it.eventReward) continue; // gifts and story rewards never come from chests
+    if ((it.event || null) !== (ev || null)) continue; // event items only come from their event's chest
+    all.push({ cat, it });
+  }
   const locked = all.filter(x => !Save.has(x.cat, x.it.id));
   let rar = weighted(odds);
   let pool = locked.filter(x => x.it.rarity === rar);
   if (!pool.length) { // nothing left at that rarity: try the others, best first
-    for (const r of ['legendary', 'epic', 'rare', 'common']) { if (odds[r] && (pool = locked.filter(x => x.it.rarity === r)).length) { rar = r; break; } }
+    for (const r of ['limited', 'legendary', 'epic', 'rare', 'common']) { if (odds[r] && (pool = locked.filter(x => x.it.rarity === r)).length) { rar = r; break; } }
   }
   if (!pool.length) { const any = all.filter(x => odds[x.it.rarity]); const x = pick(any); return { cat: x.cat, it: x.it, dup: true }; }
   const x = pick(pool);
@@ -780,17 +792,19 @@ class ChestScene {
     const T = this.T;
     text('CHESTS', W / 2, 8, C.gold, 2, 1, 'outline');
     text('UNLOCKS ARE SHARED BY BOTH DUCKS!', W / 2, 24, C.white, 1, 1);
-    const kinds = ['wood', 'gold'], pw = Math.min(110, Math.floor((W - 30) / 2));
+    const kinds = Object.keys(CHESTS).filter(k => !CHESTS[k].event || eventOn(CHESTS[k].event)), nk = kinds.length;
+    const pw = Math.min(110, Math.floor((W - 20 - (nk - 1) * 10) / nk)), x0 = Math.floor(W / 2 - (pw * nk + (nk - 1) * 10) / 2);
     kinds.forEach((k, i) => {
-      const ch = CHESTS[k], x = Math.floor(W / 2 - pw - 5 + i * (pw + 10)), y = 36, ph = H - y - 26;
-      panel(x, y, pw, ph, C.ui, OUT, C.uiL);
-      text(ch.name, x + pw / 2, y + 5, k === 'gold' ? C.gold : C.white, 1, 1);
+      const ch = CHESTS[k], x = x0 + i * (pw + 10), y = 36, ph = H - y - 26;
+      panel(x, y, pw, ph, ch.event ? '#3b2410' : C.ui, ch.event ? '#ff8c1a' : OUT, C.uiL);
+      if (ch.event) { const nw = textW('LIMITED') + 6; panel(x + pw / 2 - nw / 2, y - 5, nw, 9, '#ff8c1a', OUT, null, false); text('LIMITED', x + pw / 2, y - 3, OUT, 1, 1, null); }
+      text(ch.name, x + pw / 2, y + 5, k === 'gold' ? C.gold : ch.event ? '#ff8c1a' : C.white, 1, 1);
       const bob = Math.round(Math.sin(T * 3 + i) * 2);
       const cy = y + 34 + bob;
       drawSprX(ART.chest[k].base, x + pw / 2, cy + 14, { sc: 2, ay: 1 });
       drawSprX(ART.chest[k].lid, x + pw / 2, cy + 14 - ART.chest[k].base.h * 2 + 2, { sc: 2, ay: 1 });
       let ly = y + 56;
-      for (const r of ['common', 'rare', 'epic', 'legendary']) if (ch.odds[r]) { text(RARITY[r].name, x + 8, ly, RARITY[r].col, 1, 0); text(ch.odds[r] + '%', x + pw - 8, ly, C.white, 1, 2); ly += 7; }
+      for (const r of ['common', 'rare', 'epic', 'legendary', 'limited']) if (ch.odds[r]) { text(RARITY[r].name, x + 8, ly, RARITY[r].col, 1, 0); text(ch.odds[r] + '%', x + pw - 8, ly, C.white, 1, 2); ly += 7; }
       const can = Save.data.coins >= ch.price;
       drawButton(this.ui, 'buy' + k, x + 8, y + ph - 20, pw - 16, 15, fmt(can ? 'OPEN  {0}' : 'NEED {0}', ch.price), { on: () => this.buy(k), col: can ? '#3d2f63' : '#2a2535', tcol: can ? C.gold : C.gray, def: i === 0 });
     });

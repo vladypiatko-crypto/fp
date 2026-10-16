@@ -508,8 +508,8 @@ GameScene.prototype.buildSnapshot = function () {
     // drops: [kind, x, y, z, value]
     dr: this.drops.filter(g => near(g.x, g.y)).map(g => [DROP_KINDS.indexOf(g.k), ri(g.x), ri(g.y), ri(g.z || 0), g.v]),
     it: this.items.map(k => [k.k, ri(k.x), ri(k.y), r1(k.t)]),
-    bm: this.bombs.map(b => [ri(b.x0), ri(b.y0), ri(b.x1), ri(b.y1), r2(b.t), b.dur, b.r, b.egg ? 1 : 0]),
-    mk: this.marks.filter(m => !m.done).map(m => [ri(m.x), ri(m.y), m.r, r2(m.t), m.dur]),
+    bm: this.bombs.map(b => [ri(b.x0), ri(b.y0), ri(b.x1), ri(b.y1), r2(b.t), b.dur, b.r, b.egg ? 1 : b.meteor ? 2 : 0]),
+    mk: this.marks.filter(m => !m.done).map(m => [ri(m.x), ri(m.y), m.r, r2(m.t), m.dur, m.friendly ? 1 : 0]),
     pd: this.puddles.map(q => [ri(q.x), ri(q.y), ri(q.r), r2(q.t), q.dur, q.lava ? 1 : 0]),
     fx: this.fx.filter(f => f.x === undefined || near(f.x, f.y)).map(f => {
       const o = {}; for (const k in f) { const v = f[k]; o[k] = typeof v === 'number' ? r1(v) : k === 'pts' ? v.map(q => [ri(q[0]), ri(q[1])]) : v; }
@@ -593,8 +593,8 @@ GameScene.prototype.applySnapshot = function (s) {
   this.eshots = s.es.map(a => ({ x: a[0], y: a[1], vx: a[2], vy: a[3], life: a[4], wait: a[5], s: PROJ_ART[a[6]] || PROJ_ART.seed, sk: a[6], r: a[7] }));
   this.drops = s.dr.map(a => ({ k: DROP_KINDS[a[0]] || 'xp', x: a[1], y: a[2], z: a[3], v: a[4], bob: this.t + (a[1] * 7 + a[2] * 3) % 10, tgt: null }));
   this.items = s.it.map(a => ({ k: a[0], x: a[1], y: a[2], t: a[3] }));
-  this.bombs = s.bm.map(a => ({ x0: a[0], y0: a[1], x1: a[2], y1: a[3], t: a[4], dur: a[5], r: a[6], egg: !!a[7] }));
-  this.marks = s.mk.map(a => ({ x: a[0], y: a[1], r: a[2], t: a[3], dur: a[4] }));
+  this.bombs = s.bm.map(a => ({ x0: a[0], y0: a[1], x1: a[2], y1: a[3], t: a[4], dur: a[5], r: a[6], egg: a[7] === 1, meteor: a[7] === 2 }));
+  this.marks = s.mk.map(a => ({ x: a[0], y: a[1], r: a[2], t: a[3], dur: a[4], friendly: !!a[5] }));
   this.puddles = (s.pd || []).map(a => ({ x: a[0], y: a[1], r: a[2], t: a[3], dur: a[4], lava: !!a[5] }));
   this.fx = s.fx;
   this.texts = s.tx.map(a => ({ x: a[0], y: a[1], str: a[2], col: a[3], life: a[4], max: a[5], sc: a[6], vy: a[7] }));

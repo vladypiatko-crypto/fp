@@ -23,6 +23,12 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // special events (Halloween...): everybody can see which are on, only the admin switches them
+    match /meta/event {
+      allow get: if signedIn();
+      allow write: if isAdmin();
+    }
+
     match /usernames/{name} {
       allow get: if signedIn();
       allow list: if isAdmin();

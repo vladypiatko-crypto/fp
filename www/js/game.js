@@ -258,7 +258,11 @@ class GameScene {
   finish(won) {
     const res = { won, t: this.t, kills: this.kills, coins: this.coins, bonus: 0, reward: null, best: false, shown: 0 };
     res.bonus = Math.floor(this.t / 8) + Math.floor(this.kills / 20) + this.bossCount * 25;
-    if (this.mode === 'story' && won) {
+    if (this.mode === 'story' && won && this.level.event) { // an event level: its reward, but no story progress
+      res.bonus += 150;
+      const rw = rewardOf(this.level);
+      if (Save.unlock(rw.cat, rw.id)) res.reward = rw;
+    } else if (this.mode === 'story' && won) {
       const first = !Save.data.story.cleared[this.level.n];
       res.bonus += first ? 120 : 40;
       Save.data.story.cleared[this.level.n] = true;
@@ -290,7 +294,11 @@ class GameScene {
   // ------------------------------------------------------------ draw
   draw() {
     ctx.fillStyle = OUT; ctx.fillRect(0, 0, W, H);
-    for (const v of this.views) drawView(v);
+    for (const v of this.views) {
+      drawView(v);
+      if (this.theme.underwater) drawUnderwaterView(v, this.t);
+      if (eventOn('halloween')) drawHalloweenView(v, this.t);
+    }
     if (this.views.length === 2) { ctx.fillStyle = OUT; if (W >= H) ctx.fillRect(this.views[0].w, 0, 2, H); else ctx.fillRect(0, this.views[1].h, W, 2); }
     this.ui.begin();
     drawTopBar();
@@ -389,7 +397,11 @@ class GameScene {
     const bw = Math.min(70, Math.floor((pw - 40) / 3)), bh = 15, by = py + ph - bh - 7;
     let btns;
     if (this.online) btns = this.onlineResultButtons();
-    else if (this.mode === 'story') {
+    else if (this.mode === 'story' && this.level.event) {
+      btns = [[r.won ? 'menu' : 'retry', r.won ? 'MENU' : 'RETRY', () => Trans.go(() => Scenes.set(r.won ? new TitleScene(true) : new GameScene({ mode: 'story', level: this.level, np: this.np })))],
+        ['locker', 'LOCKER', () => Trans.go(() => Scenes.push(new LockerScene({})))], ['menu2', 'MENU', () => Trans.go(() => Scenes.set(new TitleScene(true)))]];
+      if (r.won) btns.pop();
+    } else if (this.mode === 'story') {
       btns = r.won
         ? [['next', CHAPTERS.some(c => c.to === this.level.n) ? 'ENDING' : 'NEXT', () => Trans.go(() => {
           // the last level of a chapter plays its ending, then back to the map (or the title after the very last one)
@@ -430,7 +442,8 @@ function spawnEnemy(type, pos, opts = {}) {
 // every world has its own song
 const WORLD_SONG = { pond: 'battle', woods: 'battle', peaks: 'sky', factory: 'factory', tower: 'factory', beach: 'beach', swamp: 'swamp', clouds: 'sky', moon: 'space', ship: 'factory',
   volcano: 'volcano', desert: 'beach', candy: 'candy', crystal: 'cave', castle: 'castle',
-  jungle: 'jungle', pirate: 'pirate', knight: 'castle', west: 'western', neon: 'neon' };
+  jungle: 'jungle', pirate: 'pirate', knight: 'castle', west: 'western', neon: 'neon',
+  reef: 'ocean', wreck: 'deep', kelp: 'ocean', abyss: 'deep', atlantis: 'ocean' };
 const worldSong = w => WORLD_SONG[w] || 'battle';
 function spawnBoss(id) {
   const b = BOSSES[id];
@@ -860,7 +873,7 @@ function fireMain(p, tgt, wd) {
     }
     return;
   }
-  if (p.weapon === 'sword') { // slash in an arc; multi shot makes it wider and longer
+  if (wd.melee) { // sword and scythe: slash in an arc; multi shot makes it wider and longer
     const arc = wd.arc + multi * 0.35, reach = wd.reach + multi * 4;
     for (const e of R.enemies) {
       if (e.dead || e.spawnT > 0) continue;
@@ -869,6 +882,7 @@ function fireMain(p, tgt, wd) {
       let da = Math.atan2(dy, dx) - base; da = Math.atan2(Math.sin(da), Math.cos(da));
       if (Math.abs(da) > arc / 2 && d > e.r + 6) continue;
       hurtEnemy(e, dmg, dx / (d || 1), dy / (d || 1), wd.kb, p);
+      if (wd.heal) p.hp = Math.min(p.maxHp, p.hp + wd.heal);
     }
     p.swing = (p.swing || 1) * -1;
     R.fx.push({ k: 'slash', x: p.x, y: p.y - 5, a: base, arc, r: reach, t: 0, dur: 0.16, col, dir: p.swing });
@@ -908,6 +922,14 @@ function fireMain(p, tgt, wd) {
     shakeFor(p, 2);
     return;
   }
+  if (p.weapon === 'meteor') { // meteors fall out of the sky onto the target
+    for (let i = 0; i < n; i++) {
+      const x = tgt.x + (i ? rand(-30, 30) : 0), y = tgt.y + (i ? rand(-24, 24) : 0);
+      R.bombs.push({ x0: x + 50, y0: y - 150, x1: x, y1: y, t: 0, dur: 0.55 + i * 0.12, r: wd.aoe, dmg, owner: p, meteor: true });
+      R.marks.push({ x, y, r: wd.aoe, t: 0, dur: 0.55 + i * 0.12, dmg: 0, friendly: true });
+    }
+    return;
+  }
   if (p.weapon === 'eggnade') { // lob eggs that burst where they land
     for (let i = 0; i < n; i++) {
       const off = (i - (n - 1) / 2) * 16;
@@ -928,7 +950,7 @@ function fireMain(p, tgt, wd) {
     R.fx.push({ k: 'zap', pts, t: 0, dur: 0.14, col: '#7dfff5' });
     return;
   }
-  const kind = { bubble: 'bubble', rang: 'rang', corn: 'corn', frost: 'frost', rocket: 'rocket', flame: 'flame', goldgun: 'goldgun', sawblade: 'saw', vortex: 'vortex' }[p.weapon] || 'bullet';
+  const kind = { shuriken: 'star', bees: 'bee', harpoon: 'harpoon', candycorn: 'candy', bubble: 'bubble', rang: 'rang', corn: 'corn', frost: 'frost', rocket: 'rocket', flame: 'flame', goldgun: 'goldgun', sawblade: 'saw', vortex: 'vortex' }[p.weapon] || 'bullet';
   for (let i = 0; i < n; i++) {
     let a = base + (i - (n - 1) / 2) * wd.spread;
     if (wd.jitter) a += rand(-wd.jitter, wd.jitter);
@@ -939,6 +961,9 @@ function fireMain(p, tgt, wd) {
     if (kind === 'rang') { shot.ang = a; shot.sp = sp; shot.back = false; }
     if (kind === 'rocket') { shot.tgt = tgt; shot.pierce = 0; }
     if (kind === 'saw') shot.pierce = wd.bounces + lvl(p, 'pierce');
+    if (kind === 'candy' || kind === 'star') shot.pierce += 1;
+    if (kind === 'harpoon') shot.pierce += 3;
+    if (kind === 'bee') shot.tgt = tgt;
     if (kind === 'vortex') { shot.pierce = 999; shot.tick = 0; }
     R.shots.push(shot);
   }
@@ -976,7 +1001,8 @@ function shotEnd(b, hitE) {
 function updateShots(dt) {
   for (const b of R.shots) {
     b.life -= dt; b.rot += dt * 18;
-    if (b.kind === 'feather') { // home in on the target (or the nearest robot once it's gone)
+    if (b.kind === 'bee') { b.vx += rand(-200, 200) * dt; b.vy += rand(-200, 200) * dt; } // bees wobble about
+    if (b.kind === 'feather' || (b.kind === 'bee' && b.max - b.life > 0.3)) { // home in on the target (or the nearest robot once it's gone)
       if (!b.tgt || b.tgt.dead) b.tgt = nearestEnemy(b.x, b.y, 120);
       if (b.tgt) { const dx = b.tgt.x - b.x, dy = b.tgt.y - b.y, dl = Math.hypot(dx, dy) || 1, sp = 170; b.vx += (dx / dl * sp - b.vx) * Math.min(1, dt * 7); b.vy += (dy / dl * sp - b.vy) * Math.min(1, dt * 7); }
     }
@@ -1048,7 +1074,7 @@ function updateShots(dt) {
   R.eshots = R.eshots.filter(b => b.life > 0);
   for (const m of R.marks) {
     m.t += dt;
-    if (m.t >= m.dur && !m.done) { m.done = true; explode(m.x, m.y, m.r, m.dmg, null, true); }
+    if (m.t >= m.dur && !m.done) { m.done = true; if (!m.friendly) explode(m.x, m.y, m.r, m.dmg, null, true); } // friendly marks only show where a meteor lands
   }
   R.marks = R.marks.filter(m => !m.done);
 }
@@ -1066,7 +1092,8 @@ function updateBombs(dt) {
     if (b.t >= b.dur && !b.done) {
       b.done = true; explode(b.x1, b.y1, b.r, b.dmg, b.owner, false);
       if (b.egg) burst(b.x1, b.y1, ['#fff8e7', '#ffd23f'], 8, 70, 0.4);
-      if (!b.mini && !b.egg && b.owner && b.owner.over && b.owner.over.bread) // overcharged: the bomb bursts into four more
+      if (b.meteor) { burst(b.x1, b.y1, ['#ff8c1a', '#ffd23f', '#e8343b'], 14, 100, 0.5); shakeAt(b.x1, b.y1, 3); }
+      if (!b.mini && !b.egg && !b.meteor && b.owner && b.owner.over && b.owner.over.bread) // overcharged: the bomb bursts into four more
         for (let i = 0; i < 4; i++) { const a = i / 4 * TAU + rand(-0.3, 0.3); extra.push({ x0: b.x1, y0: b.y1, x1: b.x1 + Math.cos(a) * 34, y1: b.y1 + Math.sin(a) * 34, t: 0, dur: 0.35 + i * 0.05, r: b.r * 0.7, dmg: b.dmg * 0.6, owner: b.owner, mini: true }); }
     }
   }
@@ -1451,6 +1478,7 @@ function drawView(v) {
   for (const m of R.marks) {
     if (m.t < 0 || !inV(m.x, m.y)) continue;
     const k = m.t / m.dur;
+    if (m.friendly) { pring(m.x, m.y, m.r * (1.2 - k * 0.2), '#ff8c1a', 1, m.r * 0.6); continue; }
     pring(m.x, m.y, m.r, (m.t * 10 | 0) % 2 ? '#e8343b' : '#ffd23f', 1, m.r * 0.6);
     pellipse(m.x, m.y, m.r * k, m.r * 0.6 * k, 'rgba(232,52,59,0.3)');
     const mz = (1 - k) * 120;
@@ -1501,7 +1529,10 @@ function drawView(v) {
   for (const b of R.bombs) {
     const t = clamp(b.t / b.dur, 0, 1), x = lerp(b.x0, b.x1, t), y = lerp(b.y0, b.y1, t);
     shadow(x, y + 3, 2);
-    drawSprX(b.egg ? PROJ_ART.eggbomb : ART.bread, x, y - Math.sin(t * Math.PI) * (b.egg ? 22 : 30), { rot: t * 8 });
+    if (b.meteor) { // falls straight in with a fiery tail
+      for (let k = 1; k <= 4; k++) pcirc(x + k * 3, y - k * 9, 3 - k * 0.5, k % 2 ? '#ff8c1a' : '#ffd23f');
+      drawSprX(PROJ_ART.rock, x, y, { rot: t * 6 });
+    } else drawSprX(b.egg ? PROJ_ART.eggbomb : ART.bread, x, y - Math.sin(t * Math.PI) * (b.egg ? 22 : 30), { rot: t * 8 });
     if (t > 0.5) pring(b.x1, b.y1, b.r * (1 - t) + 3, 'rgba(255,80,60,0.5)');
   }
   // projectiles
@@ -1512,6 +1543,10 @@ function drawView(v) {
     else if (b.kind === 'feather') drawSprX(PROJ_ART.feather, b.x, b.y, { rot: Math.atan2(b.vy, b.vx) });
     else if (b.kind === 'corn') drawSprX(PROJ_ART.corn, b.x, b.y, { rot: b.rot * 0.3 });
     else if (b.kind === 'saw') drawSprX(PROJ_ART.saw, b.x, b.y, { rot: b.rot * 1.5 });
+    else if (b.kind === 'candy') drawSprX(PROJ_ART.candycorn, b.x, b.y, { rot: Math.atan2(b.vy, b.vx) });
+    else if (b.kind === 'star') drawSprX(PROJ_ART.star, b.x, b.y, { rot: b.rot * 2 });
+    else if (b.kind === 'bee') { drawSprX(PROJ_ART.bee, b.x, b.y); if ((b.rot * 3 | 0) % 2) { ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(b.x - 1), Math.round(b.y - 2), 3, 1); } }
+    else if (b.kind === 'harpoon') { const l = Math.hypot(b.vx, b.vy) || 1, ux = b.vx / l, uy = b.vy / l; pline(b.x - ux * 9, b.y - uy * 9, b.x, b.y, '#a0642d', 2); pline(b.x, b.y, b.x + ux * 3, b.y + uy * 3, '#ffffff', 2); }
     else if (b.kind === 'mine') {
       drawSprX(PROJ_ART.mine, b.x, b.y);
       const armed = b.max - b.life >= 0.4, blink = (b.life * (b.life < 1.5 ? 12 : 4) | 0) % 2;
@@ -1658,6 +1693,7 @@ function drawEnemy(e) {
   if (e.d.ai === 'charger') drawSprX(s, e.x, e.y + bob, { rot: e.rot, white: e.flash > 0 });
   else drawSprX(s, e.x, e.y + bob - e.z + s.h * sc / 2, { flip: e.flip, white: e.flash > 0, sc, sx, sy, ay: 1 });
   if (fuse) pring(e.x, e.y, 4 + (1 - e.fuse / 0.45) * 22, 'rgba(232,52,59,0.6)');
+  if (!e.boss && e.d.ai !== 'charger' && eventOn('halloween')) drawSprX(DECO_ART.pumpkinS, e.x, e.y + bob - e.z - s.h * sc / 2 + 3, { ay: 1 }); // Halloween: pumpkin hats
   if (e.slowT > 0) { // frozen: icy ring and sparkles
     pring(e.x, e.y + 1, e.r * sc + 2, 'rgba(159,220,255,0.75)');
     if ((e.anim * 6 | 0) % 2) { ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(e.x + Math.sin(e.anim * 9) * e.r * sc), Math.round(e.y - e.r * sc + bob), 1, 1); }

@@ -596,4 +596,39 @@ Object.assign(TRAIL_ICON, {
   glitch(x, y, t) { for (let i = 0; i < 6; i++) { ctx.fillStyle = RAINBOW[(i + Math.floor(t * 10)) % 6]; ctx.fillRect(Math.round(x - 6 + (i * 5) % 12), Math.round(y - 4 + (i * 3) % 8), 3, 2); } },
   admintrail(x, y, t) { for (let i = 0; i < 6; i++) { ctx.fillStyle = RAINBOW[(i + Math.floor(t * 8)) % 6]; ctx.fillRect(Math.round(x - 7 + i * 2.5), Math.round(y + Math.sin(t * 6 + i) * 3), 2, 2); } },
 });
+Object.assign(SKIN_PAL, {
+  frog: { h: '#5fbf3a', y: '#5fbf3a', d: '#3f8f2a', w: '#c3f09a', o: '#ff8c6b', f: '#3f8f2a', K: OUT, c: '#ff8c6b' },
+  frosty: { h: '#e3f4ff', y: '#bde6ff', d: '#7ecbff', w: '#ffffff', o: '#5ec8ff', f: '#7ecbff', K: '#2f5a9f', c: '#9fdcff' },
+});
+Object.assign(HAT_ART, {
+  beret: hat({ rows: ['...rr..', '.rrrrrr', 'rrrrrrr'], x: 3, y: 1 }, { r: '#e8343b' }),
+  gradcap: hat({ rows: ['kkkkkkkkk', '...kkk..y', '...kkk..y'], x: 2, y: 1 }, { k: '#2a2a3a', y: '#ffd23f' }),
+  antlers: hat({ rows: ['b.b....b.b', '.bb....bb.', '..b....b..'], x: 1, y: 1 }, { b: '#7a4a24' }),
+});
+Object.assign(HAT_MOTION, { beret: { amp: 0.3, sp: 3 }, gradcap: { amp: 0.4, sp: 4 }, antlers: { amp: 0.2, sp: 2 } });
+HALO_FX.flowers = ({ x, y, sc, t, layer, rx, ry }) => {
+  const n = 6;
+  for (let i = 0; i < n; i++) {
+    const a = i / n * TAU + t * 0.8, front = Math.sin(a) > 0;
+    if ((layer === 'front') !== front) continue;
+    const px = Math.round(x + Math.cos(a) * rx), py = Math.round(y + Math.sin(a) * ry);
+    ctx.fillStyle = ['#ff6fae', '#fff8e7', '#ffd23f'][i % 3]; ctx.fillRect(px - sc, py, sc * 3, sc); ctx.fillRect(px, py - sc, sc, sc * 3);
+    ctx.fillStyle = '#ffd23f'; ctx.fillRect(px, py, sc, sc);
+  }
+};
+TRAIL_FX.stardust = (T, x, y) => T.push({ x: x + rand(-3, 3), y: y - rand(2, 8), vx: rand(-3, 3), vy: rand(-6, -2), life: 0.8, max: 0.8, col: pick(['#fff3b0', '#c9a6ff', '#ffffff']), tw: true });
+TRAIL_FX.zap = (T, x, y) => { if (Math.random() < 0.6) T.push({ x: x + rand(-4, 4), y: y - rand(0, 6), vx: 0, vy: 0, life: 0.15, max: 0.15, col: pick(['#5ec8ff', '#ffffff', '#fff36b']), size: 2 }); };
+TRAIL_ICON.stardust = (x, y, t) => { for (let i = 0; i < 5; i++) if ((Math.floor(t * 8) + i) % 3) { ctx.fillStyle = i % 2 ? '#c9a6ff' : '#fff3b0'; ctx.fillRect(Math.round(x - 6 + i * 3), Math.round(y - 3 + (i * 5) % 7), 1, 1); } };
+TRAIL_ICON.zap = (x, y, t) => { const o = Math.floor(t * 10) % 2; pline(x - 7, y + o, x - 2, y - 3, '#5ec8ff', 2); pline(x - 2, y - 3, x + 2, y + 2 - o, '#5ec8ff', 2); pline(x + 2, y + 2 - o, x + 7, y - 2, '#ffffff'); };
+Object.assign(GUN_ART, {
+  shuriken: spr(['..s.....', 'mmsmmmmm', 'mm......'], { s: '#d5dbe6', m: '#3d3a52' }),
+  bees: spr(['..yky...', 'yykykyyW', 'yy......'], { y: '#ffd23f', k: '#3d3a52', W: '#ffffff' }),
+  harpoon: spr(['.........s.', 'bbbbbbbbbss', 'mmk......s.', 'kk.........'], { b: '#a0642d', s: '#d5dbe6', m: '#5a5872', k: '#3d3a52' }),
+  meteor: spr(['.......oo', 'bbbbbbboy', '.......oo'], { b: '#7a4a24', o: '#ff8c1a', y: '#ffd23f' }),
+});
+Object.assign(PROJ_ART, {
+  star: spr(['.s.', 'sSs', '.s.'], { s: '#d5dbe6', S: '#ffffff' }),
+  bee: spr(['yky', 'yky'], { y: '#ffd23f', k: '#3d3a52' }),
+  rock: spr(['.oo.', 'oyyo', 'oyyo', '.oo.'], { o: '#e8343b', y: '#ff8c1a' }),
+});
 

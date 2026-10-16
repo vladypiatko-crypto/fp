@@ -12,6 +12,8 @@ A pixel-art **survival shooter** for **1–4 players**: split screen on one devi
 
 **Chapter 4: Lost in Time.** Dr. Honk's new **Time Toaster** opens a hole in time, and out flies **Tick-Tock**, a robot clock who wants to rule all of time. He scatters the ducks through history: a dino jungle, a pirate cove, a knight's keep and the wild west, until they reach his home, Neon City 3000.
 
+**Chapter 5: Save the Pond!** One morning Puddle Pond is empty: the **Kraken-Bot** is pumping all the water in Duckland down to its undersea factory. With Dr. Honk's snorkels the ducks dive after it, all the way down to Atlantis.
+
 | Level | World | Boss | Reward |
 | --- | --- | --- | --- |
 | 1 | Puddle Pond | Clanky Crab | Quackshot |
@@ -34,13 +36,20 @@ A pixel-art **survival shooter** for **1–4 players**: split screen on one devi
 | 18 | Knight's Keep | Dragon-Bot (breathes fire) | Knight Helm |
 | 19 | Wild West | Sheriff Bot | Sheriff Hat |
 | 20 | Neon City 3000 | Tick-Tock (teleports) | Time Traveler skin |
+| 21 | Coral Reef | Puffer-Bot | Snorkel |
+| 22 | Sunken Ship | Anchor-Bot | Harpoon Gun |
+| 23 | Kelp Forest | Eel-Tron | Mermaid skin |
+| 24 | The Abyss | Angler-Bot | Glow Fish halo |
+| 25 | Atlantis | Kraken-Bot | Deep Sea skin |
 
-Each chapter has an animated intro and ending, and the map has a page per chapter. Chapter 2 and 3 cosmetics only come from the story, never from chests. Chapter 3 adds **Turret Bots** and **Spider Bots**, and its own songs. **Endless** mode is a pure survival run where all twenty bosses take turns.
+Each chapter has an animated intro and ending, and the map has a page per chapter. Chapter 2 and 3 cosmetics only come from the story, never from chests. Chapter 3 adds **Turret Bots** and **Spider Bots**, and its own songs. **Endless** mode is a pure survival run where all twenty-five bosses take turns.
+
+**Halloween event.** The admin starts and stops it (admin tab, EVENTS) and every player sees it live: a spooky title screen and music, night-time levels where the robots wear pumpkins, the **Haunted Pond** event level with the **Pumpkin King** (reward: Pumpkin Head), and the **Pumpkin Chest** full of **LIMITED** items (Skeleton and Vampire skins, Witch Hat, Bat Orbit, Candy Corn trail, Reaper Scythe, Candy Cannon). When the event stops, limited items can't be found any more; whoever has them keeps them.
 
 ## Features
 
 - **Online with friends**: host a lobby and share its 4-letter code, or join a friend's. Up to 4 ducks, each on their own device. No server to set up: devices connect directly. Pick story or endless, ready up, and start.
-- **16 weapons**: Blaster, Quackshot, Bubble Gun, Feather-rang, Beak Beam laser, Quackinator minigun, Corn Cannon (pops into popcorn), Frost Blaster (slows robots), Firework Launcher (homing rockets that explode), Tesla Coil (chain lightning), Dragon Breath flamethrower, Egg Launcher (lobbed exploding eggs), Saw Launcher (saws bounce robot to robot), Duck Sniper (one huge shot through a whole line), Black Hole (sucks robots in, then pops), Mine Layer, Quack Sword (melee slashes), Prism Laser (three rainbow beams), and the admin-only Golden Quacker and Ban Hammer
+- **Lots of weapons**: Blaster, Quackshot, Bubble Gun, Feather-rang, Beak Beam laser, Quackinator minigun, Corn Cannon (pops into popcorn), Frost Blaster (slows robots), Firework Launcher (homing rockets that explode), Tesla Coil (chain lightning), Dragon Breath flamethrower, Egg Launcher (lobbed exploding eggs), Saw Launcher (saws bounce robot to robot), Duck Sniper (one huge shot through a whole line), Black Hole (sucks robots in, then pops), Mine Layer, Quack Sword (melee slashes), Prism Laser (three rainbow beams), Ninja Stars, Bee Hive (homing bees), Harpoon Gun, Meteor Staff (meteors from the sky), the limited Halloween weapons, and the admin-only Golden Quacker and Ban Hammer
 - **Level-up cards**: gun and duck upgrades (multi shot, piercing, speed, regen, dash attack…) plus **7 power-ups**: egg orbit, bread bombs, chain lightning, mega quack, feather darts, splash puddles and bubble shield. You get **3 power-up slots**; once they are full only those three come back. Eggs block bullets and push robots away.
 - **Overcharge**: after a power-up is maxed, a rare red glowing OVERCHARGE card can show up and makes it much stronger (giant fast-spinning eggs, splitting bread storms, lightning that jumps to everything, lava lakes, mirror shields…).
 - **Robot army**: Bolt Bots, Boom Bots, Goo Blobs, Tank Bots, Zap Drones and Saw Bots, each with its own behaviour. Bosses telegraph charges, jumps, bullet rings and missile strikes.
@@ -92,7 +101,7 @@ Setup (once):
 
 1. Create a project at [console.firebase.google.com](https://console.firebase.google.com), add a **Web app**, turn on **Authentication → Anonymous** and create a **Firestore Database** in production mode.
 2. Put the web app's `firebaseConfig` into `FIREBASE_CONFIG` in `www/js/cloud.js` and set `ACCOUNTS_ON = true`.
-3. Paste the whole of `firebase/firestore.rules` into **Firestore Database → Rules** and press **Publish**. The rules are what stop anyone else from using admin powers, even with an edited app.
+3. Paste the whole of `firebase/firestore.rules` into **Firestore Database → Rules** and press **Publish**. The rules are what stop anyone else from using admin powers, even with an edited app. (Paste them again whenever this file changes: events like Halloween need the newest rules.)
 4. **The first account ever made becomes the admin**, for good. So the admin installs the build and creates their account before anyone else.
 
 Good to know: accounts are anonymous and live in the app's storage. Uninstalling or clearing the app's data starts a new account (the old username stays taken), and a banned player could get a fresh account that way. Without `FIREBASE_CONFIG` the game skips accounts and runs fully offline.
@@ -119,7 +128,7 @@ Online, each device controls its own duck with the controls above (keyboard play
 - `www/js/game.js`: gameplay (the host runs this; online friends run the same code path but only draw)
 - `www/js/online.js`: peer-to-peer connections, the host's lobby, online menu and room screen, snapshots and the online game
 - `www/js/vendor/peerjs.min.js`: [PeerJS](https://github.com/peers/peerjs) 1.5.5 (MIT)
-- `www/js/story.js`: dialog boxes and cutscenes · `www/js/chapter2.js`, `chapter3.js` and `chapter4.js`: chapters 2 to 4 (worlds, bosses, levels, cutscenes, rewards)
+- `www/js/story.js`: dialog boxes and cutscenes · `www/js/chapter2.js` to `chapter5.js`: chapters 2 to 5 · `www/js/halloween.js`: the Halloween event (worlds, bosses, levels, cutscenes, rewards)
 - `www/js/scenes.js`: title, map, locker, chests, settings
 - `main.js`: Electron wrapper (Windows) · `android/`: Capacitor project · `scripts/build-single-html.js`: one-file web build
 

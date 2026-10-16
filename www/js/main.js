@@ -2,6 +2,8 @@
 /* QUACK ATTACK! — boot + main loop. */
 
 Save.load();
+Object.assign(EVENT_STATE, Save.data.events || {}); // the last event state we heard about (works offline too)
+{ const ev = new URLSearchParams(location.search).get('event'); if (ev) EVENT_STATE[ev] = true; } // ?event=halloween for testing
 setLang(Save.data.settings.lang || 'en');
 Save.data.name = cleanName(Save.data.name, 'QUACKER');
 onResize.push(() => { for (const s of Scenes.stack) if (s.resize) s.resize(); });

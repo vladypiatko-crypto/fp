@@ -69,6 +69,7 @@ const RARITY = {
   epic: { name: 'EPIC', col: '#c06bff', w: 10 },
   legendary: { name: 'LEGENDARY', col: '#ffd23f', w: 3 },
   admin: { name: 'ADMIN', col: '#ff5ce1', w: 0, rainbow: true }, // only the admin can hand these out
+  limited: { name: 'LIMITED', col: '#ff8c1a', w: 0 }, // only while an event is on (see EVENT_STATE)
 };
 // rarity colour; ADMIN items cycle through the rainbow
 function rarityCol(r, t = performance.now() / 1000) { const R0 = RARITY[r] || RARITY.common; return R0.rainbow ? RAINBOW[Math.floor(t * 8) % RAINBOW.length] : R0.col; }
@@ -373,6 +374,12 @@ const sfx = {
     else if (kind === 'sniper') { noise(0.25, 0.12, 2500); tone(110 * p, 0.3, 'square', 0.07, 40); }
     else if (kind === 'vortex') { tone(220 * p, 0.4, 'sine', 0.08, 60); tone(330 * p, 0.3, 'triangle', 0.03, 90, atime(0.05)); }
     else if (kind === 'mine') { tone(300 * p, 0.06, 'square', 0.04, 200); }
+    else if (kind === 'shuriken') { noise(0.06, 0.04, 6000, 0, null, 'highpass'); }
+    else if (kind === 'bees') { tone(220 * p, 0.2, 'sawtooth', 0.02, 260); }
+    else if (kind === 'harpoon') { tone(140 * p, 0.12, 'square', 0.05, 80); noise(0.08, 0.05, 1500); }
+    else if (kind === 'meteor') { tone(600 * p, 0.4, 'sine', 0.04, 120); }
+    else if (kind === 'scythe') { noise(0.18, 0.06, 2500, 0, null, 'bandpass'); tone(300 * p, 0.15, 'triangle', 0.03, 120); }
+    else if (kind === 'candycorn') { tone(1100 * p, 0.05, 'square', 0.025, 700); }
     else if (kind === 'sword') { noise(0.12, 0.06, 4000, 0, null, 'highpass'); tone(700 * p, 0.08, 'triangle', 0.03, 1400); }
     else if (kind === 'prism') { tone(1500 * p, 0.1, 'sine', 0.035, 2200); tone(1900 * p, 0.1, 'sine', 0.025, 2600, atime(0.03)); }
     else if (kind === 'banhammer') { tone(90 * p, 0.3, 'square', 0.09, 40); noise(0.3, 0.12, 900); }

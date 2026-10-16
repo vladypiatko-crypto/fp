@@ -349,8 +349,8 @@ const ENDING4_BEATS = [
       ctx.fillStyle = OUT; ctx.fillRect(0, 0, W, H);
       if (Math.random() < 0.1) cs.burst(rand(0, W), rand(0, H * 0.5), RAINBOW, 20, 50, 1.2, 30);
       const k = Ease.outBack(Math.min(1, t / 0.6));
-      drawZoomText('THE END', W / 2, H * 0.3, lerp(10, 4, k), C.gold);
-      if (t > 0.6) text('THANKS FOR PLAYING QUACK ATTACK!', W / 2, H * 0.5, C.white, 1, 1);
+      drawZoomText('CHAPTER 4 CLEAR!', W / 2, H * 0.3, lerp(10, 3, k), C.gold);
+      if (t > 0.6) text('CHAPTER 5 IS UNLOCKED!', W / 2, H * 0.5, C.white, 1, 1);
       if (t > 1.0 && cs.paid) { const lw = textW('+2000 COINS REWARD!'); coinIcon(Math.floor(W / 2 - lw / 2 - 6), Math.floor(H * 0.6), T); text('+2000 COINS REWARD!', W / 2 + 4, H * 0.6 + 1, C.gold, 1, 1); }
       drawHeroes(cs, W / 2 - 40, H * 0.88, T, true, 'down');
       drawDaisy(W / 2 + 4, H * 0.88 - Math.abs(Math.sin(T * 7)) * 3, { t: T });

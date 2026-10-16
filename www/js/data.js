@@ -77,6 +77,10 @@ const COSMETICS = {
     { id: 'sword', name: 'QUACK SWORD', rarity: 'epic', desc: 'SLASH EVERYTHING AROUND YOU' },
     { id: 'prism', name: 'PRISM LASER', rarity: 'legendary', desc: 'SPLITS INTO RAINBOW BEAMS' },
     { id: 'banhammer', name: 'BAN HAMMER', rarity: 'admin', desc: 'SMASH! YOU ARE BANNED!', gift: true },
+    { id: 'shuriken', name: 'NINJA STARS', rarity: 'rare', desc: 'THREE SPINNING STARS' },
+    { id: 'bees', name: 'BEE HIVE', rarity: 'epic', desc: 'ANGRY BEES CHASE ROBOTS' },
+    { id: 'harpoon', name: 'HARPOON GUN', rarity: 'epic', desc: 'HEAVY SPEAR THROUGH THREE ROBOTS' },
+    { id: 'meteor', name: 'METEOR STAFF', rarity: 'legendary', desc: 'CALLS DOWN FLAMING METEORS' },
     { id: 'goldgun', name: 'GOLDEN QUACKER', rarity: 'admin', desc: 'SHINY SHOTS THAT PIERCE', gift: true }, // only given by the admin
   ],
 };
@@ -91,10 +95,14 @@ function defaultSave() {
       { skin: 'classic', hat: 'bandana_r', halo: 'none', trail: 'none', weapon: 'blaster' },
       { skin: 'snowy', hat: 'bandana_b', halo: 'none', trail: 'none', weapon: 'blaster' },
     ],
-    story: { reached: 1, cleared: {} }, best: { e1: 0, e2: 0 }, muted: false, introSeen: false, wizardSeen: false, onlineNewsSeen: true,
+    story: { reached: 1, cleared: {} }, best: { e1: 0, e2: 0 }, muted: false, introSeen: false, wizardSeen: false, onlineNewsSeen: true, events: {},
     newItems: [], // unlocked cosmetics nobody has clicked in the locker yet
   };
 }
+// special events (Halloween...): switched on and off by the admin, read from the database (cloud.js)
+const EVENT_STATE = {};
+const eventOn = id => !!EVENT_STATE[id];
+const EVENTS = { halloween: { name: 'HALLOWEEN', col: '#ff8c1a' } };
 const CHESTS = {
   wood: { name: 'DUCK CHEST', price: 100, odds: { common: 55, rare: 32, epic: 11, legendary: 2 } },
   gold: { name: 'ROYAL CHEST', price: 300, odds: { rare: 50, epic: 36, legendary: 14 } },
@@ -129,11 +137,21 @@ const WEAPONS = {
   // drops a mine that explodes when a robot touches it (or when its timer runs out)
   mine: { cd: 0.9, dmg: 30, n: 1, spread: 0.6, range: 120, aoe: 26, life: 6, r: 4, kb: 0, col: '#e8343b' },
   // melee: slashes every robot in an arc in front of you (multi shot widens it)
-  sword: { cd: 0.45, dmg: 24, n: 1, range: 48, reach: 34, arc: 2, kb: 170, col: '#bde6ff' },
+  sword: { cd: 0.45, dmg: 24, n: 1, range: 48, reach: 34, arc: 2, kb: 170, col: '#bde6ff', melee: true },
+  // Halloween (LIMITED): a wide purple slash that heals you a little for every robot it hits
+  scythe: { cd: 0.6, dmg: 28, n: 1, range: 54, reach: 40, arc: 2.6, kb: 120, col: '#9d5cff', melee: true, heal: 0.6 },
+  // Halloween (LIMITED): fast candy corn that goes through one robot
+  candycorn: { cd: 0.3, dmg: 11, n: 1, spread: 0.16, speed: 240, life: 0.7, r: 2, kb: 40, range: 150, col: '#ff8c1a' },
   // like the beak beam, but always three rainbow beams
   prism: { cd: 0.7, dmg: 15, n: 3, spread: 0.28, range: 165, kb: 30, col: '#ffffff' },
   // admin only: a giant hammer smashes down on the target
   banhammer: { cd: 1.0, dmg: 130, n: 1, range: 130, aoe: 36, kb: 280, col: '#ff5ce1' },
+  shuriken: { cd: 0.42, dmg: 9, n: 3, spread: 0.22, speed: 280, life: 0.55, r: 2, kb: 30, range: 140, col: '#d5dbe6' },
+  // bees fly out wobbling, then home in on robots
+  bees: { cd: 0.7, dmg: 8, n: 3, spread: 1.2, speed: 110, life: 2.2, r: 2, kb: 15, range: 150, col: '#ffd23f' },
+  harpoon: { cd: 0.9, dmg: 34, n: 1, spread: 0.2, speed: 270, life: 0.75, r: 2, kb: 220, range: 160, col: '#d5dbe6' },
+  // meteors fall from the sky onto the target and explode
+  meteor: { cd: 1.3, dmg: 46, n: 1, range: 160, aoe: 30, kb: 0, col: '#ff8c1a' },
   goldgun: { cd: 0.3, dmg: 15, n: 1, spread: 0.14, speed: 320, life: 0.7, r: 1, kb: 80, range: 165, col: '#ffd23f' },
 };
 
@@ -222,4 +240,7 @@ COSMETICS.hat.push({ id: 'santa', name: 'SANTA HAT', rarity: 'rare' }, { id: 'ni
 COSMETICS.halo.push({ id: 'snow', name: 'SNOW ORBIT', rarity: 'rare' }, { id: 'saturn', name: 'SATURN RING', rarity: 'legendary' }, { id: 'adminhalo', name: 'ADMIN HALO', rarity: 'admin', gift: true });
 COSMETICS.trail.push({ id: 'snow', name: 'SNOWFLAKES', rarity: 'common' }, { id: 'coins', name: 'MONEY RAIN', rarity: 'epic' }, { id: 'glitch', name: 'GLITCH', rarity: 'legendary' },
   { id: 'admintrail', name: 'ADMIN SPARKS', rarity: 'admin', gift: true });
-
+COSMETICS.skin.push({ id: 'frog', name: 'FROGGY', rarity: 'common' }, { id: 'frosty', name: 'FROSTY', rarity: 'rare' });
+COSMETICS.hat.push({ id: 'beret', name: 'BERET', rarity: 'common' }, { id: 'gradcap', name: 'GRAD CAP', rarity: 'rare' }, { id: 'antlers', name: 'ANTLERS', rarity: 'epic' });
+COSMETICS.halo.push({ id: 'flowers', name: 'FLOWER RING', rarity: 'rare' });
+COSMETICS.trail.push({ id: 'stardust', name: 'STARDUST', rarity: 'rare' }, { id: 'zap', name: 'ZAP TRAIL', rarity: 'epic' });
