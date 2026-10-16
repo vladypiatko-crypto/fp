@@ -404,7 +404,14 @@ const sfx = {
   bossIntro() { tone(110, 0.9, 'sawtooth', 0.08, 55); tone(82, 1.2, 'square', 0.06, 41, atime(0.3)); },
 };
 // every sound the host plays is also sent to the other online players (see online.js)
-for (const k of Object.keys(sfx)) { const f = sfx[k]; sfx[k] = (...a) => { if (Net.role === 'host') Net.evt.push(['sfx', k, ...a]); return f(...a); }; }
+// (at most one of each sound per snapshot, or a busy fight floods a friend's phone with hundreds of sounds)
+for (const k of Object.keys(sfx)) {
+  const f = sfx[k];
+  sfx[k] = (...a) => {
+    if (Net.role === 'host') { const key = k + ':' + (typeof a[0] === 'number' || typeof a[0] === 'string' ? a[0] : ''); if (!Net.sfxSent[key]) { Net.sfxSent[key] = 1; Net.evt.push(['sfx', k, ...a]); } }
+    return f(...a);
+  };
+}
 
 // ---------------------------------------------------------------- music: tiny step sequencer with a few songs
 const NOTE = n => 440 * Math.pow(2, (n - 69) / 12);
@@ -575,7 +582,7 @@ const Input = {
     return { x, y };
   },
   dash(pid, np) {
-    if (netRemote(pid)) { const r = Net.inputs[pid], d = !!r.dash; r.dash = false; return d; }
+    if (netRemote(pid)) return nowSec() < (Net.inputs[pid].dashUntil || 0); // a friend's dash waits a moment for the cooldown
     const maps = np === 1 ? [KEYS.p1, KEYS.p2] : [pid ? KEYS.p2 : KEYS.p1];
     for (const m of maps) if (this.anyHit(m.dash)) return true;
     const pads = np === 1 ? this.pads : (this.pads[pid] ? [this.pads[pid]] : []);
@@ -738,8 +745,9 @@ const Trans = {
 };
 
 // ================================================================ network state (the functions live in online.js)
-const Net = { role: null, inputs: [{}, {}, {}, {}], idToPid: {}, evt: [], sndT: 0, ws: null, open: false, handlers: {}, room: null, myId: null };
+const Net = { role: null, inputs: [{}, {}, {}, {}], idToPid: {}, evt: [], sfxSent: {}, sndT: 0, ws: null, open: false, handlers: {}, room: null, myId: null };
 function netRemote(pid) { return Net.role === 'host' && pid > 0; } // host: this duck is driven by a friend's device
+const nowSec = () => performance.now() / 1000;
 
 // ================================================================ impact frames
 // The big moments freeze the game for a few frames: first an inverted "impact frame" with hard black speed
@@ -747,7 +755,7 @@ function netRemote(pid) { return Net.role === 'host' && pid > 0; } // host: this
 const Impact = {
   stop: 0, stopMax: 0, kind: null, lines: 0, ring: 0, snap: null, fx: 0, fy: 0, seed: 1,
   trigger(kind = 'small', fx, fy) {
-    if (Net.role === 'host') Net.evt.push(['imp', kind]);
+    if (Net.role === 'host' && !Net.evt.some(e => e[0] === 'imp' && e[1] === kind)) Net.evt.push(['imp', kind]);
     const cfg = { small: [0.035, 0, 0], big: [0.085, 0.7, 1], huge: [0.15, 1, 1] }[kind] || [0.035, 0, 0];
     if (cfg[0] >= this.stop) { this.stop = this.stopMax = cfg[0]; this.kind = kind; }
     const s = Save.data && Save.data.settings;

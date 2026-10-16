@@ -72,7 +72,7 @@ The **host's device runs the real game**. Everyone else sends their moves and bu
 
 ## Accounts and the admin tab
 
-With Firebase switched on, every player picks a **name** and a **unique username** on first start (needs internet once). The admin account gets an **ADMIN** button on the title screen: search players by username, **flag** them (3 flags = automatic ban), **ban / unban**, **reset progress**, and **give coins or any item**, optionally with a **message** (or send a message alone). Players get an animated **ADMIN GIFT!** popup that shows what they got and the message. The wizard hat has the rainbow **ADMIN** rarity and is only available as an admin gift.
+With Firebase switched on, every player picks a **name** and a **unique username** on first start (needs internet once). The admin account gets an **ADMIN** button on the title screen: search players by username, **flag** them (3 flags = automatic ban), **ban / unban**, **reset progress**, and send gifts from the **gift tab**: every item in a grid (admin items first, owned ones marked), coin amounts that add up, pick as many as you like and send them together with an optional **message** (or a message alone). Players get an animated **ADMIN GIFT!** popup that shows what they got and the message. The wizard hat has the rainbow **ADMIN** rarity and is only available as an admin gift.
 
 Setup (once):
 

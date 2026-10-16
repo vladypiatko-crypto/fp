@@ -70,8 +70,8 @@ function splat(x, y, col, n = 10, r = 6) {
   R.decals.push({ x: Math.round(x), y: Math.round(y), col, px, life: 10 });
   if (R.decals.length > 140) R.decals.shift();
 }
-function shakeAt(x, y, amt) { if (Net.role === 'host') Net.evt.push(['shk', amt]); for (const v of R.views) { const p = R.players[v.pid]; if (p && d2(p.x, p.y, x, y) < 170 * 170) v.shake = Math.max(v.shake, amt); } }
-function shakeFor(p, amt) { if (Net.role === 'host') Net.evt.push(['shk', amt]); for (const v of R.views) if (v.pid === p.id) v.shake = Math.max(v.shake, amt); }
+function shakeAt(x, y, amt) { if (Net.role === 'host') Net.evt.push(['shk', amt, Math.round(x), Math.round(y)]); for (const v of R.views) { const p = R.players[v.pid]; if (p && d2(p.x, p.y, x, y) < 170 * 170) v.shake = Math.max(v.shake, amt); } }
+function shakeFor(p, amt) { if (Net.role === 'host') Net.evt.push(['shkp', amt, p.id]); for (const v of R.views) if (v.pid === p.id) v.shake = Math.max(v.shake, amt); }
 function inAnyView(x, y, m = 0) { return R.views.some(v => x > v.camX - m && x < v.camX + v.w + m && y > v.camY - m && y < v.camY + v.h + m); }
 
 // ================================================================ the scene
@@ -600,6 +600,7 @@ function updatePlayer(p, dt) {
     p.dvx = dx / l * sp; p.dvy = dy / l * sp;
     p.dashT = 0.18; p.dashCd = pDashCd(p); p.iframes = Math.max(p.iframes, 0.28);
     p.dashHit.clear();
+    if (netRemote(p.id)) Net.inputs[p.id].dashUntil = 0;
     sfx.quack(p.id ? 1.15 : 1);
     floatText(p.x + rand(-4, 4), p.y - 18, 'QUACK!', PCOL[p.id], 0.5);
     burst(p.x, p.y, ['#e9f5db', '#c9e4a6'], 6, 40, 0.35);
@@ -617,8 +618,14 @@ function updatePlayer(p, dt) {
       }
     });
   } else { const sp = pSpeed(p); vx = mv.x * sp; vy = mv.y * sp; }
-  p.x = clamp(p.x + vx * dt, 8, WORLD_SIZE - 8);
-  p.y = clamp(p.y + vy * dt, 10, WORLD_SIZE - 6);
+  const ri = netRemote(p.id) && Net.inputs[p.id];
+  if (ri && ri.x !== undefined && !busy) { // a friend's duck: their device moves it (dashes too), we glide it to where they say
+    const k = Math.min(1, dt * 20);
+    p.x = clamp(p.x + (ri.x - p.x) * k, 8, WORLD_SIZE - 8); p.y = clamp(p.y + (ri.y - p.y) * k, 10, WORLD_SIZE - 6);
+  } else {
+    p.x = clamp(p.x + vx * dt, 8, WORLD_SIZE - 8);
+    p.y = clamp(p.y + vy * dt, 10, WORLD_SIZE - 6);
+  }
 
   // auto-aim: lock on the nearest robot within range
   const range = WEAPONS[p.weapon].range;

@@ -244,7 +244,12 @@ const PHRASES = [
   ['A MESSAGE FROM THE ADMIN', 'EINE NACHRICHT VOM ADMIN', 'СООБЩЕНИЕ ОТ АДМИНА'], ['FROM {0}:', 'VON {0}:', 'ОТ {0}:'],
   ['MESSAGE', 'NACHRICHT', 'СООБЩЕНИЕ'], ['MESSAGE: {0}  >', 'NACHRICHT: {0}  >', 'СООБЩЕНИЕ: {0}  >'], ['(NONE)', '(KEINE)', '(НЕТ)'],
   ['SEND MESSAGE', 'NACHRICHT SENDEN', 'ОТПРАВИТЬ СООБЩЕНИЕ'], ['GOES WITH YOUR NEXT GIFT, OR SEND IT ALONE', 'KOMMT MIT DEM NÄCHSTEN GESCHENK ODER ALLEIN', 'УЙДЕТ С ПОДАРКОМ ИЛИ ОТДЕЛЬНО'],
-  ['SEND', 'SENDEN', 'ОТПРАВИТЬ'], ['WRITE A MESSAGE', 'SCHREIB EINE NACHRICHT', 'НАПИШИ СООБЩЕНИЕ'], ['CLEAR', 'LEEREN', 'ОЧИСТИТЬ'],
+  ['SEND', 'SENDEN', 'ОТПРАВИТЬ'], ['OPEN GIFT TAB', 'GESCHENKE ÖFFNEN', 'ОТКРЫТЬ ПОДАРКИ'], ['GIFTS FOR {0}', 'GESCHENKE FÜR {0}', 'ПОДАРКИ ДЛЯ {0}'],
+  ['COINS', 'MÜNZEN', 'МОНЕТЫ'], ['ALREADY HAS IT', 'HAT ES SCHON', 'УЖЕ ЕСТЬ'], ['{0} ITEMS', '{0} SACHEN', 'ПРЕДМЕТОВ: {0}'], ['{0} COINS', '{0} MÜNZEN', '{0} МОНЕТ'], ['{0} ITEMS + {1} COINS', '{0} SACHEN + {1} MÜNZEN', 'ПРЕДМЕТОВ: {0} + {1} МОНЕТ'],
+  ['TAP AMOUNTS TO ADD THEM UP', 'TIPPE BETRÄGE ZUM ZUSAMMENZÄHLEN', 'НАЖИМАЙ СУММЫ, ОНИ СЛОЖАТСЯ'], ['TAP ITEMS TO PICK THEM', 'TIPPE SACHEN ZUM AUSWÄHLEN', 'НАЖИМАЙ НА ПРЕДМЕТЫ, ЧТОБЫ ВЫБРАТЬ'],
+  ['ALL MISSING', 'ALLE FEHLENDEN', 'ВСЕ НЕДОСТАЮЩИЕ'], ['MESSAGE: {0}', 'NACHRICHT: {0}', 'СООБЩЕНИЕ: {0}'], ['SEND ({0})', 'SENDEN ({0})', 'ОТПРАВИТЬ ({0})'],
+  ['SEND MESSAGE', 'NACHRICHT SENDEN', 'ОТПРАВИТЬ СООБЩЕНИЕ'], ['SENDING...', 'SENDE...', 'ОТПРАВКА...'], ['YOU GOT {0} ITEMS!', 'DU HAST {0} SACHEN BEKOMMEN!', 'ТЫ ПОЛУЧИЛ {0} ПРЕДМЕТОВ!'],
+  ['+{0} MORE', '+{0} WEITERE', 'И ЕЩЁ {0}'], ['AND {0} COINS!', 'UND {0} MÜNZEN!', 'И {0} МОНЕТ!'], ['WRITE A MESSAGE', 'SCHREIB EINE NACHRICHT', 'НАПИШИ СООБЩЕНИЕ'], ['CLEAR', 'LEEREN', 'ОЧИСТИТЬ'],
   // accounts and admin
   ['CONNECTING', 'VERBINDE', 'ПОДКЛЮЧЕНИЕ'], ['CONNECT TO THE INTERNET', 'VERBINDE DICH MIT DEM INTERNET', 'ПОДКЛЮЧИСЬ К ИНТЕРНЕТУ'],
   ['YOU NEED IT ONCE TO MAKE YOUR ACCOUNT', 'EINMAL NÖTIG FÜR DEIN KONTO', 'НУЖНО ОДИН РАЗ, ЧТОБЫ СОЗДАТЬ АККАУНТ'], ['TRY AGAIN', 'NOCHMAL', 'ЕЩЕ РАЗ'],

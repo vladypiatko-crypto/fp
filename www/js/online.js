@@ -25,6 +25,10 @@ const bossDef = name => Object.assign({ xp: 0, fx: BOSSES[name].fx || 'metal', h
 const worldFromSeed = seed => Object.keys(WORLD_THEME)[seed % Object.keys(WORLD_THEME).length];
 const makeCode = () => { let c = ''; for (let i = 0; i < 4; i++) c += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]; return c; };
 const nowS = () => performance.now() / 1000;
+const SNAP_HZ = 15; // host snapshots per second
+const NEAR = 300; // only things this close to a duck are sent (nobody can see further)
+const DROP_KINDS = ['xp', 'coin'];
+const ri = v => Math.round(v);
 
 // ?peer=host:port points at your own PeerJS server (used for testing); otherwise the free public one
 function peerOptions() {
@@ -270,7 +274,7 @@ function startOnlineGame(m) {
   if (pid < 0) return;
   Net.role = pid === 0 ? 'host' : 'client';
   Net.idToPid = {}; members.forEach((x, i) => { Net.idToPid[x.id] = i; });
-  Net.inputs = [{}, {}, {}, {}]; Net.evt = []; Net.sndT = 0;
+  Net.inputs = [{}, {}, {}, {}]; Net.evt = []; Net.sfxSent = {}; Net.sndT = 0;
   const level = m.mode === 'story' ? LEVELS[m.level - 1] : null;
   const world = level ? level.world : worldFromSeed(m.seed);
   const net = { role: Net.role, pid, members: members.map(x => ({ id: x.id, name: x.name, lo: x.lo })), seed: m.seed };
@@ -476,33 +480,43 @@ GameScene.prototype.netPump = function (dt) {
   if (this.role !== 'host') return;
   this.sndT -= dt;
   if (this.sndT > 0) return;
-  this.sndT = 1 / 12;
+  this.sndT = 1 / SNAP_HZ;
   Net.relay('all', this.buildSnapshot());
 };
 // what the host tells everyone: positions, stats and the few visuals that can't be rebuilt locally
 GameScene.prototype.buildSnapshot = function () {
-  const ev = Net.evt.splice(0, Net.evt.length);
+  const ev = Net.evt.splice(0, Net.evt.length); Net.sfxSent = {};
+  const ps = this.players.filter(p => !p.gone), near = (x, y) => ps.some(p => Math.abs(p.x - x) < NEAR && Math.abs(p.y - y) < NEAR);
   return {
     t: 'snap', T: r2(this.t), st: this.state, n: r2(this.stateT),
-    // players: [x, y, face, aim, hp, maxHp, bits, dashT, dashCd, reviveT, level, xp, xpNext, kills, pending, upgrades, choiceKeys, hurtFlash, squash, speed]
+    // players: [x, y, face, aim, hp, maxHp, bits, dashT, dashCd, reviveT, level, xp, xpNext, kills, pending, upgrades, choiceKeys, hurtFlash, squash, speed, over]
     p: this.players.map(p => [r1(p.x), r1(p.y), NET_FACE.indexOf(p.facing), r2(p.aim), Math.ceil(p.hp), p.maxHp,
       (p.down ? 1 : 0) | (p.gone ? 2 : 0) | (p.moving ? 4 : 0) | (p.iframes > 0 ? 8 : 0) | (lvl(p, 'shield') && p.shieldT <= 0 ? 16 : 0),
       r2(p.dashT), r2(p.dashCd), r2(p.reviveT), p.level, Math.floor(p.xp), p.xpNext, p.kills, p.pending, p.up,
       (p.choice || []).map(c => c.k), r2(p.hurtFlash), r2(p.squash), r2(p.spd), Object.keys(p.over)]),
     // enemies: [id, type, x, y, hp, maxHp, bits, z, state, flash, fuse, rot]
-    e: this.enemies.filter(e => !e.dead).map(e => [e.id, NET_TYPES.indexOf(e.type), r1(e.x), r1(e.y), Math.ceil(e.hp), Math.ceil(e.maxHp),
+    e: this.enemies.filter(e => !e.dead && (e.boss || near(e.x, e.y))).map(e => [e.id, NET_TYPES.indexOf(e.type), r1(e.x), r1(e.y), Math.ceil(e.hp), Math.ceil(e.maxHp),
       (e.flip ? 1 : 0) | (e.boss ? 2 : 0) | (e.spawnT > 0 ? 4 : 0) | (e.fuse >= 0 ? 8 : 0) | (e.phase === 2 ? 16 : 0) | (e.slowT > 0 ? 32 : 0),
-      r1(e.z || 0), stIdx(e.bs || e.st), r2(e.flash || 0), r2(Math.max(0, e.fuse)), r2(e.rot || 0)]),
-    // shots: [kind, x, y, vx, vy, life, max, r, col, ownerPid, weapon, rot, ang, back, sp]
-    s: this.shots.map(b => [b.kind, r1(b.x), r1(b.y), r1(b.vx), r1(b.vy), r2(b.life), b.max, b.r, b.col, b.owner.id, b.owner.weapon, r2(b.rot), r2(b.ang || 0), b.back ? 1 : 0, r1(b.sp || 0)]),
-    es: this.eshots.map(b => [r1(b.x), r1(b.y), r1(b.vx), r1(b.vy), r2(b.life), r2(b.wait || 0), b.sk || 'seed', b.r || 2]),
-    dr: this.drops.map(g => [g.k, r1(g.x), r1(g.y), r1(g.z || 0), g.v, r1(g.bob)]),
-    it: this.items.map(k => [k.k, r1(k.x), r1(k.y), r1(k.t)]),
-    bm: this.bombs.map(b => [r1(b.x0), r1(b.y0), r1(b.x1), r1(b.y1), r2(b.t), b.dur, b.r]),
-    mk: this.marks.filter(m => !m.done).map(m => [r1(m.x), r1(m.y), m.r, r2(m.t), m.dur]),
-    pd: this.puddles.map(q => [r1(q.x), r1(q.y), r1(q.r), r2(q.t), q.dur, q.lava ? 1 : 0]),
-    fx: this.fx.map(f => Object.assign({}, f)),
-    tx: this.texts.map(t => ({ x: r1(t.x), y: r1(t.y), str: t.str, col: t.col, life: r2(t.life), max: t.max, sc: t.sc, vy: r1(t.vy) })),
+      ri(e.z || 0), stIdx(e.bs || e.st), r2(e.flash || 0), r2(Math.max(0, e.fuse)), r1(e.rot || 0)]),
+    // shots: [kind, x, y, vx, vy, life, max, r, col (plain bullets only), ownerPid, weapon, (boomerangs: rot, ang, back, sp)]
+    s: this.shots.filter(b => near(b.x, b.y)).map(b => {
+      const a = [b.kind, ri(b.x), ri(b.y), ri(b.vx), ri(b.vy), r2(b.life), b.max, b.r, b.kind === 'bullet' ? b.col : 0, b.owner.id, b.owner.weapon];
+      if (b.kind === 'rang') a.push(r1(b.rot), r2(b.ang || 0), b.back ? 1 : 0, ri(b.sp || 0));
+      return a;
+    }),
+    es: this.eshots.filter(b => near(b.x, b.y)).map(b => [ri(b.x), ri(b.y), ri(b.vx), ri(b.vy), r2(b.life), r2(b.wait || 0), b.sk || 'seed', b.r || 2]),
+    // drops: [kind, x, y, z, value]
+    dr: this.drops.filter(g => near(g.x, g.y)).map(g => [DROP_KINDS.indexOf(g.k), ri(g.x), ri(g.y), ri(g.z || 0), g.v]),
+    it: this.items.map(k => [k.k, ri(k.x), ri(k.y), r1(k.t)]),
+    bm: this.bombs.map(b => [ri(b.x0), ri(b.y0), ri(b.x1), ri(b.y1), r2(b.t), b.dur, b.r]),
+    mk: this.marks.filter(m => !m.done).map(m => [ri(m.x), ri(m.y), m.r, r2(m.t), m.dur]),
+    pd: this.puddles.map(q => [ri(q.x), ri(q.y), ri(q.r), r2(q.t), q.dur, q.lava ? 1 : 0]),
+    fx: this.fx.filter(f => f.x === undefined || near(f.x, f.y)).map(f => {
+      const o = {}; for (const k in f) { const v = f[k]; o[k] = typeof v === 'number' ? r1(v) : k === 'pts' ? v.map(q => [ri(q[0]), ri(q[1])]) : v; }
+      return o;
+    }),
+    // floating texts: [x, y, str, col, life, max, sc, vy]
+    tx: this.texts.filter(t => near(t.x, t.y)).map(t => [ri(t.x), ri(t.y), t.str, t.col, r2(t.life), t.max, t.sc, ri(t.vy)]),
     ban: this.banners.map(b => ({ str: b.str, col: b.col, t: r2(b.t), dur: b.dur, sub: b.sub })),
     bi: this.bossIntro ? { t: r2(this.bossIntro.t), name: this.bossIntro.name } : null,
     res: this.results,
@@ -511,6 +525,15 @@ GameScene.prototype.buildSnapshot = function () {
 };
 GameScene.prototype.applySnapshot = function (s) {
   this.t = s.T; this.stateT = s.n;
+  // how often snapshots really arrive: everything glides from where it is to the new spot over that long
+  const now = nowS();
+  if (this.snapAt) this.snapDt = clamp((this.snapDt || 1 / SNAP_HZ) * 0.8 + (now - this.snapAt) * 0.2, 1 / 40, 0.3);
+  this.snapAt = now;
+  const glide = (o, x, y, far) => {
+    if (o.tx === undefined || Math.abs(x - o.x) > far || Math.abs(y - o.y) > far) { o.x = x; o.y = y; o.gx = x; o.gy = y; }
+    else { o.gx = o.x; o.gy = o.y; }
+    o.tx = x; o.ty = y; o.gk = 0;
+  };
   const entering = s.st === 'results' && this.state !== 'results';
   this.state = s.st === 'results' || s.st === 'dying' || s.st === 'clear' ? s.st : 'play';
   if (s.st === 'results') this.results = s.res;
@@ -521,7 +544,8 @@ GameScene.prototype.applySnapshot = function (s) {
     const bits = a[6];
     p.down = !!(bits & 1); p.gone = !!(bits & 2); p.moving = !!(bits & 4); p.iframes = bits & 8 ? 0.3 : 0; p.shieldT = bits & 16 ? 0 : 1;
     p.over = {}; for (const k of a[20] || []) p.over[k] = true;
-    p.hp = a[4]; p.maxHp = a[5]; p.dashT = a[7]; p.dashCd = a[8]; p.reviveT = a[9];
+    p.hp = a[4]; p.maxHp = a[5]; p.reviveT = a[9];
+    if (i !== this.localPid) { p.dashT = a[7]; p.dashCd = a[8]; } // our own dash runs on this device
     p.level = a[10]; p.xp = a[11]; p.xpNext = a[12]; p.kills = a[13]; p.pending = a[14]; p.up = a[15];
     p.aim = a[3]; p.facing = NET_FACE[a[2]] || p.facing; p.spd = a[19];
     p.hurtFlash = a[17]; p.squash = a[18];
@@ -531,13 +555,10 @@ GameScene.prototype.applySnapshot = function (s) {
       p.choiceSig = sig; p.choice = a[16].length ? a[16].map(findUpgrade) : null; p.choiceT = 0; p.sel = 1; p.cardSnd = 0;
     }
     if (i === this.localPid) {
-      // our own duck: keep moving locally, and only pull back to the host's position when we're far off
+      // our own duck moves on this device (the host follows us); only when we're down does the host's spot count
       const dx = a[0] - p.x, dy = a[1] - p.y;
-      if (dx * dx + dy * dy > 24 * 24 || p.down) { p.x = a[0]; p.y = a[1]; } else { p.x += dx * 0.25; p.y += dy * 0.25; }
-    } else {
-      if (p.tx === undefined) { p.x = a[0]; p.y = a[1]; }
-      p.tx = a[0]; p.ty = a[1];
-    }
+      if (p.down || p.gone || dx * dx + dy * dy > 90 * 90) { p.x = a[0]; p.y = a[1]; p.dashT = 0; }
+    } else glide(p, a[0], a[1], 120);
   });
   // enemies: keep the same objects (so they glide between snapshots)
   const prev = this.clientEnemies, next = new Map(), list = [];
@@ -548,8 +569,7 @@ GameScene.prototype.applySnapshot = function (s) {
       const name = NET_TYPES[a[1]], d = ENEMIES[name] || bossDef(name);
       e = { id, type: name, d, boss: !!(a[6] & 2), x: a[2], y: a[3], r: d.r, anim: rand(0, 10), kx: 0, ky: 0, eggCd: 0, dead: false, flash: 0 };
     }
-    e.tx = a[2]; e.ty = a[3];
-    if (e.x === undefined) { e.x = a[2]; e.y = a[3]; }
+    glide(e, a[2], a[3], 120);
     e.hp = a[4]; e.maxHp = a[5]; e.flip = !!(a[6] & 1); e.spawnT = a[6] & 4 ? 0.3 : 0;
     e.fuse = a[10] > 0 ? a[10] : -1; e.phase = a[6] & 16 ? 2 : 1; e.slowT = a[6] & 32 ? 1 : 0;
     e.z = a[7]; e.bs = e.st = NET_STATES[a[8]] || ''; e.flash = Math.max(e.flash, a[9]); e.rot = a[11];
@@ -559,22 +579,25 @@ GameScene.prototype.applySnapshot = function (s) {
   for (const [id, e] of prev) if (!next.has(id) && inAnyView(e.x, e.y, 20)) burst(e.x, e.y, e.d.fx === 'goo' ? ['#7ee04a', '#c3ff9a'] : ['#ffd23f', '#fff8e7', '#3d3a52'], 6, 60, 0.35);
   this.clientEnemies = next; this.enemies = list;
   this.boss = list.find(e => e.boss) || null;
-  this.shots = s.s.map(a => ({ kind: a[0], x: a[1], y: a[2], vx: a[3], vy: a[4], life: a[5], max: a[6], r: a[7], col: a[8], owner: { id: a[9], weapon: a[10] }, rot: a[11], ang: a[12], back: !!a[13], sp: a[14] }));
+  this.shots = s.s.map(a => ({ kind: a[0], x: a[1], y: a[2], vx: a[3], vy: a[4], life: a[5], max: a[6], r: a[7], col: a[8] || '#fff8e7', owner: { id: a[9], weapon: a[10] }, rot: a[11] || 0, ang: a[12] || 0, back: !!a[13], sp: a[14] || 0 }));
   this.eshots = s.es.map(a => ({ x: a[0], y: a[1], vx: a[2], vy: a[3], life: a[4], wait: a[5], s: PROJ_ART[a[6]] || PROJ_ART.seed, sk: a[6], r: a[7] }));
-  this.drops = s.dr.map(a => ({ k: a[0], x: a[1], y: a[2], z: a[3], v: a[4], bob: a[5], tgt: null }));
+  this.drops = s.dr.map(a => ({ k: DROP_KINDS[a[0]] || 'xp', x: a[1], y: a[2], z: a[3], v: a[4], bob: this.t + (a[1] * 7 + a[2] * 3) % 10, tgt: null }));
   this.items = s.it.map(a => ({ k: a[0], x: a[1], y: a[2], t: a[3] }));
   this.bombs = s.bm.map(a => ({ x0: a[0], y0: a[1], x1: a[2], y1: a[3], t: a[4], dur: a[5], r: a[6] }));
   this.marks = s.mk.map(a => ({ x: a[0], y: a[1], r: a[2], t: a[3], dur: a[4] }));
   this.puddles = (s.pd || []).map(a => ({ x: a[0], y: a[1], r: a[2], t: a[3], dur: a[4], lava: !!a[5] }));
   this.fx = s.fx;
-  this.texts = s.tx;
+  this.texts = s.tx.map(a => ({ x: a[0], y: a[1], str: a[2], col: a[3], life: a[4], max: a[5], sc: a[6], vy: a[7] }));
   this.banners = s.ban;
   this.bossIntro = s.bi ? { t: s.bi.t, name: s.bi.name } : null;
   // one-off things the host did: sounds, impact frames, screen shake
   for (const ev of s.ev) {
     if (ev[0] === 'sfx') { const f = sfx[ev[1]]; if (f) f(...ev.slice(2)); }
     else if (ev[0] === 'imp') Impact.trigger(ev[1]);
-    else if (ev[0] === 'shk') for (const v of this.views) v.shake = Math.max(v.shake, ev[1]);
+    else if (ev[0] === 'shk' || ev[0] === 'shkp') { // only shake for things near us
+      const me = this.players[this.localPid];
+      if (ev[0] === 'shkp' ? ev[2] === this.localPid : !me || ev[2] === undefined || d2(me.x, me.y, ev[2], ev[3]) < 170 * 170) for (const v of this.views) v.shake = Math.max(v.shake, ev[1]);
+    }
   }
 };
 GameScene.prototype.resultsReached = function (res) {
@@ -589,7 +612,8 @@ GameScene.prototype.applyClientInput = function (from, msg) {
   if (pid === undefined || pid === 0) return;
   const r = Net.inputs[pid];
   r.mx = clamp(Number(msg.mx) || 0, -1, 1); r.my = clamp(Number(msg.my) || 0, -1, 1);
-  if (msg.dash) r.dash = true;
+  if (Number.isFinite(msg.x) && Number.isFinite(msg.y)) { r.x = clamp(msg.x, 8, WORLD_SIZE - 8); r.y = clamp(msg.y, 10, WORLD_SIZE - 6); }
+  if (msg.dash) r.dashUntil = nowS() + 0.35;
   if (msg.ok) r.ok = true;
   const p = this.players[pid];
   if (p && !p.gone && Number.isInteger(msg.sel)) p.sel = clamp(msg.sel, 0, 2);
@@ -613,25 +637,43 @@ GameScene.prototype.clientUpdate = function (dt) {
   this.clientTick(dt);
   const mv = this.localMove();
   const me = this.players[this.localPid];
+  const dashHit = Input.dash(0, 1);
+  this.pendDash = this.pendDash || dashHit;
+  if (me) me.dashCd = Math.max(0, (me.dashCd || 0) - dt);
   if (me && !me.down && this.state === 'play' && !picking(me)) {
-    const sp = me.spd || 70;
-    me.x = clamp(me.x + mv.x * sp * dt, 8, WORLD_SIZE - 8); me.y = clamp(me.y + mv.y * sp * dt, 10, WORLD_SIZE - 6);
+    // our duck moves right here on our screen (dashes too), the host just follows
+    if (dashHit && me.dashCd <= 0) {
+      let dx = mv.x, dy = mv.y, l = Math.hypot(dx, dy);
+      if (l < 0.1) { dx = me.facing === 'left' ? -1 : me.facing === 'right' ? 1 : 0; dy = me.facing === 'up' ? -1 : me.facing === 'down' ? 1 : 0; l = 1; }
+      const sp = pSpeed(me) * 3.6;
+      me.dvx = dx / l * sp; me.dvy = dy / l * sp; me.dashT = 0.18; me.dashCd = pDashCd(me);
+      burst(me.x, me.y, ['#e9f5db', '#c9e4a6'], 6, 40, 0.35);
+    }
+    let vx, vy;
+    if (me.dashT > 0) { me.dashT -= dt; vx = me.dvx; vy = me.dvy; me.ghosts.push({ x: me.x, y: me.y, t: 0.18, facing: me.facing }); }
+    else { const sp = pSpeed(me); vx = mv.x * sp; vy = mv.y * sp; }
+    me.x = clamp(me.x + vx * dt, 8, WORLD_SIZE - 8); me.y = clamp(me.y + vy * dt, 10, WORLD_SIZE - 6);
     me.moving = Math.hypot(mv.x, mv.y) > 0.1; me.mvx = mv.x; me.mvy = mv.y;
     if (me.moving) me.moved = true;
-  }
+  } else if (me) me.dashT = 0;
   if (me && me.pending > 0 && me.choice) { // level-up cards: move the highlight here, the host applies the pick
     const menu = Input.menuFor(0, 1);
     if (menu.left) { me.sel = (me.sel + 2) % 3; sfx.uiMove(); }
     if (menu.right) { me.sel = (me.sel + 1) % 3; sfx.uiMove(); }
     if (menu.ok && me.choiceT > CARD_READY) this.pendOk = true;
   }
-  this.pendDash = this.pendDash || Input.dash(0, 1);
   this.inAcc += dt;
   if (this.inAcc >= 1 / 30) {
     this.inAcc = 0;
-    Net.relay('host', { t: 'in', mx: r2(mv.x), my: r2(mv.y), dash: this.pendDash, ok: this.pendOk, sel: me ? me.sel : 1 });
+    Net.relay('host', { t: 'in', mx: r2(mv.x), my: r2(mv.y), x: me ? r1(me.x) : undefined, y: me ? r1(me.y) : undefined, dash: this.pendDash, ok: this.pendOk, sel: me ? me.sel : 1 });
     this.pendDash = false; this.pendOk = false;
   }
+};
+// move from where it was shown to the latest snapshot's spot at an even speed, so it arrives as the next one comes
+GameScene.prototype.glideStep = function (o, dt) {
+  if (o.tx === undefined) return;
+  o.gk = Math.min(1.2, o.gk + dt / (this.snapDt || 1 / SNAP_HZ));
+  o.x = o.gx + (o.tx - o.gx) * o.gk; o.y = o.gy + (o.ty - o.gy) * o.gk;
 };
 // the cosmetic side of the simulation, so the friend's screen looks alive between snapshots
 GameScene.prototype.clientTick = function (dt) {
@@ -641,7 +683,10 @@ GameScene.prototype.clientTick = function (dt) {
   for (const p of this.players) {
     p.hurtFlash = Math.max(0, p.hurtFlash - dt); p.squash = Math.max(0, p.squash - dt); p.turnT = Math.max(0, p.turnT - dt);
     if (p.choice) p.choiceT += dt;
-    if (p.id !== this.localPid && p.tx !== undefined) { p.x += (p.tx - p.x) * Math.min(1, dt * 12); p.y += (p.ty - p.y) * Math.min(1, dt * 12); }
+    if (p.id !== this.localPid) {
+      this.glideStep(p, dt);
+      if (p.dashT > 0) { p.dashT -= dt; p.ghosts.push({ x: p.x, y: p.y, t: 0.18, facing: p.facing }); } // a friend's dash: leave afterimages
+    }
     if (p.mvx === undefined) { p.mvx = 0; p.mvy = 0; }
     p.eggAng += dt * eggSpeed(p);
     tickPicked(p, dt); dustFor(p, dt); heartbeatFor(p, dt);
@@ -649,7 +694,7 @@ GameScene.prototype.clientTick = function (dt) {
   }
   for (const e of this.enemies) {
     e.anim += dt; e.flash = Math.max(0, e.flash - dt);
-    if (e.tx !== undefined) { e.x += (e.tx - e.x) * Math.min(1, dt * 12); e.y += (e.ty - e.y) * Math.min(1, dt * 12); }
+    this.glideStep(e, dt);
   }
   for (const b of this.shots) {
     if (b.kind === 'flame') { const k = Math.pow(0.08, dt); b.vx *= k; b.vy *= k; b.r = 2 + (1 - b.life / b.max) * 4; }

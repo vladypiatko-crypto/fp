@@ -127,11 +127,14 @@ const Cloud = {
     if (!taken.includes(doc.id)) {
       taken.push(doc.id); if (taken.length > 60) taken.shift();
       if (g.coins > 0) Save.addCoins(Math.min(100000, g.coins));
-      const it = g.cat && COSMETICS[g.cat] && COSMETICS[g.cat].find(x => x.id === g.id);
-      if (it) Save.unlock(g.cat, g.id);
+      // one item (cat + id) or several (items: [{cat, id}, ...])
+      const list = (Array.isArray(g.items) ? g.items.slice(0, 80) : [{ cat: g.cat, id: g.id }])
+        .filter(x => x && COSMETICS[x.cat] && COSMETICS[x.cat].some(c => c.id === x.id)).map(x => ({ cat: x.cat, id: x.id }));
+      for (const x of list) Save.unlock(x.cat, x.id);
       Save.write();
       const msg = typeof g.msg === 'string' ? g.msg.toUpperCase().slice(0, 60) : '', from = String(g.from || 'ADMIN').slice(0, 12);
-      if (g.coins > 0 || it || msg) this.popups.push({ coins: g.coins > 0 ? g.coins : 0, cat: it ? g.cat : null, id: it ? g.id : null, msg, from });
+      const one = list.length === 1 ? list[0] : null;
+      if (g.coins > 0 || list.length || msg) this.popups.push({ coins: g.coins > 0 ? g.coins : 0, cat: one ? one.cat : null, id: one ? one.id : null, items: list.length > 1 ? list : null, msg, from });
     }
     doc.ref.delete().catch(() => {});
   },
@@ -284,7 +287,8 @@ class GiftScene {
     if (g.notice) {
       text(g.notice, W / 2, H / 2 - 10, C.white, 1, 1, 'outline');
     } else {
-      const gift = it || g.coins, admin = it && it.rarity === 'admin';
+      const many = g.items && g.items.map(x => Object.assign({ it: itemOf(x.cat, x.id) }, x)).filter(x => x.it);
+      const gift = it || g.coins || (many && many.length), admin = (it && it.rarity === 'admin') || (many && many.some(x => x.it.rarity === 'admin'));
       if (gift) { // turning light rays (rainbow for ADMIN items)
         ctx.save(); ctx.translate(W / 2, H * 0.47); ctx.rotate(T * 0.6);
         for (let i = 0; i < 8; i++) { ctx.rotate(TAU / 8); ctx.fillStyle = admin ? RAINBOW[i % RAINBOW.length] : '#ffd23f'; ctx.globalAlpha = admin ? 0.1 : 0.12; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-10, -H); ctx.lineTo(10, -H); ctx.fill(); }
@@ -294,6 +298,7 @@ class GiftScene {
       drawZoomText(gift ? 'ADMIN GIFT!' : 'A MESSAGE FROM THE ADMIN', W / 2, H * 0.1, lerp(6, 2, k), gift ? C.pink : C.gold);
       const msgH = g.msg ? 12 + 7 * Math.min(3, wrapText(keep(g.msg), Math.min(W - 60, 220)).length) : 0;
       const cy = Math.round(H * 0.47 - msgH * 0.35);
+      let bubY = H * 0.42; // where the message bubble goes: under whatever was given
       if (it) {
         text('YOU GOT:', W / 2, H * 0.1 + 12, C.white, 1, 1, 'outline');
         const lo = Save.data.loadout[0], y = cy + 16 - Math.abs(Math.sin(T * 4)) * 4, sc = (g.msg ? 3 : 4) * k;
@@ -305,14 +310,32 @@ class GiftScene {
         const col = rarityCol(it.rarity, T);
         text(it.name, W / 2, cy + 24, col, 1, 1, 'outline');
         text(RARITY[it.rarity].name, W / 2, cy + 33, col, 1, 1, null);
+        if (g.coins) text(fmt('AND {0} COINS!', g.coins), W / 2, cy + 42, C.gold, 1, 1, 'outline');
+        bubY = cy + (g.coins ? 52 : 42);
+      } else if (many && many.length) { // a whole bundle: a grid of everything, popping in one by one
+        text(fmt('YOU GOT {0} ITEMS!', many.length), W / 2, H * 0.1 + 12, C.white, 1, 1, 'outline');
+        const cs = 22, cols = Math.min(many.length, Math.max(4, Math.floor((W - 40) / (cs + 2)))), rows = Math.ceil(many.length / cols);
+        const gx = Math.floor(W / 2 - (cols * (cs + 2) - 2) / 2), gy = Math.round(H * 0.1 + 24);
+        const show = Math.min(many.length, rows * cols, Math.floor((H - gy - (g.msg ? 70 : 40)) / (cs + 2)) * cols);
+        many.slice(0, show).forEach((x, i) => {
+          const kk = Ease.outBack(clamp((T - 0.2 - i * 0.06) / 0.3, 0, 1)); if (kk <= 0) return;
+          const cx = gx + (i % cols) * (cs + 2) + cs / 2, cy2 = gy + Math.floor(i / cols) * (cs + 2) + cs / 2, s2 = cs * kk;
+          panel(Math.round(cx - s2 / 2), Math.round(cy2 - s2 / 2), Math.round(s2), Math.round(s2), C.ui, rarityCol(x.it.rarity, T + i * 0.1), null, false);
+          if (kk > 0.6) drawItemIcon(x.cat, x.id, cx, cy2, T, Save.data.loadout[0]);
+        });
+        if (show < many.length) text(fmt('+{0} MORE', many.length - show), W / 2, gy + Math.ceil(show / cols) * (cs + 2) + 1, C.gray, 1, 1, null);
+        let ly = gy + Math.ceil(show / cols) * (cs + 2) + (show < many.length ? 9 : 1);
+        if (g.coins) { text(fmt('AND {0} COINS!', g.coins), W / 2, ly, C.gold, 1, 1, 'outline'); ly += 9; }
+        bubY = ly + 6;
       } else if (g.coins) {
         const bob = Math.abs(Math.sin(T * 4)) * 4;
         ctx.save(); ctx.translate(W / 2, cy - 6 - bob); ctx.scale(3 * k, 3 * k); coinIcon(-4, -4, T); ctx.restore();
         text(fmt('YOU GOT {0} COINS!', g.coins), W / 2, cy + 18, C.gold, 1, 1, 'outline');
+        bubY = cy + 32;
       }
       if (g.msg) { // speech bubble with the admin's note
         const bw = Math.min(W - 40, 240), lines = wrapText(keep(g.msg), bw - 16).slice(0, 3), bh = 14 + lines.length * 7;
-        const bx = Math.floor(W / 2 - bw / 2), by = Math.min(H - 30 - bh, Math.round(gift ? cy + 42 : H * 0.42));
+        const bx = Math.floor(W / 2 - bw / 2), by = Math.min(H - 30 - bh, Math.round(bubY));
         panel(bx, by, bw, bh, '#fff8e7', OUT, null, false);
         ctx.fillStyle = '#fff8e7'; ctx.beginPath(); ctx.moveTo(W / 2 - 5, by); ctx.lineTo(W / 2, by - 6); ctx.lineTo(W / 2 + 5, by); ctx.fill();
         text(fmt('FROM {0}:', keep(g.from || 'ADMIN')), bx + 6, by + 4, '#c0609e', 1, 0, null);
