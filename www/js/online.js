@@ -15,7 +15,7 @@ const KEEPALIVE = 2, NET_TIMEOUT = 12; // seconds: ping interval, and silence be
 const NAMES = ['QUACKER', 'PUDDLE', 'WADDLE', 'FEATHER', 'MALLARD', 'SPLASH', 'NUGGET', 'BISCUIT', 'WIGGLE', 'SNORKEL'];
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const NET_TYPES = [...Object.keys(ENEMIES), ...Object.keys(BOSSES)];
-const NET_STATES = ['walk', 'wind', 'charge', 'summon', 'ring', 'volley', 'missiles', 'jumpUp', 'jumpAir', 'move', 'dash', 'spiral', 'burrow', ''];
+const NET_STATES = ['walk', 'wind', 'charge', 'summon', 'ring', 'volley', 'missiles', 'jumpUp', 'jumpAir', 'move', 'dash', 'spiral', 'burrow', 'breath', 'warp', ''];
 const NET_FACE = ['down', 'left', 'right', 'up'];
 const SNACK = { k: 'snack', name: 'BREAD SNACK', max: 99, d: () => 'HEAL 40 HP' };
 const r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100;

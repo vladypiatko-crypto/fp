@@ -73,6 +73,10 @@ const COSMETICS = {
     { id: 'sawblade', name: 'SAW LAUNCHER', rarity: 'epic', desc: 'SAWS BOUNCE ROBOT TO ROBOT' },
     { id: 'sniper', name: 'DUCK SNIPER', rarity: 'epic', desc: 'ONE HUGE SHOT THROUGH EVERYTHING' },
     { id: 'vortex', name: 'BLACK HOLE', rarity: 'legendary', desc: 'SUCKS ROBOTS IN, THEN POPS' },
+    { id: 'mine', name: 'MINE LAYER', rarity: 'rare', desc: 'DROPS MINES THAT GO BOOM' },
+    { id: 'sword', name: 'QUACK SWORD', rarity: 'epic', desc: 'SLASH EVERYTHING AROUND YOU' },
+    { id: 'prism', name: 'PRISM LASER', rarity: 'legendary', desc: 'SPLITS INTO RAINBOW BEAMS' },
+    { id: 'banhammer', name: 'BAN HAMMER', rarity: 'admin', desc: 'SMASH! YOU ARE BANNED!', gift: true },
     { id: 'goldgun', name: 'GOLDEN QUACKER', rarity: 'admin', desc: 'SHINY SHOTS THAT PIERCE', gift: true }, // only given by the admin
   ],
 };
@@ -122,6 +126,14 @@ const WEAPONS = {
   sniper: { cd: 1.35, dmg: 78, n: 1, spread: 0.06, range: 230, kb: 140, col: '#fff3b0' },
   // a slow orb that pulls robots in, hurts them, then pops
   vortex: { cd: 1.6, dmg: 40, n: 1, spread: 0.5, speed: 70, life: 1.6, r: 5, kb: 0, range: 150, col: '#9d5cff', pull: 48 },
+  // drops a mine that explodes when a robot touches it (or when its timer runs out)
+  mine: { cd: 0.9, dmg: 30, n: 1, spread: 0.6, range: 120, aoe: 26, life: 6, r: 4, kb: 0, col: '#e8343b' },
+  // melee: slashes every robot in an arc in front of you (multi shot widens it)
+  sword: { cd: 0.45, dmg: 24, n: 1, range: 48, reach: 34, arc: 2, kb: 170, col: '#bde6ff' },
+  // like the beak beam, but always three rainbow beams
+  prism: { cd: 0.7, dmg: 15, n: 3, spread: 0.28, range: 165, kb: 30, col: '#ffffff' },
+  // admin only: a giant hammer smashes down on the target
+  banhammer: { cd: 1.0, dmg: 130, n: 1, range: 130, aoe: 36, kb: 280, col: '#ff5ce1' },
   goldgun: { cd: 0.3, dmg: 15, n: 1, spread: 0.14, speed: 320, life: 0.7, r: 1, kb: 80, range: 165, col: '#ffd23f' },
 };
 
@@ -201,3 +213,13 @@ const LEVELS = [
 const ENDLESS_POOL_STEPS = [[0, 'bolt', 10], [25, 'boom', 4], [55, 'goo', 3], [85, 'drone', 2.5], [110, 'tank', 2.5], [140, 'saw', 2.5]];
 const BOSS_ORDER = ['crab', 'gooking', 'yeti', 'sawtank', 'honk'];
 const SPEAKERS = { honk: { name: 'DR. HONK', col: '#c06bff' }, daisy: { name: 'PRINCESS DAISY', col: '#ff9ccb' }, duck: { name: 'DUCKS', col: '#ffd23f' }, narr: { name: '', col: '#fff8e7' } };
+
+// ================================================================ more cosmetics (chests), plus the admin set (gifts only)
+COSMETICS.skin.push({ id: 'robin', name: 'ROBIN', rarity: 'common' }, { id: 'penguin', name: 'PENGUIN', rarity: 'rare' }, { id: 'zombie', name: 'ZOMBIE', rarity: 'epic' },
+  { id: 'diamond', name: 'DIAMOND', rarity: 'legendary' }, { id: 'galaxy', name: 'GALAXY', rarity: 'admin', gift: true });
+COSMETICS.hat.push({ id: 'santa', name: 'SANTA HAT', rarity: 'rare' }, { id: 'ninja', name: 'NINJA BAND', rarity: 'rare' }, { id: 'unicorn', name: 'UNICORN HORN', rarity: 'epic' },
+  { id: 'mohawk', name: 'PUNK MOHAWK', rarity: 'epic' });
+COSMETICS.halo.push({ id: 'snow', name: 'SNOW ORBIT', rarity: 'rare' }, { id: 'saturn', name: 'SATURN RING', rarity: 'legendary' }, { id: 'adminhalo', name: 'ADMIN HALO', rarity: 'admin', gift: true });
+COSMETICS.trail.push({ id: 'snow', name: 'SNOWFLAKES', rarity: 'common' }, { id: 'coins', name: 'MONEY RAIN', rarity: 'epic' }, { id: 'glitch', name: 'GLITCH', rarity: 'legendary' },
+  { id: 'admintrail', name: 'ADMIN SPARKS', rarity: 'admin', gift: true });
+

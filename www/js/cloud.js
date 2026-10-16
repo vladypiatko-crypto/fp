@@ -168,6 +168,24 @@ const Cloud = {
   ban(uid, on) { return this.db.doc('users/' + uid).update(on ? { banned: true } : { banned: false, flags: 0 }); },
   resetProgress(uid) { return this.db.doc('users/' + uid).update({ resetAt: Date.now(), save: { coins: 150, unlocked: DEFAULT_UNLOCKS.slice() } }); },
   give(uid, gift) { return this.db.collection('users/' + uid + '/gifts').add(Object.assign({ from: (this.me && this.me.username) || 'ADMIN', at: serverTime() }, gift)); },
+  // the same gift for every player (written in batches); returns how many got it
+  async giveAll(gift) {
+    const qs = await withTimeout(this.db.collection('users').get(), 15000);
+    const g = Object.assign({ from: (this.me && this.me.username) || 'ADMIN' }, gift);
+    let batch = this.db.batch(), n = 0, total = 0;
+    for (const d of qs.docs) {
+      if (d.id === this.uid) continue;
+      batch.set(this.db.collection('users/' + d.id + '/gifts').doc(), Object.assign({ at: serverTime() }, g)); n++; total++;
+      if (n >= 400) { await withTimeout(batch.commit(), 15000); batch = this.db.batch(); n = 0; }
+    }
+    if (n) await withTimeout(batch.commit(), 15000);
+    return total;
+  },
+  async countUsers() {
+    const qs = await withTimeout(this.db.collection('users').get(), 15000);
+    let banned = 0; qs.forEach(d => { if (d.data().banned) banned++; });
+    return { all: qs.size, banned };
+  },
 };
 Cloud.init();
 

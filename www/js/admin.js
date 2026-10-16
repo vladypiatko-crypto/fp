@@ -8,6 +8,7 @@ class AdminScene {
     this.T = 0; this.ui = new UI(); this.kb = new Keyboard({ value: '', max: USERNAME_MAX, space: false });
     this.typing = false; this.results = null; this.note = ''; this.busy = false; this.scroll = 0;
     this.search();
+    Cloud.countUsers().then(c => { this.count = c; }).catch(() => {});
   }
   resumed() { this.search(); }
   async search() {
@@ -29,6 +30,7 @@ class AdminScene {
   draw() {
     drawChecker(); this.ui.begin();
     text('ADMIN', W / 2, 5, C.pink, 2, 1, 'outline');
+    if (this.count) text(fmt('PLAYERS: {0}  BANNED: {1}', this.count.all, this.count.banned), W - 6, 8, C.gray, 1, 2, null);
     const fw = Math.min(W - 120, 160), fx = Math.floor(W / 2 - fw / 2) - 22;
     drawField(fx, 22, fw, this.kb.value, 0, this.T, { active: this.typing, hint: 'TAP TO TYPE A USERNAME' });
     this.ui.add('field', fx, 22, fw, 16, () => { this.typing = true; });
@@ -142,9 +144,9 @@ class GiftPickScene {
     if (this.coins.size) gift.coins = this.coinTotal();
     if (this.msg) gift.msg = this.msg;
     this.busy = true;
-    Cloud.give(this.owner.uid, gift).then(() => {
+    (this.toAll ? Cloud.giveAll(gift) : Cloud.give(this.owner.uid, gift)).then(n => {
       this.busy = false; this.sel.clear(); this.coins.clear(); this.msg = ''; this.owner.msg = '';
-      this.say('SENT!'); sfx.chestOpen('epic');
+      this.say(this.toAll ? fmt('SENT TO {0} PLAYERS!', n) : 'SENT!'); sfx.chestOpen('epic');
     }).catch(e => { this.busy = false; this.say(e.message === 'timeout' ? 'NO INTERNET CONNECTION?' : 'ONLY THE ADMIN CAN DO THAT'); sfx.uiBack(); });
   }
   resumed() { if (this.owner.msg !== undefined) this.msg = this.owner.msg; }
@@ -157,7 +159,8 @@ class GiftPickScene {
   draw() {
     drawChecker(); this.ui.begin();
     const T = this.T, u = this.u;
-    text(fmt('GIFTS FOR {0}', keep(u ? u.username : '...')), W / 2, 4, C.pink, 1, 1, 'outline');
+    text(this.toAll ? 'GIFTS FOR EVERYONE' : fmt('GIFTS FOR {0}', keep(u ? u.username : '...')), W / 2, 4, this.toAll ? C.gold : C.pink, 1, 1, 'outline');
+    drawButton(this.ui, 'toall', W - 76, 1, 70, 11, this.toAll ? 'TO: EVERYONE' : 'TO: ONE', { col: this.toAll ? '#6b4a16' : C.ui, on: () => { this.toAll = !this.toAll; sfx.uiMove(); } });
     // tabs
     const tw = Math.floor((W - 16 - (GIFT_TABS.length - 1) * 2) / GIFT_TABS.length), ty = 15;
     GIFT_TABS.forEach((t, i) => {

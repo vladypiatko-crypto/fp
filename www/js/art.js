@@ -126,6 +126,10 @@ const GUN_ART = {
   sawblade: spr(['.sSs.....', 'sSmSs....', '.mmmmmmmm', 'mmk......', 'kk.......'], { s: '#d5dbe6', S: '#8b8aa0', m: '#e8343b', k: '#3d3a52' }),
   sniper: spr(['.....kk.....', 'mmmmmmmmmmmW', 'wwmm........', 'ww..........'], { m: '#3d3a52', w: '#a0642d', k: '#5ec8ff', W: '#fff3b0' }),
   vortex: spr(['..pppp..', '.pPkkPp.', 'mmmkkmmm', 'mm......'], { p: '#9d5cff', P: '#c9a6ff', k: '#0c0a1a', m: '#4a4763' }),
+  mine: spr(['..rr....', 'mmmmmmmm', 'mmk.....', 'kk......'], { r: '#e8343b', m: '#5a5872', k: '#3d3a52' }),
+  sword: spr(['.y.........', 'kyWwwwwwwww', '.y.........'], { k: '#5c3416', y: '#ffd23f', w: '#d5dbe6', W: '#ffffff' }),
+  prism: spr(['..ccc..', 'mcRGBcm', 'mmmmmmm', 'mm.....'], { c: '#e3f4ff', R: '#ff4d6d', G: '#51cf66', B: '#5ec8ff', m: '#4a4763' }),
+  banhammer: spr(['.......rrr', '.......rRr', 'kkkkkkkrRr', '.......rRr', '.......rrr'], { k: '#a0642d', r: '#ff5ce1', R: '#ffd23f' }),
   goldgun: spr(['.ggggggW', 'gGgggo..', 'go......'], { g: '#ffd23f', G: '#fff3b0', o: '#b07a00', W: '#ffffff' }),
 };
 const PROJ_ART = {
@@ -138,6 +142,7 @@ const PROJ_ART = {
   popcorn: spr(['ww', 'wy'], { w: '#fff8e7', y: '#ffd23f' }, null),
   frost: spr(['.w.', 'wcw', '.w.'], { w: '#ffffff', c: '#5ec8ff' }),
   rocket: spr(['.pp..', 'fpppw', '.pp..'], { p: '#ff6fae', w: '#fff8e7', f: '#ffd23f' }),
+  mine: spr(['.k.', 'mmm', 'mMm'], { k: '#3d3a52', m: '#5a5872', M: '#8b8aa0' }),
   eggbomb: spr(['.ww.', 'wwwW', 'wwwW', '.ww.'], { w: '#fff8e7', W: '#e9cf8a' }),
   saw: spr(['.s.s.', 'sSSSs', '.SkS.', 'sSSSs', '.s.s.'], { s: '#d5dbe6', S: '#8b8aa0', k: '#3d3a52' }),
 };
@@ -420,6 +425,11 @@ function drawDuck(x, y, o) {
   if (o.halo && o.halo !== 'none') drawHalo(o.halo, headX, haloY, sc, t, 'front');
   if (fx === 'gold' && Math.random() < 0.08 && o.sparkle) o.sparkle(x + rand(-w / 2, w / 2), y - rand(0, h));
   if (fx === 'lava' && Math.random() < 0.1 && o.ember) o.ember(x + rand(-w / 3, w / 3), y - rand(2, h * 0.6));
+  if (fx === 'galaxy') for (let i = 0; i < 4; i++) { // tiny stars twinkling inside the feathers
+    if ((Math.floor(t * 6) + i * 3) % 5 === 0) continue;
+    ctx.fillStyle = i % 2 ? '#ffffff' : '#ffd23f';
+    ctx.fillRect(Math.round(x + Math.sin(i * 2.7 + 1) * w * 0.3), Math.round(y - h * (0.25 + (i * 0.37) % 0.5)), Math.max(1, Math.round(sc)), Math.max(1, Math.round(sc)));
+  }
   ctx.globalAlpha = a0;
 }
 // ---------------------------------------------------------------- hat animation
@@ -500,10 +510,13 @@ function drawHalo(id, x, y, sc, t, layer) {
   } else if (id === 'void') {
     if (layer === 'back') pellipse(x, y, rx + sc, ry + sc, 'rgba(20,6,40,0.6)');
     ringFront('#9d5cff', sc + 1); ringFront('#1b1325');
-  }
+  } else if (HALO_FX[id]) HALO_FX[id]({ x, y, sc, t, layer, rx, ry, ringFront });
 }
+// more halos and trails plug in here (see the end of this file)
+const HALO_FX = {}, TRAIL_FX = {}, TRAIL_ICON = {};
 // small preview of a trail for the locker grid
 function drawTrailIcon(id, x, y, t) {
+  if (TRAIL_ICON[id]) { TRAIL_ICON[id](x, y, t); return; }
   const cols = { sparkle: ['#fff8e7', '#ffd23f'], bubbles: ['#bde6ff'], fire: ['#ff8c1a', '#ffd23f', '#e8343b'], rainbow: RAINBOW, leaves: ['#7ac74f'], ghost: ['#bdb6d8'] }[id];
   if (id === 'hearts') { drawSpr(ART.tinyHeart, x - 3, y + 1); drawSpr(ART.tinyHeart, x + 3, y - 3); return; }
   if (id === 'notes') { drawSpr(ART.note, x - 2, y); drawSpr(ART.note, x + 4, y - 3); return; }
@@ -517,3 +530,70 @@ function drawTrailIcon(id, x, y, t) {
     ctx.fillRect(Math.round(x + Math.cos(a) * 5), Math.round(y + Math.sin(a * 1.3) * 4), 1 + (i % 2), 1 + (i % 2));
   }
 }
+
+// ================================================================ more cosmetics: skins, hats, halos, trails (and the admin set)
+Object.assign(SKIN_PAL, {
+  robin: { h: '#7a4a24', y: '#7a4a24', d: '#4f2f14', w: '#e8603b', o: '#ffd23f', f: '#c9a26b', K: OUT, c: '#ff8c6b' },
+  penguin: { h: '#2a2a3a', y: '#2a2a3a', d: '#15151f', w: '#ffffff', o: '#ff9f1c', f: '#ff9f1c', K: OUT, c: '#ffd23f' },
+  zombie: { h: '#8fbf6a', y: '#6f9f4a', d: '#4a6f2f', w: '#b8d49a', o: '#8b8aa0', f: '#8b8aa0', K: '#e8343b', c: '#5a7a3a' },
+  diamond: { h: '#bde6ff', y: '#9fdcff', d: '#5ec8ff', w: '#ffffff', o: '#e3f4ff', f: '#5ec8ff', K: OUT, c: '#ffffff' },
+  galaxy: { h: '#2a1748', y: '#2a1748', d: '#140b26', w: '#9d5cff', o: '#ff6fae', f: '#ff6fae', K: '#ffd23f', c: '#5ec8ff' },
+});
+Object.assign(SKIN_FX, { diamond: 'glow', galaxy: 'galaxy' });
+Object.assign(HAT_ART, {
+  santa: hat({ rows: ['......ww', '...rrrr.', '..rrrrr.', '.rrrrrr.', 'wwwwwwww'], x: 2, y: 1 }, { r: '#e8343b', w: '#ffffff' }),
+  ninja: hat({ rows: ['kkkkkk'], x: 3, y: 1 }, { k: '#3d3a52' },
+    { side: { rows: ['..kkkkkkk', '.k.......', 'k........'], x: 0, y: 3 }, up: { rows: ['kkkkkk', '.k..k.', 'k....k'], x: 3, y: 3 } }),
+  unicorn: hat({ rows: ['...y', '..yp', '..y.', '.py.', 'yy..'], x: 5, y: 1 }, { y: '#fff3b0', p: '#ff6fae' }, { fx: 'shine' }),
+  mohawk: hat({ rows: ['p.g.b', 'pggbb', 'pggbb'], x: 4, y: 1 }, { p: '#ff6fae', g: '#51cf66', b: '#5ec8ff' }),
+});
+Object.assign(HAT_MOTION, { santa: { amp: 0.6, sp: 3 }, ninja: { amp: 0.9, sp: 7 }, unicorn: { amp: 0.2, sp: 2 }, mohawk: { amp: 0.5, sp: 5 } });
+Object.assign(HAT_SPARK, { santa: ['#ffffff'], ninja: ['#8b8aa0'], unicorn: RAINBOW, mohawk: ['#ff6fae', '#51cf66', '#5ec8ff'] });
+Object.assign(HALO_FX, {
+  // three snowflakes going round
+  snow({ x, y, sc, t, layer, rx, ry }) {
+    for (let i = 0; i < 3; i++) {
+      const a = t * 1.8 + i * TAU / 3, front = Math.sin(a) > 0;
+      if ((layer === 'front') !== front) continue;
+      const px = Math.round(x + Math.cos(a) * (rx + 2 * sc)), py = Math.round(y + 4 * sc + Math.sin(a) * (ry + 1.5 * sc));
+      ctx.fillStyle = '#bde6ff'; ctx.fillRect(px - sc, py, sc * 3, sc); ctx.fillRect(px, py - sc, sc, sc * 3);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(px, py, sc, sc);
+    }
+  },
+  // a wide tilted ring like Saturn's, with a little moon
+  saturn({ x, y, sc, t, layer }) {
+    const rx = 9 * sc, ry = 2.4 * sc, n = 40;
+    for (let i = 0; i < n; i++) {
+      const a = i / n * TAU, front = Math.sin(a) > 0;
+      if ((layer === 'front') !== front) continue;
+      ctx.fillStyle = i % 4 === 0 ? '#fff3b0' : i % 2 ? '#ffd23f' : '#ff8c1a';
+      ctx.fillRect(Math.round(x + Math.cos(a) * rx), Math.round(y + 3 * sc + Math.sin(a) * ry + Math.cos(a) * 1.5 * sc), sc, sc);
+    }
+    const ma = t * 1.2, mf = Math.sin(ma) > 0;
+    if ((layer === 'front') === mf) pcirc(x + Math.cos(ma) * (rx + 3 * sc), y + 3 * sc + Math.sin(ma) * (ry + 2 * sc), 1.5 * sc, '#c3c2d4');
+  },
+  // admin: a double rainbow ring with sparkles
+  adminhalo({ x, y, sc, t, layer, rx, ry }) {
+    const n = 34;
+    for (let k = 0; k < 2; k++) for (let i = 0; i < n; i++) {
+      const a = i / n * TAU + (k ? -t : t) * 1.5, front = Math.sin(a) > 0;
+      if ((layer === 'front') !== front) continue;
+      ctx.fillStyle = RAINBOW[Math.floor(i / n * 6 + t * 10 + k * 3) % 6];
+      ctx.fillRect(Math.round(x + Math.cos(a) * (rx + k * 2 * sc)), Math.round(y - k * 2 * sc + Math.sin(a) * (ry + k * sc)), sc + 1 - k, sc + 1 - k);
+    }
+    if (layer === 'front' && Math.floor(t * 8) % 3 === 0) { ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(x + Math.sin(t * 5) * rx), Math.round(y - 3 * sc), sc, sc); }
+  },
+});
+Object.assign(TRAIL_FX, {
+  snow: (T, x, y) => T.push({ x, y: y - 6, vx: rand(-6, 6), vy: rand(4, 10), life: 0.9, max: 0.9, col: pick(['#ffffff', '#bde6ff']), size: 2, sway: rand(0, 6) }),
+  coins: (T, x, y) => T.push({ x, y: y - 3, vx: rand(-10, 10), vy: rand(-30, -18), life: 0.6, max: 0.6, col: pick(['#ffd23f', '#fff3b0', '#d99a00']), size: 2, tw: Math.random() < 0.3 }),
+  glitch: (T, x, y) => { for (let i = 0; i < 2; i++) T.push({ x: x + rand(-5, 5), y: y - rand(0, 8), vx: 0, vy: 0, life: 0.25, max: 0.25, col: pick(RAINBOW), size: rint(2, 3) }); },
+  admintrail: (T, x, y) => { T.push({ x, y: y - 3, vx: rand(-8, 8), vy: rand(-16, -6), life: 0.7, max: 0.7, col: RAINBOW[(performance.now() / 60 | 0) % 6], size: 2 }); if (Math.random() < 0.3) T.push({ x: x + rand(-4, 4), y: y - 8, vx: 0, vy: -10, life: 0.5, max: 0.5, col: '#ffffff', tw: true }); },
+});
+Object.assign(TRAIL_ICON, {
+  snow(x, y, t) { for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? '#bde6ff' : '#ffffff'; ctx.fillRect(Math.round(x - 6 + i * 4), Math.round(y - 4 + ((t * 8 + i * 5) % 9)), 2, 2); } },
+  coins(x, y, t) { coinIcon(x - 7, y - 2, t); coinIcon(x + 1, y - 5, t + 0.5); },
+  glitch(x, y, t) { for (let i = 0; i < 6; i++) { ctx.fillStyle = RAINBOW[(i + Math.floor(t * 10)) % 6]; ctx.fillRect(Math.round(x - 6 + (i * 5) % 12), Math.round(y - 4 + (i * 3) % 8), 3, 2); } },
+  admintrail(x, y, t) { for (let i = 0; i < 6; i++) { ctx.fillStyle = RAINBOW[(i + Math.floor(t * 8)) % 6]; ctx.fillRect(Math.round(x - 7 + i * 2.5), Math.round(y + Math.sin(t * 6 + i) * 3), 2, 2); } },
+});
+

@@ -239,6 +239,7 @@ class GameScene {
   }
   // online, a pause stops the game for everybody (and anybody can carry on)
   pause(by) {
+    this.adminMenu = false;
     this.state = 'paused'; this.sticks = [null, null, null, null]; Music.paused = true; sfx.uiBack();
     this.pausedBy = by === undefined ? this.localPid || 0 : by;
     if (this.role === 'client') { this.pauseAskT = nowSec() + 0.6; Net.relay('host', { t: 'in', pause: 1 }); }
@@ -298,12 +299,26 @@ class GameScene {
     if (this.state === 'paused') this.drawPause();
     if (this.state === 'results') this.drawResults();
   }
+  // the admin's cheat menu (only on the admin's device, and online only for the host)
+  adminPowers() {
+    const close = (msg) => { this.adminMenu = false; this.resume(); if (msg) banner(msg, '#ff5ce1', 1.6); };
+    return [
+      ['a_heal', 'HEAL EVERYONE', () => { for (const p of this.players) if (!p.gone) { p.down = false; p.reviveT = 0; p.hp = p.maxHp; } sfx.revive(); close('HEALED!'); }],
+      ['a_level', 'LEVEL UP', () => { for (const p of this.players) if (!p.gone) gainXp(p, p.xpNext - p.xp); close('LEVEL UP!'); }],
+      ['a_clear', 'CLEAR ROBOTS', () => { for (const e of this.enemies) if (!e.dead && !e.boss) killEnemy(e, this.players[0]); sfx.bigBoom(); close('KABOOM!'); }],
+      ['a_boss', 'SPAWN BOSS', () => { if (this.boss && !this.boss.dead) return; close(); spawnBoss(this.level ? this.level.boss : BOSS_ORDER[this.bossCount % BOSS_ORDER.length]); }],
+      ['a_god', this.godMode ? 'GOD MODE: ON' : 'GOD MODE: OFF', () => { this.godMode = !this.godMode; sfx.uiMove(); }],
+      ['a_back', 'BACK', () => { this.adminMenu = false; }],
+    ];
+  }
   drawPause() {
     ctx.fillStyle = 'rgba(15,10,26,0.78)'; ctx.fillRect(0, 0, W, H);
     const ui = this.pauseUI; ui.begin();
+    if (this.adminMenu) { this.drawAdminPowers(ui); return; }
     const bw = 104, bh = 16, gap = 4;
     const labels = [['resume', 'RESUME', () => this.resume()]];
     if (!this.online) labels.push(['locker', 'LOCKER', () => Trans.go(() => Scenes.push(new LockerScene({ fromPause: true })))]);
+    if (typeof Cloud !== 'undefined' && Cloud.isAdmin() && this.role !== 'client') labels.push(['admin', 'ADMIN POWERS', () => { this.adminMenu = true; sfx.uiMove(); }]);
     labels.push(['sound', AU.muted ? 'SOUND: OFF' : 'SOUND: ON', () => { setMuted(!AU.muted); Save.data.muted = AU.muted; Save.write(); }]);
     if (fsSupported()) labels.push(['fs', document.fullscreenElement ? 'EXIT FULLSCREEN' : 'FULLSCREEN', toggleFullscreen]);
     labels.push(['quit', this.online ? 'LEAVE GAME' : this.mode === 'story' ? 'QUIT TO MAP' : 'QUIT TO MENU',
@@ -325,6 +340,14 @@ class GameScene {
       shadow(x, y, 6);
       drawDuck(x, y + Math.round(Math.abs(Math.sin(p.anim * 5)) * -2), { skin: p.lo.skin, hat: p.lo.hat, halo: p.lo.halo, facing: ['down', 'right', 'up', 'left'][Math.floor(p.anim * 2) % 4], frame: Math.floor(p.anim * 6) % 2, blink: p.blinkT < 0, t: p.anim, sc: 2 });
     });
+  }
+  drawAdminPowers(ui) {
+    const items = this.adminPowers(), bw = 120, bh = 15, gap = 3;
+    const total = items.length * (bh + gap) - gap + 24;
+    const px = Math.floor(W / 2 - bw / 2 - 8), py = Math.floor(H / 2 - total / 2);
+    panel(px, py, bw + 16, total + 12, '#2a1238', '#ff5ce1', C.uiL);
+    text('ADMIN POWERS', W / 2, py + 6, rarityCol('admin', performance.now() / 1000), 1, 1, 'outline');
+    items.forEach(([id, label, on], i) => drawButton(ui, id, px + 8, py + 22 + i * (bh + gap), bw, bh, label, { on, def: i === 0, col: id === 'a_back' ? C.ui : '#4b2a6b' }));
   }
   drawResults() {
     const r = this.results, k = Math.min(1, this.stateT / 0.4);
@@ -406,7 +429,8 @@ function spawnEnemy(type, pos, opts = {}) {
 }
 // every world has its own song
 const WORLD_SONG = { pond: 'battle', woods: 'battle', peaks: 'sky', factory: 'factory', tower: 'factory', beach: 'beach', swamp: 'swamp', clouds: 'sky', moon: 'space', ship: 'factory',
-  volcano: 'volcano', desert: 'beach', candy: 'candy', crystal: 'cave', castle: 'castle' };
+  volcano: 'volcano', desert: 'beach', candy: 'candy', crystal: 'cave', castle: 'castle',
+  jungle: 'jungle', pirate: 'pirate', knight: 'castle', west: 'western', neon: 'neon' };
 const worldSong = w => WORLD_SONG[w] || 'battle';
 function spawnBoss(id) {
   const b = BOSSES[id];
@@ -547,6 +571,7 @@ function explode(x, y, r, dmg, owner, hurtsPlayers) {
   if (hurtsPlayers) for (const p of alivePlayers()) if (d2(x, y, p.x, p.y) < (r + p.r) ** 2) hurtPlayer(p, dmg);
 }
 function hurtPlayer(p, dmg) {
+  if (R.godMode) return; // admin power: nothing hurts
   if (p.down || p.iframes > 0 || p.dashT > 0 || R.state === 'clear' || picking(p)) return;
   if (lvl(p, 'shield') && p.shieldT <= 0) { // bubble shield: this hit pops the bubble instead
     p.shieldT = shieldCd(p); p.iframes = 0.5;
@@ -680,6 +705,7 @@ function updateTrail(p, dt) {
   else if (trail === 'leaves') T.push({ x, y: y - 5, vx: rand(-12, 12), vy: rand(4, 10), life: 1, max: 1, s: ART.leaf, sway: rand(0, 6) });
   else if (trail === 'fire') { for (let i = 0; i < 2; i++) T.push({ x: x + rand(-2, 2), y, vx: rand(-6, 6), vy: rand(-26, -14), life: 0.4, max: 0.4, col: pick(['#ff8c1a', '#ffd23f', '#e8343b']), size: 2 }); }
   else if (trail === 'ghost') p.ghosts.push({ x: p.x, y: p.y, t: 0.3, facing: p.facing, soft: true });
+  else if (TRAIL_FX[trail]) TRAIL_FX[trail](T, x, y, p);
   if (T.length > 400) T.splice(0, T.length - 400);
 }
 function fireWeapons(p, dt, tgt) {
@@ -818,7 +844,8 @@ function fireMain(p, tgt, wd) {
   sfx.shoot(p.weapon, p.id);
   p.recoil = 0.08;
   R.fx.push({ k: 'muzzle', x: mx, y: my, t: 0, dur: 0.07, col });
-  if (p.weapon === 'laser') {
+  if (p.weapon === 'laser' || p.weapon === 'prism') {
+    const rainbow = p.weapon === 'prism';
     for (let i = 0; i < n; i++) {
       const a = base + (i - (n - 1) / 2) * wd.spread, cx = Math.cos(a), cy = Math.sin(a);
       const len = wd.range;
@@ -829,7 +856,38 @@ function fireMain(p, tgt, wd) {
         const perp = Math.abs(ex * cy - ey * cx);
         if (perp < e.r + 2) hurtEnemy(e, dmg, cx, cy, wd.kb, p);
       }
-      R.fx.push({ k: 'beam', x0: mx, y0: my, x1: mx + cx * len, y1: my + cy * len, t: 0, dur: 0.14, col });
+      R.fx.push({ k: 'beam', x0: mx, y0: my, x1: mx + cx * len, y1: my + cy * len, t: 0, dur: 0.14, col: rainbow ? RAINBOW[(i * 2 + Math.floor(R.t * 6)) % 6] : col });
+    }
+    return;
+  }
+  if (p.weapon === 'sword') { // slash in an arc; multi shot makes it wider and longer
+    const arc = wd.arc + multi * 0.35, reach = wd.reach + multi * 4;
+    for (const e of R.enemies) {
+      if (e.dead || e.spawnT > 0) continue;
+      const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy);
+      if (d > reach + e.r) continue;
+      let da = Math.atan2(dy, dx) - base; da = Math.atan2(Math.sin(da), Math.cos(da));
+      if (Math.abs(da) > arc / 2 && d > e.r + 6) continue;
+      hurtEnemy(e, dmg, dx / (d || 1), dy / (d || 1), wd.kb, p);
+    }
+    p.swing = (p.swing || 1) * -1;
+    R.fx.push({ k: 'slash', x: p.x, y: p.y - 5, a: base, arc, r: reach, t: 0, dur: 0.16, col, dir: p.swing });
+    return;
+  }
+  if (p.weapon === 'banhammer') { // SMASH
+    const x = tgt.x, y = tgt.y;
+    R.fx.push({ k: 'hammer', x, y, t: 0, dur: 0.22 });
+    R.fx.push({ k: 'ring', x, y, r: wd.aoe, t: 0, dur: 0.3, col });
+    forNear(x, y, wd.aoe + 10, e => { const dd = Math.hypot(e.x - x, e.y - y); if (dd < wd.aoe + e.r) hurtEnemy(e, dmg, (e.x - x) / (dd || 1), (e.y - y) / (dd || 1), wd.kb, p); });
+    burst(x, y, ['#ff5ce1', '#ffd23f', '#ffffff'], 18, 110, 0.5);
+    floatText(x, y - 22, 'BANNED!', '#ff5ce1', 0.8);
+    shakeFor(p, 4); impactAt('small', x, y);
+    return;
+  }
+  if (p.weapon === 'mine') { // drop mines around you, a step towards the target
+    for (let i = 0; i < n; i++) {
+      const a = base + (i - (n - 1) / 2) * wd.spread, x = p.x + Math.cos(a) * 12, y = p.y + 2 + Math.sin(a) * 12;
+      R.shots.push({ kind: 'mine', x, y, vx: 0, vy: 0, life: wd.life, max: wd.life, dmg, pierce: 0, hit: new Set(), owner: p, r: wd.r, col: wd.col, kb: 0, aoe: wd.aoe, rot: 0 });
     }
     return;
   }
@@ -903,6 +961,8 @@ function shotEnd(b, hitE) {
       R.shots.push(s);
     }
     sfx.pop();
+  } else if (b.kind === 'mine') {
+    explode(b.x, b.y, b.aoe, b.dmg, b.owner);
   } else if (b.kind === 'vortex') { // the black hole pops
     R.fx.push({ k: 'ring', x: b.x, y: b.y, r: 34, t: 0, dur: 0.3, col: '#9d5cff' });
     burst(b.x, b.y, ['#9d5cff', '#c9a6ff', '#0c0a1a'], 18, 110, 0.5);
@@ -959,9 +1019,10 @@ function updateShots(dt) {
     if (b.life <= 0) { shotEnd(b); continue; }
     forNear(b.x, b.y, 18, e => {
       if (b.hit.has(e.id) || e.bs === 'burrow') return;
+      if (b.kind === 'mine' && b.max - b.life < 0.4) return; // not armed yet
       const rr = e.r + b.r + 1;
       if (d2(b.x, b.y, e.x, e.y) < rr * rr) {
-        if (b.kind === 'bubble' || b.kind === 'rocket') { b.life = 0; shotEnd(b, e); return true; }
+        if (b.kind === 'bubble' || b.kind === 'rocket' || b.kind === 'mine') { b.life = 0; shotEnd(b, e); return true; }
         b.hit.add(e.id);
         const l = Math.hypot(b.vx, b.vy) || 1;
         hurtEnemy(e, b.dmg, b.vx / l, b.vy / l, b.kb, b.owner);
@@ -1207,6 +1268,25 @@ function updateBoss(e, tgt, dx, dy, dist, dt) {
         if (e.step >= 30) { e.bs = 'walk'; e.bt = 2.6 * fast; }
       }
       break;
+    case 'breath': { // stands and breathes a cone of fire that slowly follows you
+      if (e.step === 0) { e.step = 1; e.bt = 1.5; e.ba = Math.atan2(tgt.y - e.y, tgt.x - e.x); e.tick = 0; floatText(e.x, e.y - 36, 'FWOOOSH!', C.orange, 0.9); }
+      let da = Math.atan2(tgt.y - e.y, tgt.x - e.x) - e.ba; da = Math.atan2(Math.sin(da), Math.cos(da));
+      e.ba += clamp(da, -dt * 0.9, dt * 0.9);
+      e.tick -= dt;
+      if (e.tick <= 0) { e.tick = 0.045; shoot(e.ba + rand(-0.32, 0.32), rand(105, 135), bullet); }
+      if (e.bt <= 0) { e.bs = 'walk'; e.bt = 2.4 * fast; }
+      break;
+    }
+    case 'warp': // fades out, pops up right next to you and bursts
+      if (e.step === 0) { e.step = 1; e.bt = 0.55; sfx.warp(); }
+      if (e.bt <= 0) {
+        const a = rand(0, TAU); e.x = clamp(tgt.x + Math.cos(a) * 46, 20, WORLD_SIZE - 20); e.y = clamp(tgt.y + Math.sin(a) * 46, 20, WORLD_SIZE - 20);
+        R.fx.push({ k: 'ring', x: e.x, y: e.y, r: 36, t: 0, dur: 0.3, col: B.col });
+        for (let i = 0; i < 12; i++) shoot(i / 12 * TAU, 78, bullet);
+        burst(e.x, e.y, [B.col, '#ffffff'], 16, 90, 0.4); shakeAt(e.x, e.y, 4);
+        e.bs = 'walk'; e.bt = 2.2 * fast;
+      }
+      break;
     case 'burrow': { // dives underground (can't be hit), tunnels after you and bursts out under your feet
       if (e.step === 0) { e.step = 1; e.bt = 1.7; burst(e.x, e.y + 8, ['#c98a4a', '#e0a86a'], 16, 70, 0.5); shakeAt(e.x, e.y, 3); sfx.boom(); }
       mx = dx * e.spd * 2.4; my = dy * e.spd * 2.4;
@@ -1432,6 +1512,11 @@ function drawView(v) {
     else if (b.kind === 'feather') drawSprX(PROJ_ART.feather, b.x, b.y, { rot: Math.atan2(b.vy, b.vx) });
     else if (b.kind === 'corn') drawSprX(PROJ_ART.corn, b.x, b.y, { rot: b.rot * 0.3 });
     else if (b.kind === 'saw') drawSprX(PROJ_ART.saw, b.x, b.y, { rot: b.rot * 1.5 });
+    else if (b.kind === 'mine') {
+      drawSprX(PROJ_ART.mine, b.x, b.y);
+      const armed = b.max - b.life >= 0.4, blink = (b.life * (b.life < 1.5 ? 12 : 4) | 0) % 2;
+      ctx.fillStyle = armed && blink ? '#ff3b3b' : '#7a1f24'; ctx.fillRect(Math.round(b.x), Math.round(b.y - 3), 1, 1);
+    }
     else if (b.kind === 'vortex') { // a little black hole with spinning purple rings
       const pulse = Math.sin(b.rot * 0.5) * 1.5;
       pcirc(b.x, b.y, 9 + pulse, 'rgba(157,92,255,0.25)'); pring(b.x, b.y, 7 + pulse, '#9d5cff', 1); pcirc(b.x, b.y, 4, '#0c0a1a'); pring(b.x, b.y, 4, '#c9a6ff', 1);
@@ -1476,6 +1561,19 @@ function drawView(v) {
         const [x0, y0] = f.pts[i], [x1, y1] = f.pts[i + 1], mx = (x0 + x1) / 2 + rand(-6, 6), my = (y0 + y1) / 2 + rand(-6, 6);
         pline(x0, y0, mx, my, f.col || '#fff36b', 2); pline(mx, my, x1, y1, f.col || '#fff36b', 2); pline(x0, y0, mx, my, '#fff'); pline(mx, my, x1, y1, '#fff');
       }
+    } else if (f.k === 'slash') { // a bright arc swept in the swing direction
+      const n = 9, sweep = Math.min(1, k * 1.6);
+      for (let i = 0; i < n - 1; i++) {
+        const u = i / (n - 1); if (u > sweep) break;
+        const a = f.a + (u - 0.5) * f.arc * (f.dir || 1), a2 = f.a + ((i + 1) / (n - 1) - 0.5) * f.arc * (f.dir || 1);
+        const r = f.r * (0.85 + 0.15 * Math.sin(u * Math.PI));
+        ctx.globalAlpha = 1 - k * 0.7;
+        pline(f.x + Math.cos(a) * r, f.y + Math.sin(a) * r, f.x + Math.cos(a2) * r, f.y + Math.sin(a2) * r, f.col, 3);
+        pline(f.x + Math.cos(a) * (r - 3), f.y + Math.sin(a) * (r - 3), f.x + Math.cos(a2) * (r - 3), f.y + Math.sin(a2) * (r - 3), '#ffffff', 1);
+        ctx.globalAlpha = 1;
+      }
+    } else if (f.k === 'hammer') { // the ban hammer comes down
+      drawSprX(GUN_ART.banhammer, f.x - 4, f.y - 14, { sc: 2, rot: -Math.PI / 2 + Math.min(1, k * 2) * Math.PI / 2 * 0.9, ax: 0.1, ay: 0.5, alpha: 1 - Math.max(0, k - 0.6) * 2.5 });
     } else if (f.k === 'beam') {
       const th = k < 0.5 ? 3 : 2;
       pline(f.x0, f.y0, f.x1, f.y1, f.col, th + 1); pline(f.x0, f.y0, f.x1, f.y1, '#ffffff', 1);
@@ -1533,6 +1631,7 @@ function drawTrail(p) {
   }
 }
 function drawEnemy(e) {
+  if (e.bs === 'warp' && (e.anim * 24 | 0) % 2) return; // flickering out of time
   if (e.bs === 'burrow') { // underground: only a mound of earth moving along
     const w = 10 + Math.sin(e.anim * 20) * 2;
     pellipse(e.x, e.y + 6, w + 1, 5, OUT); pellipse(e.x, e.y + 6, w, 4, '#c98a4a'); pellipse(e.x - 2, e.y + 5, w * 0.6, 2, '#e0a86a');
