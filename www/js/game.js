@@ -237,12 +237,21 @@ class GameScene {
       else this.finish(true);
     }
   }
-  pause() { this.state = 'paused'; this.sticks = [null, null, null, null]; Music.paused = true; sfx.uiBack(); }
-  resume() { this.state = 'play'; Music.paused = false; }
+  // online, a pause stops the game for everybody (and anybody can carry on)
+  pause(by) {
+    this.state = 'paused'; this.sticks = [null, null, null, null]; Music.paused = true; sfx.uiBack();
+    this.pausedBy = by === undefined ? this.localPid || 0 : by;
+    if (this.role === 'client') { this.pauseAskT = nowSec() + 0.6; Net.relay('host', { t: 'in', pause: 1 }); }
+  }
+  resume() {
+    this.state = 'play'; Music.paused = false;
+    if (this.role === 'client') { this.pauseAskT = nowSec() + 0.6; Net.relay('host', { t: 'in', resume: 1 }); }
+  }
   updatePause(dt, acts) {
     if (acts.start || acts.back) { this.resume(); return; }
     this.pauseUI.update(dt, acts);
     this.tickCosmetics(dt);
+    this.netPump(dt); // online: keep friends up to date (they see the pause too)
   }
   // end of a run: work out coins and unlocks, then show the results panel
   finish(won) {
@@ -293,8 +302,9 @@ class GameScene {
     ctx.fillStyle = 'rgba(15,10,26,0.78)'; ctx.fillRect(0, 0, W, H);
     const ui = this.pauseUI; ui.begin();
     const bw = 104, bh = 16, gap = 4;
-    const labels = [['resume', 'RESUME', () => this.resume()], ['locker', 'LOCKER', () => Trans.go(() => Scenes.push(new LockerScene({ fromPause: true })))],
-      ['sound', AU.muted ? 'SOUND: OFF' : 'SOUND: ON', () => { setMuted(!AU.muted); Save.data.muted = AU.muted; Save.write(); }]];
+    const labels = [['resume', 'RESUME', () => this.resume()]];
+    if (!this.online) labels.push(['locker', 'LOCKER', () => Trans.go(() => Scenes.push(new LockerScene({ fromPause: true })))]);
+    labels.push(['sound', AU.muted ? 'SOUND: OFF' : 'SOUND: ON', () => { setMuted(!AU.muted); Save.data.muted = AU.muted; Save.write(); }]);
     if (fsSupported()) labels.push(['fs', document.fullscreenElement ? 'EXIT FULLSCREEN' : 'FULLSCREEN', toggleFullscreen]);
     labels.push(['quit', this.online ? 'LEAVE GAME' : this.mode === 'story' ? 'QUIT TO MAP' : 'QUIT TO MENU',
       () => (this.online ? this.quitOnline() : Trans.go(() => { Music.paused = false; Scenes.set(this.mode === 'story' ? new MapScene(this.np) : new TitleScene(true)); }))]);
@@ -302,6 +312,8 @@ class GameScene {
     const px = Math.floor(W / 2 - bw / 2 - 8), py = Math.floor(H / 2 - total / 2);
     panel(px, py, bw + 16, total + 12, C.uiD, OUT, C.uiL);
     text('PAUSED', W / 2, py + 6, C.gold, 2, 1, 'outline');
+    const pp = this.online && this.players[this.pausedBy];
+    if (pp) text(pp.id === this.localPid ? 'THE GAME IS PAUSED FOR EVERYONE' : fmt('{0} PAUSED THE GAME', keep(pp.name)), W / 2, py - 10, C.white, 1, 1, 'outline');
     labels.forEach(([id, label, on], i) => {
       drawButton(ui, id, px + 8, py + 26 + i * (bh + gap), bw, bh, label, { on, def: i === 0 });
       if (id === 'locker' && Save.anyNew()) drawNewTag(px + bw - 6, py + 26 + i * (bh + gap), performance.now() / 1000);

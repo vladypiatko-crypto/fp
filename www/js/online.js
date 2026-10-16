@@ -468,7 +468,7 @@ GameScene.prototype.onlineResultButtons = function () {
   if (this.role === 'host') return [['lobby', 'BACK TO LOBBY', () => Net.send({ t: 'back' })]];
   return [['leave', 'LEAVE', () => this.quitOnline()]];
 };
-GameScene.prototype.dashFor = function (pid) { if (this.role === 'client') this.pendDash = true; else this.players[pid].dashReq = true; };
+GameScene.prototype.dashFor = function (pid) { if (this.role === 'client') { this.pendDash = true; this.wantDash = true; } else this.players[pid].dashReq = true; };
 GameScene.prototype.dropPlayer = function (id) {
   const p = this.players[Net.idToPid[id]];
   if (!p || p.gone) return;
@@ -488,7 +488,7 @@ GameScene.prototype.buildSnapshot = function () {
   const ev = Net.evt.splice(0, Net.evt.length); Net.sfxSent = {};
   const ps = this.players.filter(p => !p.gone), near = (x, y) => ps.some(p => Math.abs(p.x - x) < NEAR && Math.abs(p.y - y) < NEAR);
   return {
-    t: 'snap', T: r2(this.t), st: this.state, n: r2(this.stateT),
+    t: 'snap', T: r2(this.t), st: this.state, n: r2(this.stateT), pb: this.pausedBy,
     // players: [x, y, face, aim, hp, maxHp, bits, dashT, dashCd, reviveT, level, xp, xpNext, kills, pending, upgrades, choiceKeys, hurtFlash, squash, speed, over]
     p: this.players.map(p => [r1(p.x), r1(p.y), NET_FACE.indexOf(p.facing), r2(p.aim), Math.ceil(p.hp), p.maxHp,
       (p.down ? 1 : 0) | (p.gone ? 2 : 0) | (p.moving ? 4 : 0) | (p.iframes > 0 ? 8 : 0) | (lvl(p, 'shield') && p.shieldT <= 0 ? 16 : 0),
@@ -535,7 +535,14 @@ GameScene.prototype.applySnapshot = function (s) {
     o.tx = x; o.ty = y; o.gk = 0;
   };
   const entering = s.st === 'results' && this.state !== 'results';
-  this.state = s.st === 'results' || s.st === 'dying' || s.st === 'clear' ? s.st : 'play';
+  // a pause asked for on this device holds for a moment, until the host has heard about it
+  const want = s.st === 'results' || s.st === 'dying' || s.st === 'clear' || s.st === 'paused' ? s.st : 'play';
+  if (!(this.pauseAskT > nowSec() && (want === 'play' || want === 'paused'))) {
+    if (want === 'paused' && this.state !== 'paused') { this.sticks = [null, null, null, null]; Music.paused = true; }
+    if (want !== 'paused' && this.state === 'paused') Music.paused = false;
+    this.state = want;
+  }
+  this.pausedBy = s.pb;
   if (s.st === 'results') this.results = s.res;
   if (entering) this.resultsReached(s.res);
   // players
@@ -558,6 +565,7 @@ GameScene.prototype.applySnapshot = function (s) {
       // our own duck moves on this device (the host follows us); only when we're down does the host's spot count
       const dx = a[0] - p.x, dy = a[1] - p.y;
       if (p.down || p.gone || dx * dx + dy * dy > 90 * 90) { p.x = a[0]; p.y = a[1]; p.dashT = 0; }
+      this.myOff = [p.x - a[0], p.y - a[1]]; // the host sees us a little behind: our own shots get moved up to us
     } else glide(p, a[0], a[1], 120);
   });
   // enemies: keep the same objects (so they glide between snapshots)
@@ -580,6 +588,8 @@ GameScene.prototype.applySnapshot = function (s) {
   this.clientEnemies = next; this.enemies = list;
   this.boss = list.find(e => e.boss) || null;
   this.shots = s.s.map(a => ({ kind: a[0], x: a[1], y: a[2], vx: a[3], vy: a[4], life: a[5], max: a[6], r: a[7], col: a[8] || '#fff8e7', owner: { id: a[9], weapon: a[10] }, rot: a[11] || 0, ang: a[12] || 0, back: !!a[13], sp: a[14] || 0 }));
+  const off = this.myOff;
+  if (off) for (const b of this.shots) if (b.owner.id === this.localPid) { b.x += off[0]; b.y += off[1]; }
   this.eshots = s.es.map(a => ({ x: a[0], y: a[1], vx: a[2], vy: a[3], life: a[4], wait: a[5], s: PROJ_ART[a[6]] || PROJ_ART.seed, sk: a[6], r: a[7] }));
   this.drops = s.dr.map(a => ({ k: DROP_KINDS[a[0]] || 'xp', x: a[1], y: a[2], z: a[3], v: a[4], bob: this.t + (a[1] * 7 + a[2] * 3) % 10, tgt: null }));
   this.items = s.it.map(a => ({ k: a[0], x: a[1], y: a[2], t: a[3] }));
@@ -615,6 +625,8 @@ GameScene.prototype.applyClientInput = function (from, msg) {
   if (Number.isFinite(msg.x) && Number.isFinite(msg.y)) { r.x = clamp(msg.x, 8, WORLD_SIZE - 8); r.y = clamp(msg.y, 10, WORLD_SIZE - 6); }
   if (msg.dash) r.dashUntil = nowS() + 0.35;
   if (msg.ok) r.ok = true;
+  if (msg.pause && this.state === 'play') this.pause(pid);
+  if (msg.resume && this.state === 'paused') this.resume();
   const p = this.players[pid];
   if (p && !p.gone && Number.isInteger(msg.sel)) p.sel = clamp(msg.sel, 0, 2);
 };
@@ -630,14 +642,15 @@ GameScene.prototype.localMove = function () {
 GameScene.prototype.clientUpdate = function (dt) {
   const acts = Input.menu();
   if (this.state === 'results') { this.updateResults(dt, acts); this.clientTick(dt); return; }
-  if (this.state === 'paused') { this.updatePause(dt, acts); this.clientTick(dt); return; }
+  if (this.state === 'paused') { this.updatePause(dt, acts); this.updateCameras(dt); return; }
   if (acts.start) { this.pause(); return; }
   this.handlePointers();
   this.ui.update(dt, null);
   this.clientTick(dt);
   const mv = this.localMove();
   const me = this.players[this.localPid];
-  const dashHit = Input.dash(0, 1);
+  // a dash from the keyboard, a pad or the touch button (handlePointers sets wantDash)
+  const dashHit = Input.dash(0, 1) || this.wantDash; this.wantDash = false;
   this.pendDash = this.pendDash || dashHit;
   if (me) me.dashCd = Math.max(0, (me.dashCd || 0) - dt);
   if (me && !me.down && this.state === 'play' && !picking(me)) {
