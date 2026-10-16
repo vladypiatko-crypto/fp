@@ -415,21 +415,23 @@ class MapScene {
     const lv = LEVELS[this.sel];
     Trans.go(() => {
       const start = () => Scenes.set(new GameScene({ mode: 'story', level: lv, np: this.np }));
-      if (lv.n === CHAPTERS[1].from && !Save.data.intro2Seen) { Save.data.intro2Seen = true; Save.write(); Scenes.set(new CutsceneScene('intro2', start, this.np)); }
+      // the first level of a later chapter opens with that chapter's intro (once)
+      const ch = CHAPTERS.find(c => c.from === lv.n && c.n > 1);
+      if (ch && !Save.data[ch.intro + 'Seen']) { Save.data[ch.intro + 'Seen'] = true; Save.write(); Scenes.set(new CutsceneScene(ch.intro, start, this.np)); }
       else start();
     });
   }
   draw() {
     const T = this.T, ch = CHAPTERS[this.page], open = this.pageOpen(this.page);
-    // chapter 1 sails on water, chapter 2 floats in the sky
-    const bgWorld = this.page === 0 ? 'pond' : 'clouds';
+    // each chapter has its own sea: chapter 1 sails on water, chapter 2 floats in the sky...
+    const bgWorld = ch.sea;
     if (!this.pats) this.pats = {};
     if (!this.pats[bgWorld]) this.pats[bgWorld] = ctx.createPattern(edgeTile(bgWorld), 'repeat');
     ctx.save(); ctx.translate(Math.floor(T * 5) % 32, 0); ctx.fillStyle = this.pats[bgWorld]; ctx.fillRect(-32, 0, W + 64, H); ctx.restore();
     const nodes = this.nodes(), reached = Math.min(Save.data.story.reached, LEVELS.length);
     // islands under every node, topped with their world's ground colour
     for (const n of nodes) {
-      const base = this.page === 0 ? ['#c9ab66', '#e9cf8a'] : ['#b9c6e8', '#e6ecfb'];
+      const base = ch.isle;
       pellipse(n.x, n.y + 6, 30, 15, base[0]); pellipse(n.x, n.y + 4, 29, 13, base[1]); pellipse(n.x, n.y + 3, 24, 10, WORLD_THEME[n.lv.world].ground[0]);
     }
     // dotted path
@@ -466,14 +468,14 @@ class MapScene {
     if (this.page > 0) drawButton(this.ui, 'prev', 4, 20, 16, 13, '<', { on: () => this.turn(this.page - 1) });
     if (this.page < CHAPTERS.length - 1) {
       drawButton(this.ui, 'next', W - 20, 38, 16, 13, '>', { on: () => this.turn(this.page + 1) });
-      if (this.pageOpen(this.page + 1) && !Save.data.intro2Seen) drawNewTag(W - 12, 38, T);
+      if (this.pageOpen(this.page + 1) && !Save.data[CHAPTERS[this.page + 1].intro + 'Seen']) drawNewTag(W - 12, 38, T);
     }
     // info panel
     const pw = Math.min(W - 12, 260), px = Math.floor(W / 2 - pw / 2), py = H - 50;
     panel(px, py, pw, 44, C.uiD, OUT, C.uiL);
     if (!open) {
       text(fmt('CHAPTER {0}', ch.n), px + 8, py + 6, C.gray, 1, 0);
-      text('BEAT CHAPTER 1 FIRST', px + 8, py + 18, C.white, 1, 0);
+      text(fmt('BEAT CHAPTER {0} FIRST', ch.n - 1), px + 8, py + 18, C.white, 1, 0);
       drawSpr(ART.lock, px + pw - 20, py + 22, false, false, 2);
     } else {
       const lv = LEVELS[this.sel];
@@ -514,6 +516,7 @@ function drawLandmark(world, x, y, T, on) {
   else if (world === 'clouds') { drawSpr(DECO_ART.cloudpillar, x - 5, y - 5); drawSpr(DECO_ART.balloon, x + 9, y - 8 + Math.round(Math.sin(T * 2) * 2)); }
   else if (world === 'moon') { drawSpr(DECO_ART.dome, x - 4, y - 1); drawSpr(DECO_ART.flag, x + 10, y - 5); drawSpr(DECO_ART.crater, x - 13, y + 4); }
   else if (world === 'ship') drawMothership(x, y - 6 + Math.round(Math.sin(T * 2) * 2), T, 0.35);
+  else if (LANDMARKS[world]) LANDMARKS[world](x, y, T, on);
   ctx.globalAlpha = 1;
 }
 

@@ -132,9 +132,13 @@ LEVELS.push(
     intro: [['honk', 'THE GOLDEN QUACK POWERS MY ULTRA SUIT! NOTHING CAN STOP ME NOW!'], ['duck', 'GIVE IT BACK, HONK! QUAAACK!']],
     outro: [] },
 );
-const CHAPTERS = [{ n: 1, from: 1, to: 5, title: 'STORY - SAVE PRINCESS DAISY!' }, { n: 2, from: 6, to: 10, title: 'CHAPTER 2 - GET THE GOLDEN QUACK BACK!' }];
+// each chapter: its levels, map look (sea + island colours) and the cutscenes around it
+const CHAPTERS = [
+  { n: 1, from: 1, to: 5, title: 'STORY - SAVE PRINCESS DAISY!', sea: 'pond', isle: ['#c9ab66', '#e9cf8a'], intro: 'intro', ending: 'ending' },
+  { n: 2, from: 6, to: 10, title: 'CHAPTER 2 - GET THE GOLDEN QUACK BACK!', sea: 'clouds', isle: ['#b9c6e8', '#e6ecfb'], intro: 'intro2', ending: 'ending2' },
+];
 const rewardOf = lv => ({ cat: lv.rewardCat || 'weapon', id: lv.reward });
-const chapterOf = n => (n > 5 ? 2 : 1);
+const chapterOf = n => { const i = CHAPTERS.findIndex(c => n >= c.from && n <= c.to); return i < 0 ? 1 : i + 1; };
 
 // ================================================================ cutscene props
 function drawMothership(x, y, t, sc = 1) {
@@ -339,14 +343,16 @@ const ENDING2_BEATS = [
       ctx.fillStyle = OUT; ctx.fillRect(0, 0, W, H);
       if (Math.random() < 0.1) cs.burst(rand(0, W), rand(0, H * 0.5), RAINBOW, 20, 50, 1.2, 30);
       const k = Ease.outBack(Math.min(1, t / 0.6));
-      drawZoomText('THE END', W / 2, H * 0.3, lerp(10, 4, k), C.gold);
-      if (t > 0.6) text('THANKS FOR PLAYING QUACK ATTACK!', W / 2, H * 0.5, C.white, 1, 1);
+      drawZoomText('CHAPTER 2 CLEAR!', W / 2, H * 0.3, lerp(10, 3, k), C.gold);
+      if (t > 0.6) text('CHAPTER 3 IS UNLOCKED!', W / 2, H * 0.5, C.white, 1, 1);
       if (t > 1.0 && cs.paid) { const lw = textW('+1000 COINS REWARD!'); coinIcon(Math.floor(W / 2 - lw / 2 - 6), Math.floor(H * 0.6), T); text('+1000 COINS REWARD!', W / 2 + 4, H * 0.6 + 1, C.gold, 1, 1); }
       drawHeroes(cs, W / 2 - 30, H * 0.88, T, true, 'down');
       drawDaisy(W / 2 + 14, H * 0.88 - Math.abs(Math.sin(T * 7)) * 3, { t: T });
       drawHonk(W / 2 + 46, H * 0.88 + 2 - Math.abs(Math.sin(T * 7 + 1)) * 3, false, 2, T);
     } },
 ];
+
+Object.assign(CUTSCENES, { intro2: INTRO2_BEATS, ending2: ENDING2_BEATS });
 
 // ================================================================ translations for chapter 2
 addPhrases([

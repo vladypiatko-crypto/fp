@@ -15,7 +15,7 @@ const KEEPALIVE = 2, NET_TIMEOUT = 12; // seconds: ping interval, and silence be
 const NAMES = ['QUACKER', 'PUDDLE', 'WADDLE', 'FEATHER', 'MALLARD', 'SPLASH', 'NUGGET', 'BISCUIT', 'WIGGLE', 'SNORKEL'];
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const NET_TYPES = [...Object.keys(ENEMIES), ...Object.keys(BOSSES)];
-const NET_STATES = ['walk', 'wind', 'charge', 'summon', 'ring', 'volley', 'missiles', 'jumpUp', 'jumpAir', 'move', 'dash', ''];
+const NET_STATES = ['walk', 'wind', 'charge', 'summon', 'ring', 'volley', 'missiles', 'jumpUp', 'jumpAir', 'move', 'dash', 'spiral', 'burrow', ''];
 const NET_FACE = ['down', 'left', 'right', 'up'];
 const SNACK = { k: 'snack', name: 'BREAD SNACK', max: 99, d: () => 'HEAL 40 HP' };
 const r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100;
@@ -508,7 +508,7 @@ GameScene.prototype.buildSnapshot = function () {
     // drops: [kind, x, y, z, value]
     dr: this.drops.filter(g => near(g.x, g.y)).map(g => [DROP_KINDS.indexOf(g.k), ri(g.x), ri(g.y), ri(g.z || 0), g.v]),
     it: this.items.map(k => [k.k, ri(k.x), ri(k.y), r1(k.t)]),
-    bm: this.bombs.map(b => [ri(b.x0), ri(b.y0), ri(b.x1), ri(b.y1), r2(b.t), b.dur, b.r]),
+    bm: this.bombs.map(b => [ri(b.x0), ri(b.y0), ri(b.x1), ri(b.y1), r2(b.t), b.dur, b.r, b.egg ? 1 : 0]),
     mk: this.marks.filter(m => !m.done).map(m => [ri(m.x), ri(m.y), m.r, r2(m.t), m.dur]),
     pd: this.puddles.map(q => [ri(q.x), ri(q.y), ri(q.r), r2(q.t), q.dur, q.lava ? 1 : 0]),
     fx: this.fx.filter(f => f.x === undefined || near(f.x, f.y)).map(f => {
@@ -583,7 +583,7 @@ GameScene.prototype.applySnapshot = function (s) {
   this.eshots = s.es.map(a => ({ x: a[0], y: a[1], vx: a[2], vy: a[3], life: a[4], wait: a[5], s: PROJ_ART[a[6]] || PROJ_ART.seed, sk: a[6], r: a[7] }));
   this.drops = s.dr.map(a => ({ k: DROP_KINDS[a[0]] || 'xp', x: a[1], y: a[2], z: a[3], v: a[4], bob: this.t + (a[1] * 7 + a[2] * 3) % 10, tgt: null }));
   this.items = s.it.map(a => ({ k: a[0], x: a[1], y: a[2], t: a[3] }));
-  this.bombs = s.bm.map(a => ({ x0: a[0], y0: a[1], x1: a[2], y1: a[3], t: a[4], dur: a[5], r: a[6] }));
+  this.bombs = s.bm.map(a => ({ x0: a[0], y0: a[1], x1: a[2], y1: a[3], t: a[4], dur: a[5], r: a[6], egg: !!a[7] }));
   this.marks = s.mk.map(a => ({ x: a[0], y: a[1], r: a[2], t: a[3], dur: a[4] }));
   this.puddles = (s.pd || []).map(a => ({ x: a[0], y: a[1], r: a[2], t: a[3], dur: a[4], lava: !!a[5] }));
   this.fx = s.fx;
@@ -699,6 +699,7 @@ GameScene.prototype.clientTick = function (dt) {
   for (const b of this.shots) {
     if (b.kind === 'flame') { const k = Math.pow(0.08, dt); b.vx *= k; b.vy *= k; b.r = 2 + (1 - b.life / b.max) * 4; }
     else if (b.kind === 'rocket') rocketSmoke(b);
+    else if (b.kind === 'vortex') { const k = Math.pow(0.35, dt); b.vx *= k; b.vy *= k; }
     b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; b.rot += dt * 18;
   }
   this.shots = this.shots.filter(b => b.life > 0);

@@ -25,7 +25,7 @@ function forNear(x, y, r, fn) {
 function nearestEnemy(x, y, maxR, skip) {
   let best = null, bd = maxR * maxR;
   for (const e of R.enemies) {
-    if (e.dead || e.spawnT > 0 || (skip && skip.has(e))) continue;
+    if (e.dead || e.spawnT > 0 || e.bs === 'burrow' || (skip && skip.has(e))) continue;
     const dd = d2(x, y, e.x, e.y); if (dd < bd) { bd = dd; best = e; }
   }
   return best;
@@ -356,10 +356,10 @@ class GameScene {
     if (this.online) btns = this.onlineResultButtons();
     else if (this.mode === 'story') {
       btns = r.won
-        ? [['next', this.level.n === 5 || this.level.n === LEVELS.length ? 'ENDING' : 'NEXT', () => Trans.go(() => {
-          // chapter 1 ends at level 5 (then on to chapter 2), the whole story at the last level
-          if (this.level.n === 5) Scenes.set(new CutsceneScene('ending', () => Scenes.set(new MapScene(this.np)), this.np));
-          else if (this.level.n === LEVELS.length) Scenes.set(new CutsceneScene('ending2', () => Scenes.set(new TitleScene(true)), this.np));
+        ? [['next', CHAPTERS.some(c => c.to === this.level.n) ? 'ENDING' : 'NEXT', () => Trans.go(() => {
+          // the last level of a chapter plays its ending, then back to the map (or the title after the very last one)
+          const ch = CHAPTERS.find(c => c.to === this.level.n);
+          if (ch) Scenes.set(new CutsceneScene(ch.ending, () => Scenes.set(this.level.n === LEVELS.length ? new TitleScene(true) : new MapScene(this.np)), this.np));
           else Scenes.set(new MapScene(this.np));
         })],
           ['locker', 'LOCKER', () => Trans.go(() => Scenes.push(new LockerScene({})))]]
@@ -393,7 +393,8 @@ function spawnEnemy(type, pos, opts = {}) {
   return e;
 }
 // every world has its own song
-const WORLD_SONG = { pond: 'battle', woods: 'battle', peaks: 'sky', factory: 'factory', tower: 'factory', beach: 'beach', swamp: 'swamp', clouds: 'sky', moon: 'space', ship: 'factory' };
+const WORLD_SONG = { pond: 'battle', woods: 'battle', peaks: 'sky', factory: 'factory', tower: 'factory', beach: 'beach', swamp: 'swamp', clouds: 'sky', moon: 'space', ship: 'factory',
+  volcano: 'volcano', desert: 'beach', candy: 'candy', crystal: 'cave', castle: 'castle' };
 const worldSong = w => WORLD_SONG[w] || 'battle';
 function spawnBoss(id) {
   const b = BOSSES[id];
@@ -466,7 +467,7 @@ function director(dt) {
 
 // ================================================================ damage
 function hurtEnemy(e, dmg, kx, ky, kb, owner) {
-  if (e.dead || e.spawnT > 0) return;
+  if (e.dead || e.spawnT > 0 || e.bs === 'burrow') return; // a burrowed boss is safe underground
   e.hp -= dmg; e.flash = 0.08;
   const res = e.d.heavy || 1;
   e.kx += kx * kb * res; e.ky += ky * kb * res;
@@ -820,6 +821,30 @@ function fireMain(p, tgt, wd) {
     }
     return;
   }
+  if (p.weapon === 'sniper') { // one big instant shot through everything in the line
+    for (let i = 0; i < n; i++) {
+      const a = base + (i - (n - 1) / 2) * wd.spread, cx = Math.cos(a), cy = Math.sin(a), len = wd.range;
+      let hits = 0;
+      for (const e of R.enemies) {
+        if (e.dead || e.spawnT > 0) continue;
+        const ex = e.x - mx, ey = e.y - my, proj = ex * cx + ey * cy;
+        if (proj < 0 || proj > len || Math.abs(ex * cy - ey * cx) > e.r + 2) continue;
+        hurtEnemy(e, dmg, cx, cy, wd.kb, p); hits++;
+        burst(e.x, e.y, ['#fff3b0', '#ffffff'], 4, 70, 0.25);
+      }
+      R.fx.push({ k: 'beam', x0: mx, y0: my, x1: mx + cx * len, y1: my + cy * len, t: 0, dur: 0.12, col });
+      if (hits >= 3) impactAt('small', tgt.x, tgt.y);
+    }
+    shakeFor(p, 2);
+    return;
+  }
+  if (p.weapon === 'eggnade') { // lob eggs that burst where they land
+    for (let i = 0; i < n; i++) {
+      const off = (i - (n - 1) / 2) * 16;
+      R.bombs.push({ x0: mx, y0: my, x1: tgt.x + off * -Math.sin(base) + rand(-6, 6), y1: tgt.y + off * Math.cos(base) + rand(-6, 6), t: 0, dur: 0.5 + i * 0.05, r: wd.aoe, dmg, owner: p, egg: true });
+    }
+    return;
+  }
   if (p.weapon === 'tesla') { // lightning: hits the target, then jumps on (multi shot and piercing add jumps)
     let cur = tgt, d = dmg;
     const pts = [[mx, my]], hit = new Set();
@@ -833,7 +858,7 @@ function fireMain(p, tgt, wd) {
     R.fx.push({ k: 'zap', pts, t: 0, dur: 0.14, col: '#7dfff5' });
     return;
   }
-  const kind = { bubble: 'bubble', rang: 'rang', corn: 'corn', frost: 'frost', rocket: 'rocket', flame: 'flame', goldgun: 'goldgun' }[p.weapon] || 'bullet';
+  const kind = { bubble: 'bubble', rang: 'rang', corn: 'corn', frost: 'frost', rocket: 'rocket', flame: 'flame', goldgun: 'goldgun', sawblade: 'saw', vortex: 'vortex' }[p.weapon] || 'bullet';
   for (let i = 0; i < n; i++) {
     let a = base + (i - (n - 1) / 2) * wd.spread;
     if (wd.jitter) a += rand(-wd.jitter, wd.jitter);
@@ -843,6 +868,8 @@ function fireMain(p, tgt, wd) {
       life: wd.life, max: wd.life, dmg, pierce: lvl(p, 'pierce') + (p.weapon === 'rang' || p.weapon === 'flame' ? 99 : p.weapon === 'goldgun' ? 2 : 0), hit: new Set(), owner: p, r: wd.r + (pw >= 3 && p.weapon === 'blaster' ? 1 : 0), col, kb: wd.kb, aoe: wd.aoe, rot: 0 };
     if (kind === 'rang') { shot.ang = a; shot.sp = sp; shot.back = false; }
     if (kind === 'rocket') { shot.tgt = tgt; shot.pierce = 0; }
+    if (kind === 'saw') shot.pierce = wd.bounces + lvl(p, 'pierce');
+    if (kind === 'vortex') { shot.pierce = 999; shot.tick = 0; }
     R.shots.push(shot);
   }
   if (p.weapon === 'shotgun') burst(mx, my, ['#ffd23f', '#fff8e7'], 4, 50, 0.15);
@@ -864,6 +891,11 @@ function shotEnd(b, hitE) {
       R.shots.push(s);
     }
     sfx.pop();
+  } else if (b.kind === 'vortex') { // the black hole pops
+    R.fx.push({ k: 'ring', x: b.x, y: b.y, r: 34, t: 0, dur: 0.3, col: '#9d5cff' });
+    burst(b.x, b.y, ['#9d5cff', '#c9a6ff', '#0c0a1a'], 18, 110, 0.5);
+    forNear(b.x, b.y, 42, e => { if (d2(b.x, b.y, e.x, e.y) < (30 + e.r) ** 2) { const a = Math.atan2(e.y - b.y, e.x - b.x); hurtEnemy(e, b.dmg, Math.cos(a), Math.sin(a), 160, b.owner); } });
+    shakeAt(b.x, b.y, 3); sfx.boom();
   } else if (b.kind === 'rocket') { // firework!
     explode(b.x, b.y, b.aoe, b.dmg, b.owner);
     burst(b.x, b.y, pick([['#ff6fae', '#ffd23f'], ['#5ec8ff', '#fff8e7'], ['#51cf66', '#ffd23f'], ['#c06bff', '#ff6fae']]), 16, 140, 0.55, 1, 40);
@@ -895,10 +927,26 @@ function updateShots(dt) {
       b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp;
       rocketSmoke(b);
     } else if (b.kind === 'flame') { const k = Math.pow(0.08, dt); b.vx *= k; b.vy *= k; b.r = 2 + (1 - b.life / b.max) * 4; }
+    else if (b.kind === 'vortex') { // slows down, drags robots in and grinds them
+      const k = Math.pow(0.35, dt); b.vx *= k; b.vy *= k;
+      const pull = WEAPONS.vortex.pull;
+      b.tick -= dt;
+      const grind = b.tick <= 0; if (grind) b.tick = 0.2;
+      forNear(b.x, b.y, pull + 8, e => {
+        if (e.bs === 'burrow') return;
+        const dx = b.x - e.x, dy = b.y - e.y, d = Math.hypot(dx, dy) || 1;
+        if (d > pull + e.r) return;
+        const f = Math.min(1, dt * (e.boss ? 0.6 : 3.2)); e.x += dx * f; e.y += dy * f;
+        if (grind && d < 14 + e.r) hurtEnemy(e, b.dmg * 0.22, 0, 0, 0, b.owner);
+      });
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      if (b.life <= 0) shotEnd(b);
+      continue;
+    }
     b.x += b.vx * dt; b.y += b.vy * dt;
     if (b.life <= 0) { shotEnd(b); continue; }
     forNear(b.x, b.y, 18, e => {
-      if (b.hit.has(e.id)) return;
+      if (b.hit.has(e.id) || e.bs === 'burrow') return;
       const rr = e.r + b.r + 1;
       if (d2(b.x, b.y, e.x, e.y) < rr * rr) {
         if (b.kind === 'bubble' || b.kind === 'rocket') { b.life = 0; shotEnd(b, e); return true; }
@@ -909,6 +957,12 @@ function updateShots(dt) {
         else if (b.kind === 'flame') { if (Math.random() < 0.3) burst(b.x, b.y, ['#ff8c1a', '#ffd23f'], 1, 30, 0.2); }
         else burst(b.x, b.y, [b.col, '#fff8e7'], 2, 40, 0.2);
         if (b.pierce-- <= 0) { b.life = 0; shotEnd(b, e); return true; }
+        if (b.kind === 'saw') { // bounce on to the closest robot it hasn't cut yet
+          let nx = null, nd = 90 * 90;
+          for (const o of R.enemies) if (!o.dead && o.spawnT <= 0 && o.bs !== 'burrow' && !b.hit.has(o.id)) { const dd = d2(b.x, b.y, o.x, o.y); if (dd < nd) { nd = dd; nx = o; } }
+          if (nx) { const sp = Math.hypot(b.vx, b.vy) || 210, a = Math.atan2(nx.y - b.y, nx.x - b.x); b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp; b.life = Math.max(b.life, 0.5); sfx.clank(); }
+          return true;
+        }
       }
     });
   }
@@ -938,7 +992,8 @@ function updateBombs(dt) {
     b.t += dt;
     if (b.t >= b.dur && !b.done) {
       b.done = true; explode(b.x1, b.y1, b.r, b.dmg, b.owner, false);
-      if (!b.mini && b.owner && b.owner.over && b.owner.over.bread) // overcharged: the bomb bursts into four more
+      if (b.egg) burst(b.x1, b.y1, ['#fff8e7', '#ffd23f'], 8, 70, 0.4);
+      if (!b.mini && !b.egg && b.owner && b.owner.over && b.owner.over.bread) // overcharged: the bomb bursts into four more
         for (let i = 0; i < 4; i++) { const a = i / 4 * TAU + rand(-0.3, 0.3); extra.push({ x0: b.x1, y0: b.y1, x1: b.x1 + Math.cos(a) * 34, y1: b.y1 + Math.sin(a) * 34, t: 0, dur: 0.35 + i * 0.05, r: b.r * 0.7, dmg: b.dmg * 0.6, owner: b.owner, mini: true }); }
     }
   }
@@ -1038,9 +1093,22 @@ function updateEnemies(dt) {
           if (e.st === 'move') { mx = dx * e.spd; my = dy * e.spd; if (e.stT <= 0 && dist < 95) { e.st = 'wind'; e.stT = 0.5; } }
           else if (e.st === 'wind') { e.flash = (e.stT * 16 | 0) % 2 ? 0.05 : 0; if (e.stT <= 0) { e.st = 'dash'; e.stT = 0.6; e.cx = dx; e.cy = dy; } }
           else if (e.st === 'dash') { mx = e.cx * 160; my = e.cy * 160; if (Math.random() < 0.4) burst(e.x, e.y + 4, ['#d5dbe6', '#fff8e7'], 1, 30, 0.2); if (e.stT <= 0) { e.st = 'move'; e.stT = rand(1.5, 2.5); } }
+        } else if (ai === 'turret') { // stands still and fires a three-way spread
+          e.shootT -= dt;
+          if (e.shootT < 0.4) e.flash = (e.shootT * 20 | 0) % 2 ? 0.05 : 0;
+          if (e.shootT <= 0 && dist < 140) {
+            e.shootT = rand(2.8, 3.4);
+            const a = Math.atan2(tgt.y - e.y, tgt.x - e.x);
+            for (const o of [-0.3, 0, 0.3]) R.eshots.push({ x: e.x, y: e.y - 5, vx: Math.cos(a + o) * 70, vy: Math.sin(a + o) * 70, life: 3, dmg: 7 * (e.dmg / e.d.dmg), s: PROJ_ART.seed, r: 2 });
+            if (inAnyView(e.x, e.y)) tone(240, 0.07, 'square', 0.03, 140);
+          }
+        } else if (ai === 'skitter') { // fast and twitchy: zig-zags towards you
+          e.stT -= dt; if (e.stT <= 0) { e.stT = rand(0.25, 0.5); e.zig = rand(-1.2, 1.2); }
+          const c = Math.cos(e.zig || 0), s = Math.sin(e.zig || 0);
+          mx = (dx * c - dy * s) * e.spd; my = (dx * s + dy * c) * e.spd;
         } else { mx = dx * e.spd; my = dy * e.spd; }
       }
-      if (e.d.ai !== 'bomber' && e.z <= 2 && dist < e.r + tgt.r + 1) hurtPlayer(tgt, e.dmg);
+      if (e.d.ai !== 'bomber' && e.z <= 2 && e.bs !== 'burrow' && dist < e.r + tgt.r + 1) hurtPlayer(tgt, e.dmg);
     } else { mx = Math.cos(e.anim) * 10; my = Math.sin(e.anim * 0.7) * 10; }
     // keep robots from stacking into one blob
     let sx = 0, sy = 0;
@@ -1060,7 +1128,7 @@ function updateEnemies(dt) {
 // bosses pick from a set of telegraphed attacks
 function updateBoss(e, tgt, dx, dy, dist, dt) {
   const B = e.d;
-  if (e.phase === 1 && B.final && e.hp < e.maxHp * 0.5) { e.phase = 2; banner('HONK RAGE MODE!', C.red, 2.4, 'HE IS REALLY ANGRY NOW'); sfx.honk(0.7); impactAt('big', e.x, e.y); e.bt = 0.6; }
+  if (e.phase === 1 && B.final && e.hp < e.maxHp * 0.5) { e.phase = 2; banner(B.rage || 'HONK RAGE MODE!', C.red, 2.4, 'HE IS REALLY ANGRY NOW'); if (B.rage) sfx.clank(); else sfx.honk(0.7); impactAt('big', e.x, e.y); e.bt = 0.6; }
   const fast = e.phase === 2 ? 0.65 : 1;
   e.bt -= dt;
   e.flip = tgt.x < e.x;
@@ -1090,7 +1158,7 @@ function updateBoss(e, tgt, dx, dy, dist, dt) {
     case 'summon': {
       const n = 6 + (e.phase === 2 ? 4 : 0);
       for (let i = 0; i < n; i++) { const a = i / n * TAU; spawnEnemy(pick(B.summon), { x: e.x + Math.cos(a) * 30, y: e.y + Math.sin(a) * 30 }); }
-      floatText(e.x, e.y - 36, B.final ? 'MINIONS! HONK!' : 'BZZT! REINFORCEMENTS!', C.gold, 1.2);
+      floatText(e.x, e.y - 36, B.summonText || (B.final ? 'MINIONS! HONK!' : 'BZZT! REINFORCEMENTS!'), C.gold, 1.2);
       e.bs = 'walk'; e.bt = 3 * fast;
       break;
     }
@@ -1115,6 +1183,30 @@ function updateBoss(e, tgt, dx, dy, dist, dt) {
         R.marks.push({ x: p.x + rand(-40, 40) + (i === 0 ? 0 : 0), y: p.y + rand(-30, 30), r: 18, t: -i * 0.15, dur: 1.1, dmg: e.dmg * 0.8 });
       floatText(e.x, e.y - 36, 'MISSILES!', C.red, 1);
       e.bs = 'walk'; e.bt = 3.2 * fast;
+      break;
+    }
+    case 'spiral': // stands still and sprays a turning spiral of bullets
+      e.flash = 0;
+      if (e.bt <= 0) {
+        e.sa = (e.sa || 0) + 0.38;
+        const arms = e.phase === 2 ? 3 : 2;
+        for (let i = 0; i < arms; i++) shoot(e.sa + i / arms * TAU, 82, bullet);
+        e.step++; e.bt = 0.09;
+        if (e.step >= 30) { e.bs = 'walk'; e.bt = 2.6 * fast; }
+      }
+      break;
+    case 'burrow': { // dives underground (can't be hit), tunnels after you and bursts out under your feet
+      if (e.step === 0) { e.step = 1; e.bt = 1.7; burst(e.x, e.y + 8, ['#c98a4a', '#e0a86a'], 16, 70, 0.5); shakeAt(e.x, e.y, 3); sfx.boom(); }
+      mx = dx * e.spd * 2.4; my = dy * e.spd * 2.4;
+      if (Math.random() < 0.5) burst(e.x + rand(-6, 6), e.y + 6, ['#c98a4a', '#e0a86a', '#8f5a2a'], 1, 30, 0.4);
+      if (e.bt <= 0) {
+        e.bs = 'walk'; e.bt = 2.4 * fast;
+        R.fx.push({ k: 'ring', x: e.x, y: e.y, r: 40, t: 0, dur: 0.35, col: B.col });
+        impactAt('small', e.x, e.y); shakeAt(e.x, e.y, 6); sfx.bigBoom();
+        for (const p of alivePlayers()) if (d2(p.x, p.y, e.x, e.y) < 40 * 40) hurtPlayer(p, e.dmg);
+        for (let i = 0; i < 14; i++) shoot(i / 14 * TAU, 85, bullet);
+        burst(e.x, e.y + 6, ['#c98a4a', '#e0a86a', B.col], 26, 100, 0.6);
+      }
       break;
     }
     case 'jumpUp':
@@ -1317,7 +1409,7 @@ function drawView(v) {
   for (const b of R.bombs) {
     const t = clamp(b.t / b.dur, 0, 1), x = lerp(b.x0, b.x1, t), y = lerp(b.y0, b.y1, t);
     shadow(x, y + 3, 2);
-    drawSprX(ART.bread, x, y - Math.sin(t * Math.PI) * 30, { rot: t * 8 });
+    drawSprX(b.egg ? PROJ_ART.eggbomb : ART.bread, x, y - Math.sin(t * Math.PI) * (b.egg ? 22 : 30), { rot: t * 8 });
     if (t > 0.5) pring(b.x1, b.y1, b.r * (1 - t) + 3, 'rgba(255,80,60,0.5)');
   }
   // projectiles
@@ -1327,6 +1419,12 @@ function drawView(v) {
     else if (b.kind === 'rang') drawSprX(PROJ_ART.rang, b.x, b.y, { rot: b.rot });
     else if (b.kind === 'feather') drawSprX(PROJ_ART.feather, b.x, b.y, { rot: Math.atan2(b.vy, b.vx) });
     else if (b.kind === 'corn') drawSprX(PROJ_ART.corn, b.x, b.y, { rot: b.rot * 0.3 });
+    else if (b.kind === 'saw') drawSprX(PROJ_ART.saw, b.x, b.y, { rot: b.rot * 1.5 });
+    else if (b.kind === 'vortex') { // a little black hole with spinning purple rings
+      const pulse = Math.sin(b.rot * 0.5) * 1.5;
+      pcirc(b.x, b.y, 9 + pulse, 'rgba(157,92,255,0.25)'); pring(b.x, b.y, 7 + pulse, '#9d5cff', 1); pcirc(b.x, b.y, 4, '#0c0a1a'); pring(b.x, b.y, 4, '#c9a6ff', 1);
+      for (let i = 0; i < 4; i++) { const a = b.rot * 0.4 + i / 4 * TAU, rr = 12 - ((b.rot * 2 + i * 3) % 10); ctx.fillStyle = '#c9a6ff'; ctx.fillRect(Math.round(b.x + Math.cos(a) * rr), Math.round(b.y + Math.sin(a) * rr), 1, 1); }
+    }
     else if (b.kind === 'popcorn') drawSprX(PROJ_ART.popcorn, b.x, b.y, { rot: b.rot });
     else if (b.kind === 'frost') {
       const l = Math.hypot(b.vx, b.vy) || 1;
@@ -1423,6 +1521,11 @@ function drawTrail(p) {
   }
 }
 function drawEnemy(e) {
+  if (e.bs === 'burrow') { // underground: only a mound of earth moving along
+    const w = 10 + Math.sin(e.anim * 20) * 2;
+    pellipse(e.x, e.y + 6, w + 1, 5, OUT); pellipse(e.x, e.y + 6, w, 4, '#c98a4a'); pellipse(e.x - 2, e.y + 5, w * 0.6, 2, '#e0a86a');
+    return;
+  }
   if (e.spawnT > 0) { // teleport beam
     const k = 1 - e.spawnT / 0.45;
     ctx.globalAlpha = 0.7;

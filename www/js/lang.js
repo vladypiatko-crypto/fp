@@ -96,6 +96,10 @@ const PHRASES = [
   ['FIREWORK LAUNCHER', 'FEUERWERKSWERFER', 'САЛЮТОМЁТ'], ['ROCKETS THAT GO BOOM', 'RAKETEN, DIE BUMM MACHEN', 'РАКЕТЫ, КОТОРЫЕ ДЕЛАЮТ БУМ'],
   ['TESLA COIL', 'TESLASPULE', 'КАТУШКА ТЕСЛЫ'], ['LIGHTNING JUMPS ROBOT TO ROBOT', 'BLITZ SPRINGT VON ROBOTER ZU ROBOTER', 'МОЛНИЯ ПРЫГАЕТ ПО РОБОТАМ'],
   ['DRAGON BREATH', 'DRACHENATEM', 'ДЫХАНИЕ ДРАКОНА'], ['SHORT RANGE FIRE STORM', 'FEUERSTURM AUF KURZE DISTANZ', 'ОГНЕННЫЙ ШТОРМ ВБЛИЗИ'],
+  ['EGG LAUNCHER', 'EIERWERFER', 'ЯЙЦЕМЁТ'], ['LOBS EGGS THAT EXPLODE', 'WIRFT EIER, DIE EXPLODIEREN', 'КИДАЕТ ВЗРЫВАЮЩИЕСЯ ЯЙЦА'],
+  ['SAW LAUNCHER', 'SÄGENWERFER', 'ПИЛОМЁТ'], ['SAWS BOUNCE ROBOT TO ROBOT', 'SÄGEN SPRINGEN VON ROBOTER ZU ROBOTER', 'ПИЛЫ ПРЫГАЮТ ОТ РОБОТА К РОБОТУ'],
+  ['DUCK SNIPER', 'ENTEN-SCHARFSCHÜTZE', 'УТИНАЯ СНАЙПЕРКА'], ['ONE HUGE SHOT THROUGH EVERYTHING', 'EIN RIESENSCHUSS DURCH ALLES', 'ОДИН МОЩНЫЙ ВЫСТРЕЛ НАСКВОЗЬ'],
+  ['BLACK HOLE', 'SCHWARZES LOCH', 'ЧЁРНАЯ ДЫРА'], ['SUCKS ROBOTS IN, THEN POPS', 'SAUGT ROBOTER EIN UND PLATZT', 'ЗАСАСЫВАЕТ РОБОТОВ И ЛОПАЕТСЯ'],
   ['GOLDEN QUACKER', 'GOLDENER QUAKER', 'ЗОЛОТОЙ КРЯКЕР'], ['SHINY SHOTS THAT PIERCE', 'GLÄNZENDE SCHÜSSE, DIE DURCHBOHREN', 'БЛЕСТЯЩИЕ ПРОБИВАЮЩИЕ ВЫСТРЕЛЫ'],
   // locker categories
   ['SKIN', 'SKIN', 'СКИН'], ['HAT', 'HUT', 'ШЛЯПА'], ['HALO', 'HALO', 'НИМБ'], ['TRAIL', 'SPUR', 'СЛЕД'], ['WEAPON', 'WAFFE', 'ОРУЖИЕ'],

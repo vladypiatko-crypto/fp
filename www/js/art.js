@@ -122,6 +122,10 @@ const GUN_ART = {
   rocket: spr(['mmmmmmmmm', 'mppppppPm', 'mmmmmmmmm', '.kk......'], { m: '#3d3a52', p: '#ff6fae', P: '#ffd23f', k: '#5a5872' }),
   tesla: spr(['..c.c.c..', '.kkkkkkcW', 'kkkkkk...', 'kk.......'], { c: '#7dfff5', k: '#4a4763', W: '#ffffff' }),
   flame: spr(['rr......', 'rRmmmmmo', 'rrmm...y', 'kk......'], { r: '#e8343b', R: '#ff8c8c', m: '#8b8aa0', o: '#ff8c1a', y: '#ffd23f', k: '#3d3a52' }),
+  eggnade: spr(['...www..', 'mmmmmmmW', 'mmk.....', 'kk......'], { w: '#fff8e7', W: '#ffd23f', m: '#5a8f3a', k: '#3d3a52' }),
+  sawblade: spr(['.sSs.....', 'sSmSs....', '.mmmmmmmm', 'mmk......', 'kk.......'], { s: '#d5dbe6', S: '#8b8aa0', m: '#e8343b', k: '#3d3a52' }),
+  sniper: spr(['.....kk.....', 'mmmmmmmmmmmW', 'wwmm........', 'ww..........'], { m: '#3d3a52', w: '#a0642d', k: '#5ec8ff', W: '#fff3b0' }),
+  vortex: spr(['..pppp..', '.pPkkPp.', 'mmmkkmmm', 'mm......'], { p: '#9d5cff', P: '#c9a6ff', k: '#0c0a1a', m: '#4a4763' }),
   goldgun: spr(['.ggggggW', 'gGgggo..', 'go......'], { g: '#ffd23f', G: '#fff3b0', o: '#b07a00', W: '#ffffff' }),
 };
 const PROJ_ART = {
@@ -134,6 +138,8 @@ const PROJ_ART = {
   popcorn: spr(['ww', 'wy'], { w: '#fff8e7', y: '#ffd23f' }, null),
   frost: spr(['.w.', 'wcw', '.w.'], { w: '#ffffff', c: '#5ec8ff' }),
   rocket: spr(['.pp..', 'fpppw', '.pp..'], { p: '#ff6fae', w: '#fff8e7', f: '#ffd23f' }),
+  eggbomb: spr(['.ww.', 'wwwW', 'wwwW', '.ww.'], { w: '#fff8e7', W: '#e9cf8a' }),
+  saw: spr(['.s.s.', 'sSSSs', '.SkS.', 'sSSSs', '.s.s.'], { s: '#d5dbe6', S: '#8b8aa0', k: '#3d3a52' }),
 };
 
 // ================================================================ robots (Dr. Honk's army). m/M/l are re-tinted per world.
@@ -315,6 +321,8 @@ const DECO_ART = {
   vat: spr(['.mmmmmm.', 'mggggggm', 'mgGggggm', 'mggggGgm', 'mggggggm', 'mgGggggm', 'mmmmmmmm', 'm.m..m.m'], { m: '#5b3f8f', g: '#7ee04a', G: '#c3ff9a' }),
   console: spr(['mmmmmmmm', 'mssssssm', 'msSsssSm', 'mssssssm', 'mmmmmmmm', 'mrygbmmm', 'mmmmmmmm'], { m: '#5b3f8f', s: '#2b2438', S: '#5ec8ff', r: '#e8343b', y: '#ffd23f', g: '#51cf66', b: '#5ec8ff' }),
 };
+// later chapters add ground styles here: GROUND_STYLES[style](g, S, base, dark, light)
+const GROUND_STYLES = {}, LANDMARKS = {};
 const tileCache = new Map();
 function groundTile(world) {
   if (tileCache.has(world)) return tileCache.get(world);
@@ -352,7 +360,7 @@ function groundTile(world) {
       g.fillStyle = light; g.fillRect(x, y, 16, 1); g.fillRect(x, y, 1, 16);
     }
     g.fillStyle = 'rgba(94,200,255,0.35)'; g.fillRect(0, 47, S, 1); g.fillRect(47, 0, 1, S);
-  }
+  } else if (GROUND_STYLES[th.style]) GROUND_STYLES[th.style](g, S, base, dark, light);
   tileCache.set(world, c);
   return c;
 }

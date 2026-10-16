@@ -69,6 +69,10 @@ const COSMETICS = {
     { id: 'rocket', name: 'FIREWORK LAUNCHER', rarity: 'epic', desc: 'ROCKETS THAT GO BOOM' },
     { id: 'tesla', name: 'TESLA COIL', rarity: 'epic', desc: 'LIGHTNING JUMPS ROBOT TO ROBOT' },
     { id: 'flame', name: 'DRAGON BREATH', rarity: 'legendary', desc: 'SHORT RANGE FIRE STORM' },
+    { id: 'eggnade', name: 'EGG LAUNCHER', rarity: 'rare', desc: 'LOBS EGGS THAT EXPLODE' },
+    { id: 'sawblade', name: 'SAW LAUNCHER', rarity: 'epic', desc: 'SAWS BOUNCE ROBOT TO ROBOT' },
+    { id: 'sniper', name: 'DUCK SNIPER', rarity: 'epic', desc: 'ONE HUGE SHOT THROUGH EVERYTHING' },
+    { id: 'vortex', name: 'BLACK HOLE', rarity: 'legendary', desc: 'SUCKS ROBOTS IN, THEN POPS' },
     { id: 'goldgun', name: 'GOLDEN QUACKER', rarity: 'admin', desc: 'SHINY SHOTS THAT PIERCE', gift: true }, // only given by the admin
   ],
 };
@@ -110,6 +114,14 @@ const WEAPONS = {
   // instant lightning that jumps to `chain` more robots
   tesla: { cd: 0.68, dmg: 14, n: 1, chain: 3, range: 135, kb: 20, col: '#7dfff5' },
   flame: { cd: 0.07, dmg: 3.3, n: 1, spread: 0.3, speed: 160, life: 0.42, r: 3, kb: 8, range: 92, col: '#ff8c1a', jitter: 0.2 },
+  // lobbed eggs that explode where they land
+  eggnade: { cd: 0.95, dmg: 24, n: 1, spread: 0.45, range: 140, aoe: 22, kb: 0, col: '#fff8e7' },
+  // a spinning saw that bounces on to the next robot after every hit
+  sawblade: { cd: 0.8, dmg: 16, n: 1, spread: 0.3, speed: 210, life: 1.4, r: 3, kb: 50, range: 140, col: '#d5dbe6', bounces: 3 },
+  // one huge instant shot that goes through everything in a long line
+  sniper: { cd: 1.35, dmg: 78, n: 1, spread: 0.06, range: 230, kb: 140, col: '#fff3b0' },
+  // a slow orb that pulls robots in, hurts them, then pops
+  vortex: { cd: 1.6, dmg: 40, n: 1, spread: 0.5, speed: 70, life: 1.6, r: 5, kb: 0, range: 150, col: '#9d5cff', pull: 48 },
   goldgun: { cd: 0.3, dmg: 15, n: 1, spread: 0.14, speed: 320, life: 0.7, r: 1, kb: 80, range: 165, col: '#ffd23f' },
 };
 

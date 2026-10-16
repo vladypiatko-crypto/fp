@@ -65,7 +65,9 @@ function drawCage(x, y, lift = 0) {
   for (let i = 0; i <= 5; i++) { ctx.fillStyle = '#9aa3b5'; ctx.fillRect(Math.round(x - w / 2 + i * (w - 2) / 5), top, 2, h); }
   pline(x, top, x, top - 40, '#5a5872', 2);
 }
-// portrait for dialog boxes
+// portrait for dialog boxes (later chapters add their own speakers to PORTRAITS and VOICES)
+const PORTRAITS = {}, VOICES = { honk: 180, daisy: 900, duck: 600 };
+const voiceOf = who => VOICES[who] || 400;
 function drawPortrait(who, x, y, t, talking) {
   panel(x, y, 30, 30, '#3a2a4f', OUT, C.uiL, false);
   ctx.save(); ctx.beginPath(); ctx.rect(x + 1, y + 1, 28, 28); ctx.clip();
@@ -73,6 +75,7 @@ function drawPortrait(who, x, y, t, talking) {
   if (who === 'honk') drawSprX(HONK_SPR, x + 11, y + 46 - bob, { sc: 3, ay: 1 });
   else if (who === 'daisy') drawDuck(x + 15, y + 40 - bob, { skin: 'daisy', hat: 'bow', facing: 'down', sc: 3, blink: (t * 0.7 % 3) > 2.85, t });
   else if (who === 'duck') { const lo = Save.data.loadout[0]; drawDuck(x + 15, y + 40 - bob, { skin: lo.skin, hat: lo.hat, facing: 'down', sc: 3, blink: (t * 0.7 % 3) > 2.85, t }); }
+  else if (PORTRAITS[who]) PORTRAITS[who](x, y, t, bob);
   ctx.restore();
 }
 
@@ -84,6 +87,7 @@ class Dialog {
   announce() {
     const L = this.line; if (!L) return;
     if (L[0] === 'honk') sfx.honk(1.2);
+    else if (L[0] === 'clank') { sfx.clank(); sfx.clank(); }
     else if (L[0] === 'duck' || L[0] === 'daisy') sfx.quack(L[0] === 'daisy' ? 1.2 : 1);
   }
   update(dt, acts) {
@@ -95,7 +99,7 @@ class Dialog {
     this.chars = Math.min(full, this.chars + dt * 48);
     if (Math.floor(this.chars) > prev && msg[prev] !== ' ' && this.blipN++ % 2 === 0) {
       const who = this.line[0];
-      tone(who === 'honk' ? 180 : who === 'daisy' ? 900 : who === 'duck' ? 600 : 400, 0.03, 'square', 0.025);
+      tone(voiceOf(who), 0.03, 'square', 0.025);
     }
     const tap = (acts && (acts.ok || acts.back)) || Input.ptrEv.some(e => e.type === 'down') || Input.dash(0, 1) || Input.pads.some(p => p.e.a);
     if (acts && acts.start) { this.finish(); return; }
@@ -161,14 +165,17 @@ function heroes(np) { return Save.data.loadout.slice(0, Math.max(1, np)); }
 
 // ================================================================ cutscene scene
 // A cutscene is a list of beats; each beat has a line of dialog and draws the stage at time t.
+// CUTSCENES maps an id to its beats (each chapter adds its intro and ending); ENDING_PAY is the one-time coin reward.
+const CUTSCENES = {}, ENDING_PAY = { ending: 500, ending2: 1000 };
 class CutsceneScene {
   constructor(id, done, np = 1) {
     this.id = id; this.done = done; this.np = np; this.beat = 0; this.t = 0; this.T = 0; this.chars = 0;
     this.parts = []; this.ui = new UI(); this.shake = 0;
-    this.beats = { intro: INTRO_BEATS, ending: ENDING_BEATS, intro2: INTRO2_BEATS, ending2: ENDING2_BEATS }[id] || INTRO_BEATS;
+    this.beats = CUTSCENES[id] || INTRO_BEATS;
     Music.play(id.startsWith('ending') ? 'title' : 'calm');
-    if (id === 'ending' && !Save.data.endingSeen) { Save.data.endingSeen = true; Save.addCoins(500); this.paid = true; }
-    if (id === 'ending2' && !Save.data.ending2Seen) { Save.data.ending2Seen = true; Save.addCoins(1000); this.paid = true; }
+    // every chapter's ending pays out once
+    const pay = ENDING_PAY[id];
+    if (pay && !Save.data[id + 'Seen']) { Save.data[id + 'Seen'] = true; Save.addCoins(pay); this.paid = pay; }
     if (this.beats[0].enter) this.beats[0].enter(this);
   }
   update(dt) {
@@ -179,7 +186,7 @@ class CutsceneScene {
     const prev = Math.floor(this.chars);
     this.chars = Math.min(msg.length, this.chars + dt * 45);
     if (b.say && Math.floor(this.chars) > prev && msg[prev] !== ' ' && prev % 2 === 0) {
-      const w = b.say[0]; tone(w === 'honk' ? 180 : w === 'daisy' ? 900 : w === 'duck' ? 600 : 400, 0.03, 'square', 0.025);
+      tone(voiceOf(b.say[0]), 0.03, 'square', 0.025);
     }
     if (b.tick) b.tick(this, this.t, dt);
     for (const q of this.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.vy += (q.g || 0) * dt; q.life -= dt; }
@@ -406,3 +413,4 @@ function drawZoomText(str, x, y, sc, col, rot = 0) {
   ctx.drawImage(c, Math.round(-w / 2), Math.round(-h / 2), Math.round(w), Math.round(h));
   ctx.restore();
 }
+Object.assign(CUTSCENES, { intro: INTRO_BEATS, ending: ENDING_BEATS });

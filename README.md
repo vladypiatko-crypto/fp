@@ -8,6 +8,8 @@ A pixel-art **survival shooter** for **1–4 players**: split screen on one devi
 
 **Chapter 2: The Stolen Quack.** A week later, at Daisy's thank-you party, Dr. Honk is back in his giant **Mothership**. This time his tractor beam steals only her voice, leaving Daisy croaking. The ducks chase the ship from the beach to the moon to get the Golden Quack back.
 
+**Chapter 3: The Robot Rebellion.** Dr. Honk now runs a bakery at Puddle Pond, but his old robots built themselves a new boss out of scrap: **King Clank**. He kidnaps Honk and wants to turn the whole world into one big factory. The ducks chase him over a volcano, through the desert, a candy factory and the crystal caves, up to Clank Castle.
+
 | Level | World | Boss | Reward |
 | --- | --- | --- | --- |
 | 1 | Puddle Pond | Clanky Crab | Quackshot |
@@ -20,13 +22,18 @@ A pixel-art **survival shooter** for **1–4 players**: split screen on one devi
 | 8 | Cloud Kingdom | Thunder Balloon | Stormy skin |
 | 9 | Moon Base | Robo-Daisy | Space Helmet |
 | 10 | Honk Mothership | Dr. Honk Ultra | Cosmic skin |
+| 11 | Lava Fields | Lava Golem | Fire Helmet |
+| 12 | Dusty Dunes | Dune Driller (burrows under the sand) | Saw Launcher |
+| 13 | Candy Factory | Gummy King | Gummy skin |
+| 14 | Crystal Caves | Crystal Queen (bullet spirals) | Crystal Crown |
+| 15 | Clank Castle | King Clank | Clanky skin |
 
-Each chapter has an animated intro and ending, and the map has a page per chapter. Chapter 2 rewards only come from the story, never from chests. **Endless** mode is a pure survival run where all ten bosses take turns.
+Each chapter has an animated intro and ending, and the map has a page per chapter. Chapter 2 and 3 cosmetics only come from the story, never from chests. Chapter 3 adds **Turret Bots** and **Spider Bots**, and its own songs. **Endless** mode is a pure survival run where all fifteen bosses take turns.
 
 ## Features
 
 - **Online with friends**: host a lobby and share its 4-letter code, or join a friend's. Up to 4 ducks, each on their own device. No server to set up: devices connect directly. Pick story or endless, ready up, and start.
-- **12 weapons**: Blaster, Quackshot, Bubble Gun, Feather-rang, Beak Beam laser, Quackinator minigun, Corn Cannon (pops into popcorn), Frost Blaster (slows robots), Firework Launcher (homing rockets that explode), Tesla Coil (chain lightning), Dragon Breath flamethrower, and the admin-only Golden Quacker
+- **16 weapons**: Blaster, Quackshot, Bubble Gun, Feather-rang, Beak Beam laser, Quackinator minigun, Corn Cannon (pops into popcorn), Frost Blaster (slows robots), Firework Launcher (homing rockets that explode), Tesla Coil (chain lightning), Dragon Breath flamethrower, Egg Launcher (lobbed exploding eggs), Saw Launcher (saws bounce robot to robot), Duck Sniper (one huge shot through a whole line), Black Hole (sucks robots in, then pops), and the admin-only Golden Quacker
 - **Level-up cards**: gun and duck upgrades (multi shot, piercing, speed, regen, dash attack…) plus **7 power-ups**: egg orbit, bread bombs, chain lightning, mega quack, feather darts, splash puddles and bubble shield. You get **3 power-up slots**; once they are full only those three come back. Eggs block bullets and push robots away.
 - **Overcharge**: after a power-up is maxed, a rare red glowing OVERCHARGE card can show up and makes it much stronger (giant fast-spinning eggs, splitting bread storms, lightning that jumps to everything, lava lakes, mirror shields…).
 - **Robot army**: Bolt Bots, Boom Bots, Goo Blobs, Tank Bots, Zap Drones and Saw Bots, each with its own behaviour. Bosses telegraph charges, jumps, bullet rings and missile strikes.
@@ -105,7 +112,7 @@ Online, each device controls its own duck with the controls above (keyboard play
 - `www/js/game.js`: gameplay (the host runs this; online friends run the same code path but only draw)
 - `www/js/online.js`: peer-to-peer connections, the host's lobby, online menu and room screen, snapshots and the online game
 - `www/js/vendor/peerjs.min.js`: [PeerJS](https://github.com/peers/peerjs) 1.5.5 (MIT)
-- `www/js/story.js`: dialog boxes and cutscenes · `www/js/chapter2.js`: chapter 2 (worlds, bosses, levels, cutscenes, rewards)
+- `www/js/story.js`: dialog boxes and cutscenes · `www/js/chapter2.js` and `www/js/chapter3.js`: chapters 2 and 3 (worlds, bosses, levels, cutscenes, rewards)
 - `www/js/scenes.js`: title, map, locker, chests, settings
 - `main.js`: Electron wrapper (Windows) · `android/`: Capacitor project · `scripts/build-single-html.js`: one-file web build
 
