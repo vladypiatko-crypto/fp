@@ -55,7 +55,7 @@ function cleanLoadout(lo) {
 const Hub = {
   room: null, nextId: 2,
   open(code, name, lo) {
-    const host = { id: 'p1', conn: null, name: cleanName(name), user: cleanUser(myUsername()), lo: cleanLoadout(lo), ready: false };
+    const host = { id: 'p1', conn: null, name: cleanName(name), user: cleanUser(myUsername()), lo: cleanLoadout(lo), tr: cleanTrain(Save.data.train), bo: armedBoosters(), ready: false };
     this.room = { code, name: host.name, state: 'lobby', mode: 'endless', level: 1, hostId: host.id, members: [host] };
     this.nextId = 2;
     this.to(host, { t: 'hello', id: host.id });
@@ -89,7 +89,7 @@ const Hub = {
       const r = this.room, fail = msg => { try { conn.send(JSON.stringify({ t: 'error', msg })); } catch (e) { /* gone */ } setTimeout(() => conn.close(), 500); };
       if (r.state !== 'lobby') { fail('THAT GAME HAS ALREADY STARTED'); return; }
       if (r.members.length >= MAX_PLAYERS) { fail('THAT LOBBY IS FULL'); return; }
-      mem = { id: 'p' + (this.nextId++), conn, name: cleanName(m.name), user: cleanUser(m.user), lo: cleanLoadout(m.lo), ready: false };
+      mem = { id: 'p' + (this.nextId++), conn, name: cleanName(m.name), user: cleanUser(m.user), lo: cleanLoadout(m.lo), tr: cleanTrain(m.tr), bo: cleanBoost(m.bo), ready: false };
       r.members.push(mem);
       this.to(mem, { t: 'hello', id: mem.id });
       this.to(mem, { t: 'joined', code: r.code });
@@ -128,7 +128,7 @@ const Hub = {
         if (!isHost || r.state !== 'lobby') break;
         r.state = 'game';
         const seed = Math.floor(Math.random() * 2147483647) + 1;
-        this.all({ t: 'start', mode: r.mode, level: r.level, seed, members: r.members.map(x => ({ id: x.id, name: x.name, lo: x.lo })) });
+        this.all({ t: 'start', mode: r.mode, level: r.level, seed, members: r.members.map(x => ({ id: x.id, name: x.name, lo: x.lo, tr: x.tr, bo: x.bo })) });
         this.sync(); break;
       }
       case 'back': // host takes everyone back to the lobby after a game
@@ -225,7 +225,7 @@ Object.assign(Net, {
           if (m && m.t !== 'ka') this.onMsg(m);
         });
         conn.on('close', () => { if (this.conn === conn) this.lost('LOST THE HOST'); });
-        conn.send(JSON.stringify({ t: 'join', name, lo, user: myUsername() }));
+        conn.send(JSON.stringify({ t: 'join', name, lo, user: myUsername(), tr: Save.data.train, bo: armedBoosters() }));
         res();
       });
       conn.on('error', () => { clearTimeout(t); rej(new Error("COULDN'T CONNECT TO YOUR FRIEND")); });
@@ -277,7 +277,7 @@ function startOnlineGame(m) {
   Net.inputs = [{}, {}, {}, {}]; Net.evt = []; Net.sfxSent = {}; Net.sndT = 0;
   const level = m.mode === 'story' ? LEVELS[m.level - 1] : null;
   const world = level ? level.world : worldFromSeed(m.seed);
-  const net = { role: Net.role, pid, members: members.map(x => ({ id: x.id, name: x.name, lo: x.lo })), seed: m.seed };
+  const net = { role: Net.role, pid, members: members.map(x => ({ id: x.id, name: x.name, lo: x.lo, tr: x.tr, bo: x.bo })), seed: m.seed };
   Trans.go(() => Scenes.set(new GameScene({ mode: m.mode, level, np: members.length, world, net })), true);
 }
 
@@ -473,6 +473,7 @@ GameScene.prototype.dropPlayer = function (id) {
   const p = this.players[Net.idToPid[id]];
   if (!p || p.gone) return;
   p.gone = true; p.down = true; p.reviveT = 0; p.choice = null; p.pending = 0;
+  if (this.state === 'paused' && this.pausedBy === Net.idToPid[id]) this.resume(); // they paused, then left: carry on
   banner(fmt('{0} LEFT THE GAME', keep(p.name)), C.gray, 2.2);
   burst(p.x, p.y, ['#fff8e7', '#8b8aa0'], 14, 60, 0.6);
 };
@@ -612,7 +613,7 @@ GameScene.prototype.applySnapshot = function (s) {
 };
 GameScene.prototype.resultsReached = function (res) {
   if (!res) return;
-  Save.addCoins(res.coins + res.bonus);
+  res.perk = payRun(res, true); // our own shop bonus, on our own device
   if (this.mode === 'endless') { const k = 'e' + this.np; if (res.t > (Save.data.best[k] || 0)) Save.data.best[k] = res.t; Save.write(); }
   if (res.won) { sfx.win(); Music.play('title'); } else { sfx.over(); Music.play('calm'); }
 };

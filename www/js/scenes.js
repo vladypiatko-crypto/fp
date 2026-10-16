@@ -686,6 +686,7 @@ class LockerScene {
     // bottom buttons
     const by = H - 17;
     drawButton(this.ui, 'chests', L.gx, by, 62, 14, 'CHESTS', { on: () => Trans.go(() => Scenes.push(new ChestScene(this))), icon: ICON.chestIcon, col: '#5c3416' });
+    drawButton(this.ui, 'shop', L.gx + 66, by, 50, 14, 'SHOP', { on: () => Trans.go(() => Scenes.push(new ShopScene())), col: '#7a1f24' });
     drawButton(this.ui, 'back', L.gx + L.gw - 46, by, 46, 14, 'BACK', { on: () => this.close(), icon: ICON.back });
     if (this.popup) this.drawPopup();
   }
@@ -798,7 +799,7 @@ class ChestScene {
       const ch = CHESTS[k], x = x0 + i * (pw + 10), y = 36, ph = H - y - 26;
       panel(x, y, pw, ph, ch.event ? '#3b2410' : C.ui, ch.event ? '#ff8c1a' : OUT, C.uiL);
       if (ch.event) { const nw = textW('LIMITED') + 6; panel(x + pw / 2 - nw / 2, y - 5, nw, 9, '#ff8c1a', OUT, null, false); text('LIMITED', x + pw / 2, y - 3, OUT, 1, 1, null); }
-      text(ch.name, x + pw / 2, y + 5, k === 'gold' ? C.gold : ch.event ? '#ff8c1a' : C.white, 1, 1);
+      text(ch.name, x + pw / 2, y + 5, k === 'gold' ? C.gold : k === 'mega' ? '#c9a6ff' : ch.event ? '#ff8c1a' : C.white, 1, 1);
       const bob = Math.round(Math.sin(T * 3 + i) * 2);
       const cy = y + 34 + bob;
       drawSprX(ART.chest[k].base, x + pw / 2, cy + 14, { sc: 2, ay: 1 });

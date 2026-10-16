@@ -95,6 +95,7 @@ function defaultSave() {
       { skin: 'classic', hat: 'bandana_r', halo: 'none', trail: 'none', weapon: 'blaster' },
       { skin: 'snowy', hat: 'bandana_b', halo: 'none', trail: 'none', weapon: 'blaster' },
     ],
+    train: {}, boosters: {}, armed: {}, deals: { day: -1, bought: [] }, // the shop (shop.js)
     story: { reached: 1, cleared: {} }, best: { e1: 0, e2: 0 }, muted: false, introSeen: false, wizardSeen: false, onlineNewsSeen: true, events: {},
     newItems: [], // unlocked cosmetics nobody has clicked in the locker yet
   };
@@ -106,6 +107,7 @@ const EVENTS = { halloween: { name: 'HALLOWEEN', col: '#ff8c1a' } };
 const CHESTS = {
   wood: { name: 'DUCK CHEST', price: 100, odds: { common: 55, rare: 32, epic: 11, legendary: 2 } },
   gold: { name: 'ROYAL CHEST', price: 300, odds: { rare: 50, epic: 36, legendary: 14 } },
+  mega: { name: 'MEGA CHEST', price: 900, odds: { epic: 40, legendary: 60 } },
 };
 
 // ================================================================ weapons

@@ -33,8 +33,10 @@ function nearestEnemy(x, y, maxR, skip) {
 
 // ================================================================ small helpers
 const lvl = (p, k) => p.up[k] || 0;
-const pSpeed = p => 70 * (1 + 0.1 * lvl(p, 'speed'));
-const pMagnet = p => 34 * (1 + 0.45 * lvl(p, 'magnet'));
+// a duck's permanent training from the shop (p.train), e.g. trainLv(p, 'hp')
+const trainLv = (p, k) => (p.train && p.train[k]) || 0;
+const pSpeed = p => 70 * (1 + 0.1 * lvl(p, 'speed')) * (1 + 0.04 * trainLv(p, 'spd'));
+const pMagnet = p => 34 * (1 + 0.45 * lvl(p, 'magnet')) * (1 + 0.12 * trainLv(p, 'mag'));
 const reachMul = p => 1 + 0.15 * lvl(p, 'reach');
 const pDashCd = p => 1.2 * (1 - 0.12 * lvl(p, 'dash'));
 const xpFor = lv => Math.round(3 + lv * 4 + lv * lv * 0.45);
@@ -98,7 +100,8 @@ class GameScene {
     this.pendDash = false; this.pendOk = false; this.inAcc = 0; this.sndT = 0; this.clientEnemies = new Map();
     this.players = [];
     const members = this.net ? this.net.members : null;
-    for (let i = 0; i < this.np; i++) this.players.push(this.newPlayer(i, members ? members[i].lo : null, members ? members[i].name : null));
+    for (let i = 0; i < this.np; i++) this.players.push(this.newPlayer(i, members ? members[i].lo : null, members ? members[i].name : null, members ? members[i].tr : null));
+    this.useBoosters();
     this.makeDecor();
     this.layout();
     for (const v of this.views) { const p = this.players[v.pid]; v.camX = p.x - v.w / 2; v.camY = p.y - v.h / 2; }
@@ -113,11 +116,12 @@ class GameScene {
     banner(this.level ? fmt('LEVEL {0}: {1}', this.level.n, this.level.name) : 'SURVIVE!', C.gold, 2.4, this.level ? 'SURVIVE UNTIL THE BOSS ARRIVES' : '');
     for (let i = 0; i < 5; i++) spawnEnemy('bolt', spawnPos());
   }
-  newPlayer(id, lo0, name) {
+  newPlayer(id, lo0, name, tr0) {
     const lo = lo0 || Save.data.loadout[id] || Save.data.loadout[0];
+    const train = cleanTrain(tr0 || (this.online ? {} : Save.data.train)), hp = 100 + 10 * (train.hp || 0);
     const ring = this.np > 1 ? [Math.cos(id / this.np * TAU) * 28, Math.sin(id / this.np * TAU) * 28] : [0, 0];
     return {
-      id, lo, name: name || 'P' + (id + 1), weapon: lo.weapon, x: WORLD_SIZE / 2 + ring[0], y: WORLD_SIZE / 2 + ring[1], r: 5, hp: 100, maxHp: 100, spd: 70, gone: false,
+      id, lo, name: name || 'P' + (id + 1), weapon: lo.weapon, x: WORLD_SIZE / 2 + ring[0], y: WORLD_SIZE / 2 + ring[1], r: 5, hp, maxHp: hp, spd: 70, gone: false, train,
       facing: 'down', turnT: 0, ax: 1, ay: 0, aim: 0, iframes: 0, dashT: 0, dashCd: 0, dvx: 0, dvy: 0, dashHit: new Set(),
       xp: 0, level: 1, xpNext: xpFor(1), kills: 0, down: false, reviveT: 0, up: {}, over: {}, shieldT: 0, tm: { main: 0.3, bread: 1, zap: 1.5, quack: 2, feather: 1.2, puddle: 1.5 },
       pending: 0, choice: null, sel: 1, choiceT: 0, anim: 0, moving: false, eggAng: 0, blinkT: rand(1, 4), hurtFlash: 0, moved: false,
@@ -275,7 +279,7 @@ class GameScene {
       const k = 'e' + this.np;
       if (this.t > Save.data.best[k]) { Save.data.best[k] = this.t; res.best = true; }
     }
-    Save.addCoins(res.coins + res.bonus);
+    res.perk = payRun(res);
     this.results = res;
     this.state = 'results'; this.stateT = 0;
     Music.paused = false;
@@ -285,7 +289,7 @@ class GameScene {
     this.stateT += dt;
     this.netPump(dt);
     const r = this.results;
-    const total = r.coins + r.bonus;
+    const total = r.coins + r.bonus + (r.perk || 0);
     if (r.shown < total) { r.shown = Math.min(total, r.shown + Math.max(1, total * dt * 0.9)); if (Math.random() < 0.5) sfx.coin(); }
     this.resUI.update(dt, this.stateT > 0.6 ? acts : null);
     this.tickCosmetics(dt);
@@ -375,6 +379,7 @@ class GameScene {
     row('ROBOTS SCRAPPED', r.kills);
     row('COINS PICKED UP', r.coins, C.gold);
     row('BONUS', '+' + r.bonus, C.gold);
+    if (this.myPerk) row(this.myPerkDouble ? 'SHOP BONUS (X2 COINS!)' : 'SHOP BONUS', '+' + this.myPerk, C.gold);
     if (r.best) { if ((this.stateT * 4 | 0) % 2) text('NEW BEST TIME!', W / 2, y, C.pink, 1, 1); y += 8; }
     y += 2;
     coinIcon(Math.floor(W / 2 - textW('+' + Math.floor(r.shown), 2) / 2 - 8), y + 1, this.stateT);
@@ -520,6 +525,7 @@ function hurtEnemy(e, dmg, kx, ky, kb, owner) {
   if (e.dead || e.spawnT > 0 || e.bs === 'burrow') return; // a burrowed boss is safe underground
   const crit = owner && owner.up && lvl(owner, 'crit') && Math.random() < 0.08 * lvl(owner, 'crit');
   if (crit) dmg *= 2; // lucky shot
+  if (owner && owner.train) dmg *= 1 + 0.06 * trainLv(owner, 'dmg'); // sharper beak (shop training)
   e.hp -= dmg; e.flash = 0.08;
   const res = e.d.heavy || 1;
   e.kx += kx * kb * res; e.ky += ky * kb * res;
@@ -1163,7 +1169,7 @@ function updateBombs(dt) {
   R.bombs = R.bombs.filter(b => !b.done);
 }
 function gainXp(p, v) {
-  p.xp += v * (1 + 0.15 * lvl(p, 'wisdom'));
+  p.xp += v * (1 + 0.15 * lvl(p, 'wisdom')) * (1 + 0.05 * trainLv(p, 'xp'));
   while (p.xp >= p.xpNext) {
     p.xp -= p.xpNext; p.level++; p.xpNext = xpFor(p.level); p.pending++;
     sfx.level(); floatText(p.x, p.y - 20, 'LEVEL UP!', C.gold, 1.2);

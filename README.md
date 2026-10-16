@@ -57,7 +57,11 @@ Each chapter has an animated intro and ending, and the map has a page per chapte
 - **Soundtrack**: every world has its own chiptune song (beach, swamp, sky, space, factory…), plus boss, chapter finale and locker tunes.
 - **Honks and quacks**: Dr. Honk honks, the ducks quack. Both are synthesised in the browser, no sound files.
 - **Locker**: customise each duck's **skin, hat, halo, trail and weapon**. Every hat sways, sparkles and has its own little extras (twinkling crown, floating notes, chef steam).
-- **Chests**: spend the coins you earn on Duck Chests or Royal Chests. **Unlocks are shared by both players.** New items get a bouncing red NEW! on their locker tab and a red ! on the item until you tap it.
+- **Chests**: spend the coins you earn on Duck Chests, Royal Chests or the **Mega Chest** (900 coins, only epic and legendary items). **Unlocks are shared by both players.** New items get a bouncing red NEW! on their locker tab and a red ! on the item until you tap it.
+- **Shop** (SHOP button in the locker), more things to spend coins on:
+  - **Training**: permanent upgrades, 5 levels each, more expensive every level: Tougher Duck (+10 max HP), Sharper Beak (+6% damage), Faster Feet (+4% speed), Bigger Magnet, Quick Learner (+5% XP) and Piggy Bank (+10% coins from games). Training also works online; every duck brings their own.
+  - **Daily deals**: 4 items you don't have yet, to buy straight away. New ones every day.
+  - **Boosters** for one game: Double Coins, Head Start (2 free upgrade cards) and Extra Life. Switch them on and they're used at the start of your next game, online too.
 - **Settings** (gear icon): turn off screen shake, impact flashes or music, pick your **language** (English, Deutsch, Русский, or QUACK, where every word is QUACK) and set your **name**.
 - **Your own name**: type any name up to 12 letters and numbers. Rude names (English, German and Russian, including l33t spellings) are refused, and the host filters friends' names too.
 - Ducks turn in 4 directions, blink, squash & stretch and leave afterimages when dashing.
@@ -130,6 +134,7 @@ Online, each device controls its own duck with the controls above (keyboard play
 - `www/js/vendor/peerjs.min.js`: [PeerJS](https://github.com/peers/peerjs) 1.5.5 (MIT)
 - `www/js/story.js`: dialog boxes and cutscenes · `www/js/chapter2.js` to `chapter5.js`: chapters 2 to 5 · `www/js/halloween.js`: the Halloween event (worlds, bosses, levels, cutscenes, rewards)
 - `www/js/scenes.js`: title, map, locker, chests, settings
+- `www/js/shop.js`: the shop (training, daily deals, boosters) and the Mega Chest art
 - `main.js`: Electron wrapper (Windows) · `android/`: Capacitor project · `scripts/build-single-html.js`: one-file web build
 
 Run locally by opening `www/index.html` in a browser, or with `npm install && npm start` for the desktop app.
