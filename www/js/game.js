@@ -2039,22 +2039,43 @@ function drawCardFront(x, y, w, h, u, p, i, t, selected, full) {
     ctx.globalAlpha = a;
   }
   if (selected) { const a = ctx.globalAlpha; ctx.globalAlpha = a * (0.35 + Math.sin(t * 8) * 0.15); ctx.fillStyle = PCOL[p.id]; ctx.fillRect(x - 2, y - 2, w + 4, h + 4); ctx.globalAlpha = a; }
-  panel(x, y, w, h, u.over ? (selected ? '#6b1f2a' : '#4a1520') : selected ? '#3d2f63' : C.ui, u.over ? '#ff3b3b' : selected ? PCOL[p.id] : OUT, u.over ? '#a83240' : C.uiL);
+  // the card: a shadow, an outline, a body that gets darker towards the bottom, and a thin inner frame in the card's colour
+  const body = u.over ? (selected ? '#5a1824' : '#3d1019') : selected ? '#3a2c5e' : '#2a2140';
+  ctx.fillStyle = 'rgba(8,5,14,0.5)'; ctx.fillRect(x + 2, y + h, w - 2, 3);
+  panel(x, y, w, h, body, u.over ? '#ff3b3b' : selected ? PCOL[p.id] : OUT, null, false);
   if (w < 6) return;
+  const steps = 4;
+  for (let s = 1; s < steps; s++) { ctx.fillStyle = shade(body, -0.12 * s); ctx.fillRect(x + 1, Math.round(y + 11 + (h - 12) * s / steps), w - 2, Math.ceil((h - 12) / steps)); }
+  if (full) {
+    const fr = shade(col, -0.35);
+    ctx.fillStyle = fr; ctx.fillRect(x + 2, y + 12, 1, h - 14); ctx.fillRect(x + w - 3, y + 12, 1, h - 14); ctx.fillRect(x + 2, y + h - 3, w - 4, 1);
+    ctx.fillStyle = col; for (const [cx2, cy2] of [[x + 2, y + h - 3], [x + w - 3, y + h - 3]]) ctx.fillRect(cx2, cy2, 1, 1); // little studs in the corners
+    if (selected) { // a glint sliding across the chosen card
+      const k = (t * 0.7) % 1.4, gx = x - 12 + k / 1.4 * (w + 36);
+      ctx.save(); ctx.beginPath(); ctx.rect(x + 1, y + 1, w - 2, h - 2); ctx.clip();
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      for (let i = 0; i < h; i++) ctx.fillRect(Math.round(gx - i * 0.5), y + i, 5, 1);
+      ctx.restore();
+    }
+  }
   if (u.over && full) for (let s = 0; s < 4; s++) { // sparks chase each other around the border
     const k = ((t * 0.9 + s / 4) % 1) * 2 * (w + h), px = k < w ? x + k : k < w + h ? x + w - 1 : k < 2 * w + h ? x + w - 1 - (k - w - h) : x, py = k < w ? y : k < w + h ? y + (k - w) : k < 2 * w + h ? y + h - 1 : y + h - 1 - (k - 2 * w - h);
     ctx.fillStyle = s % 2 ? '#ffd23f' : '#ffffff'; ctx.fillRect(Math.round(px) - 1, Math.round(py) - 1, 3, 3);
   }
+  // the header band in the card's colour, with a shine on top and a darker edge below
   ctx.fillStyle = col; ctx.fillRect(x + 1, y + 1, w - 2, 9);
-  ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(x + 1, y + 1, w - 2, 1);
+  ctx.fillStyle = shade(col, 0.4); ctx.fillRect(x + 2, y + 1, w - 4, 1);
+  ctx.fillStyle = shade(col, -0.35); ctx.fillRect(x + 1, y + 10, w - 2, 1);
   if (!full) return;
   text(label, x + w / 2, y + 3, OUT, 1, 1, null);
   const cx = x + w / 2, iy = y + 22;
-  pcirc(cx, iy, 10, OUT); pcirc(cx, iy, 9, '#3d3456'); pring(cx, iy, 9, col);
+  // the icon sits in a glowing medallion
+  const ga = ctx.globalAlpha; ctx.globalAlpha = ga * (0.18 + Math.sin(t * 3 + i) * 0.06); pcirc(cx, iy, 13, col); ctx.globalAlpha = ga;
+  pcirc(cx, iy, 10, OUT); pcirc(cx, iy, 9, shade(col, -0.7)); pcirc(cx, iy - 2, 6, shade(col, -0.55)); pring(cx, iy, 9, col); pring(cx, iy, 8, shade(col, -0.3));
   drawSpr(ICON[u.over || u.k] || ART.heart, cx, iy + Math.round(Math.sin(t * 4 + i)), false, false, 2);
   if (u.over && (t * 6 | 0) % 2) pring(cx, iy, 11, '#ffd23f');
   let ty = y + 35;
-  for (const ln of wrapText(u.name, w - 6)) { text(ln, cx, ty, u.over ? '#ff8080' : C.gold, 1, 1); ty += 7; }
+  for (const ln of wrapText(u.name, w - 6)) { text(ln, cx, ty, u.over ? '#ff8080' : C.gold, 1, 1, 'shadow', '#120c1f'); ty += 7; }
   const l = lvl(p, u.k);
   if (u.over) { const nw = textW('MAX+') + 6; panel(Math.round(cx - nw / 2), ty - 1, nw, 8, '#ff3b3b', OUT, null, false); text('MAX+', cx, ty, '#fff8e7', 1, 1, null); ty += 10; }
   else if (u.k !== 'snack') {

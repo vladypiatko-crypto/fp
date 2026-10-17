@@ -770,18 +770,52 @@ class UI {
   }
 }
 // standard chunky button
+// a colour made lighter (amt > 0) or darker (amt < 0), e.g. shade('#3d2f63', -0.4)
+const shadeCache = new Map();
+function shade(hex, amt) {
+  const key = hex + amt;
+  let out = shadeCache.get(key);
+  if (!out) {
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex; // only plain #rrggbb colours can be shaded
+    const n = parseInt(hex.slice(1), 16), to = amt > 0 ? 255 : 0, k = Math.abs(amt);
+    const ch = [n >> 16, (n >> 8) & 255, n & 255].map(c => Math.round(c + (to - c) * k));
+    out = '#' + ch.map(c => c.toString(16).padStart(2, '0')).join('');
+    shadeCache.set(key, out);
+  }
+  return out;
+}
+// a chunky pixel button: a raised face on a darker base, a shine across the top, and a sweep of light
+// over the one that has focus. Pressed buttons sink down onto their base.
 function drawButton(ui, id, x, y, w, h, label, opts = {}) {
-  const f = ui.isFocus(id), dn = ui.isDown(id), p = ui.pulseOf(id);
-  const lift = dn ? 1 : f ? -1 : 0;
-  const col = opts.col || C.ui;
-  panel(x, y + lift, w, h, opts.disabled ? '#2a2535' : f ? (opts.focusCol || C.uiSel) : col, f ? (opts.ring || C.gold) : OUT, opts.disabled ? null : C.uiL, !dn);
-  if (p > 0) { ctx.globalAlpha = p * 0.5; ctx.fillStyle = '#fff'; ctx.fillRect(x + 1, y + lift + 1, w - 2, h - 2); ctx.globalAlpha = 1; }
+  const f = ui.isFocus(id), dn = ui.isDown(id), p = ui.pulseOf(id), off = opts.disabled;
+  x = Math.round(x); y = Math.round(y + (f && !dn ? -1 : 0)); w = Math.round(w); h = Math.round(h);
+  const col = off ? '#2a2535' : f ? (opts.focusCol || C.uiSel) : (opts.col || C.ui);
+  const depth = off || dn || h < 9 ? 1 : 2; // how thick the button is
+  // shadow on the ground, outline, then the darker base the face sits on
+  if (!dn) { ctx.fillStyle = 'rgba(10,6,18,0.45)'; ctx.fillRect(x + 1, y + h, w - 2, f ? 3 : 2); }
+  ctx.fillStyle = f && !off ? (opts.ring || C.gold) : OUT; ctx.fillRect(x + 1, y, w - 2, h); ctx.fillRect(x, y + 1, w, h - 2);
+  ctx.fillStyle = shade(col, -0.45); ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+  const fy = y + 1 + (dn ? 1 : 0), fh = h - 2 - depth - (dn ? 1 : 0) + (dn ? 1 : 0);
+  ctx.fillStyle = col; ctx.fillRect(x + 1, fy, w - 2, fh);
+  if (!off) {
+    ctx.fillStyle = shade(col, 0.1); ctx.fillRect(x + 1, fy, w - 2, Math.floor(fh / 2)); // top half a little lighter
+    ctx.fillStyle = shade(col, 0.35); ctx.fillRect(x + 2, fy, w - 4, 1); // shine along the top
+    ctx.fillStyle = shade(col, 0.2); ctx.fillRect(x + 1, fy + 1, 1, Math.max(0, fh - 2)); // and down the left side
+  }
+  if (f && !off && w > 12) { // a diagonal glint sweeping across
+    const tt = (performance.now() / 1000 * 0.8) % 1.6, gx = x - 10 + tt / 1.6 * (w + 30);
+    ctx.save(); ctx.beginPath(); ctx.rect(x + 1, fy, w - 2, fh); ctx.clip();
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    for (let i = 0; i < fh; i++) ctx.fillRect(Math.round(gx - i * 0.6), fy + i, 4, 1);
+    ctx.restore();
+  }
+  if (p > 0) { ctx.globalAlpha = p * 0.5; ctx.fillStyle = '#fff'; ctx.fillRect(x + 1, fy, w - 2, fh); ctx.globalAlpha = 1; }
   const sc = opts.sc || 1;
   const lw = label ? textW(label, sc) : 0, iw = opts.icon ? opts.icon.w + 2 : 0;
-  const left = Math.round(x + w / 2 - (lw + iw) / 2);
-  if (opts.icon) drawSpr(opts.icon, left + opts.icon.w / 2, y + lift + h / 2);
-  if (label) text(label, left + iw, y + lift + Math.floor(h / 2 - 2.5 * sc), opts.disabled ? C.gray : opts.tcol || C.white, sc, 0);
-  return ui.add(id, x, y, w, h, opts.on, { def: opts.def, disabled: opts.disabled, silent: opts.silent });
+  const left = Math.round(x + w / 2 - (lw + iw) / 2), my = fy + fh / 2;
+  if (opts.icon) drawSpr(opts.icon, left + opts.icon.w / 2, Math.round(my));
+  if (label) text(label, left + iw, Math.round(my - 2.5 * sc), off ? C.gray : opts.tcol || C.white, sc, 0, 'shadow', shade(col, -0.65));
+  return ui.add(id, x, y, w, h, opts.on, { def: opts.def, disabled: off, silent: opts.silent });
 }
 // red tag for something you haven't looked at yet: hops, squashes when it lands, rests, repeats
 const NEW_RED = '#e8343b';
