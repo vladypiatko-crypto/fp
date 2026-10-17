@@ -41,4 +41,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- in-game updates: install the newest APK over this one -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- buzz when you get hurt (settings: VIBRATION) -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 </manifest>

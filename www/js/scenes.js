@@ -205,10 +205,11 @@ class TitleScene {
     ctx.globalAlpha = 1;
     // main buttons slide up one after another
     const labels = [['story', 'STORY', ICON.play, () => this.openModal('story')], ['endless', 'ENDLESS', null, () => this.openModal('endless')],
-      ['online', 'ONLINE', null, () => ONLINE_READY ? Trans.go(() => Scenes.set(new OnlineScene())) : this.openModal('online')], ['locker', 'LOCKER', ICON.locker, () => Trans.go(() => Scenes.push(new LockerScene({})))]];
+      ['online', 'ONLINE', null, () => ONLINE_READY ? Trans.go(() => Scenes.set(new OnlineScene())) : this.openModal('online')], ['locker', 'LOCKER', ICON.locker, () => Trans.go(() => Scenes.push(new LockerScene({})))],
+      ['quests', 'QUESTS', null, () => Trans.go(() => Scenes.push(new QuestScene()))]];
     // running events with a level: one button (or one EVENTS button that lists them all)
     const evLv = runningEvents().filter(id => EVENTS[id].level), ev1 = evLv.length === 1 ? EVENTS[evLv[0]] : null;
-    if (evLv.length) labels.push(['event', ev1 ? ev1.name : 'EVENTS', null, () => this.openModal(ev1 ? 'event:' + evLv[0] : 'events')]);
+    if (evLv.length) labels.push(['event', ev1 ? ev1.short || ev1.name : 'EVENTS', null, () => this.openModal(ev1 ? 'event:' + evLv[0] : 'events')]);
     const stack = W < 300, n = labels.length;
     const bw = stack ? 96 : Math.min(84, Math.floor((W - 40) / n)), bh = 18, gap = 6;
     const rowW = stack ? bw : bw * n + gap * (n - 1);
@@ -223,6 +224,7 @@ class TitleScene {
       else drawButton(ui, id, x, y, bw, bh, label, { on, icon, def: i === 0, col: id === 'event' ? (ev1 ? ev1.btn : '#6b2a6b') : i === 0 ? '#3d2f63' : C.ui, tcol: id === 'event' ? (ev1 ? ev1.tcol : C.gold) : undefined });
       if (id === 'event') { evLv.forEach((e, j) => drawSprX(EVENTS[e].hat, x + 4 + j * 5, y + 2 + Math.round(Math.sin(this.T * 4 + j)), { ay: 1 })); drawNewTag(x + bw - 10, y, this.T); }
       if (id === 'locker' && Save.anyNew()) drawNewTag(x + bw - 10, y, this.T);
+      if (id === 'quests') { const n = claimable(); if (n) { pcirc(x + bw - 3, y + 1, 5, C.red); text(String(n), x + bw - 3, y - 1, C.white, 1, 1, null); } }
     });
     // corner widgets
     drawCoins(4, 4, Save.data.coins, this.T);
@@ -304,22 +306,22 @@ class TitleScene {
   drawSettings() {
     ctx.fillStyle = 'rgba(15,10,26,0.7)'; ctx.fillRect(0, 0, W, H);
     const k = Ease.outBack(Math.min(1, this.modalT / 0.3));
-    const rowH = Math.min(18, Math.floor((H - 70) / 5));
-    const pw = Math.min(W - 20, 200), ph = 50 + rowH * 5, px = Math.floor(W / 2 - pw / 2), py = Math.floor(H / 2 - ph / 2 + (1 - k) * 30);
+    const rowH = Math.min(18, Math.floor((H - 70) / 6));
+    const pw = Math.min(W - 20, 200), ph = 50 + rowH * 6, px = Math.floor(W / 2 - pw / 2), py = Math.floor(H / 2 - ph / 2 + (1 - k) * 30);
     panel(px, py, pw, ph, C.uiD, OUT, C.uiL);
     text('SETTINGS', W / 2, py + 7, C.gold, 2, 1, 'outline');
     const ui = this.modalUI; ui.begin();
     const st = Save.data.settings;
-    [['shake', 'SCREEN SHAKE'], ['flash', 'IMPACT FLASH'], ['music', 'MUSIC']].forEach(([key, label], i) => {
+    [['shake', 'SCREEN SHAKE'], ['flash', 'IMPACT FLASH'], ['music', 'MUSIC'], ['vibe', 'VIBRATION']].forEach(([key, label], i) => {
       const on = st[key];
       drawButton(ui, 'set_' + key, px + 10, py + 26 + i * rowH, pw - 20, rowH - 3, fmt('{0}: {1}', label, on ? 'ON' : 'OFF'),
         { def: i === 0, col: on ? C.ui : '#2a2535', tcol: on ? C.white : C.gray,
           on: () => { st[key] = !st[key]; Save.write(); if (key === 'music' && AU.musicBus) AU.musicBus.gain.value = st.music ? 0.42 : 0; } });
     });
     // language: ENGLISH > DEUTSCH > РУССКИЙ > QUACK
-    drawButton(ui, 'set_lang', px + 10, py + 26 + 3 * rowH, pw - 20, rowH - 3, fmt('{0}: {1}  >', 'LANGUAGE', keep(langName())), {
+    drawButton(ui, 'set_lang', px + 10, py + 26 + 4 * rowH, pw - 20, rowH - 3, fmt('{0}: {1}  >', 'LANGUAGE', keep(langName())), {
       on: () => { const i = LANGS.findIndex(l => l[0] === LANG), next = LANGS[(i + 1) % LANGS.length][0]; st.lang = next; Save.write(); setLang(next); } });
-    drawButton(ui, 'set_name', px + 10, py + 26 + 4 * rowH, pw - 20, rowH - 3, fmt('{0}: {1}  >', 'NAME', keep(Save.data.name + (Save.data.account ? '  (' + Save.data.account.username + ')' : ''))), { on: () => Scenes.push(new NameScene()) });
+    drawButton(ui, 'set_name', px + 10, py + 26 + 5 * rowH, pw - 20, rowH - 3, fmt('{0}: {1}  >', 'NAME', keep(Save.data.name + (Save.data.account ? '  (' + Save.data.account.username + ')' : ''))), { on: () => Scenes.push(new NameScene()) });
     drawButton(ui, 'set_back', Math.floor(W / 2 - 30), py + ph - 20, 60, 13, 'BACK', { on: () => { this.modal = null; } });
   }
   // several events at once: pick which event level to play
@@ -796,7 +798,7 @@ class ChestScene {
   buy(kind) {
     const price = chestPrice(kind);
     if (Save.data.coins < price) { sfx.uiBack(); this.nope = 0.5; return; }
-    Save.addCoins(-price);
+    Save.addCoins(-price); questBump('chests');
     this.kind = kind; this.result = rollChest(kind);
     if (this.result.dup) Save.addCoins(Math.floor(price * 0.4));
     else Save.unlock(this.result.cat, this.result.it.id);

@@ -6,6 +6,7 @@ Object.assign(EVENT_STATE, Save.data.events || {}); // the last event state we h
 { const ev = new URLSearchParams(location.search).get('event'); if (ev) for (const id of ev.split(',')) EVENT_STATE[id] = true; } // ?event=halloween,christmas for testing
 SHOP_CFG = cleanShopCfg(Save.data.shopCfg); // what the admin last put in the shop (works offline too)
 setLang(Save.data.settings.lang || 'en');
+if (Save.data.settings.vibe === undefined) Save.data.settings.vibe = true; // phone vibration starts switched on
 Save.data.name = cleanName(Save.data.name, 'QUACKER');
 onResize.push(() => { for (const s of Scenes.stack) if (s.resize) s.resize(); });
 resize();
@@ -30,6 +31,7 @@ function frame(now) {
     if (top) { top.update(dt); }
     showCloudPopups();
     showUpdatePopup();
+    showDailyPopup();
     ctx.imageSmoothingEnabled = false;
     const cur = Scenes.top();
     if (cur) cur.draw();

@@ -73,6 +73,14 @@ Each chapter has an animated intro and ending, and the map has a page per chapte
   - **Daily deals**: 4 items you don't have yet, to buy straight away. New ones every day.
   - **Boosters** for one game: Double Coins, Head Start (2 free upgrade cards) and Extra Life. Switch them on and they're used at the start of your next game, online too.
   - **The admin decides what's in the shop** (admin tab → SHOP): pick up to 8 items as special offers with your own prices (instead of the random daily deals), and set the Admin Sale price and booster prices. Saved for every player at once.
+- **Quests** (QUESTS button on the title screen, with a red number when rewards are waiting):
+  - **Daily quests**: 3 new quests every day (scrap robots, beat bosses, survive in endless, get a combo…) paying coins, plus a bonus for finishing all 3
+  - **Achievements**: 24 big goals (scrap 10000 robots, finish every chapter, survive 20 minutes, own 100 items…), each with a coin reward to claim
+  - **Stats**: everything you've ever done, from robots scrapped to time played
+- **Daily reward**: coins every day you open the game; the streak grows for 7 days (500 coins on day 7)
+- **Combo counter**: kills close together build a combo, with an announcer at 10, 25, 50, 100 and 200 (QUACKTASTIC!, QUACKPOCALYPSE!…)
+- **Elite robots**: rare bigger golden robots with a crown, 4x the HP and much better loot
+- **Vibration**: phones buzz a little when you get hurt (switch it off in settings)
 - **Settings** (gear icon): turn off screen shake, impact flashes or music, pick your **language** (English, Deutsch, Русский, or QUACK, where every word is QUACK) and set your **name**.
 - **Your own name**: type any name up to 12 letters and numbers. Rude names (English, German and Russian, including l33t spellings) are refused, and the host filters friends' names too.
 - Ducks turn in 4 directions, blink, squash & stretch and leave afterimages when dashing.

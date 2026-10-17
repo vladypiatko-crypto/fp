@@ -156,6 +156,7 @@ class GameScene {
 
   // ------------------------------------------------------------ update
   update(dt) {
+    this.juice(dt); // combo counter, announcer, vibration (quests.js)
     if (this.role === 'client') { this.clientUpdate(dt); return; }
     const acts = Input.menu();
     if (this.state === 'dialog') { this.dialog.update(dt, acts); this.tickCosmetics(dt); updateParticles(dt); return; }
@@ -263,6 +264,7 @@ class GameScene {
   finish(won) {
     const res = { won, t: this.t, kills: this.kills, coins: this.coins, bonus: 0, reward: null, best: false, shown: 0 };
     res.bonus = Math.floor(this.t / 8) + Math.floor(this.kills / 20) + this.bossCount * 25;
+    res.bosses = this.bossCount - (this.boss && !this.boss.dead ? 1 : 0); // bosses beaten (for quests)
     if (this.mode === 'story' && won && this.level.event) { // an event level: its reward, but no story progress
       res.bonus += 150;
       const rw = rewardOf(this.level);
@@ -310,6 +312,7 @@ class GameScene {
     if (this.views.length === 2) { ctx.fillStyle = OUT; if (W >= H) ctx.fillRect(this.views[0].w, 0, 2, H); else ctx.fillRect(0, this.views[1].h, W, 2); }
     this.ui.begin();
     drawTopBar();
+    if (this.state === 'play') this.drawJuice();
     if (this.state === 'play') for (const v of this.views) drawLevelUp(v);
     if (this.state === 'dialog') this.dialog.draw();
     if (this.state === 'paused') this.drawPause();
@@ -444,6 +447,7 @@ function spawnEnemy(type, pos, opts = {}) {
     dmg: d.dmg * (R.mode === 'story' ? 1 + (R.level.diff - 1) * 0.08 : 1 + R.t / 400), flash: 0, anim: rand(0, 10), dead: false, eggCd: 0,
     spawnT: opts.instant ? 0 : 0.45, flip: false, st: 'move', stT: rand(1, 2), shootT: rand(1.5, 3), fuse: -1, rot: 0, z: 0,
   };
+  if (!opts.instant && R.t > 20 && Math.random() < ELITE_CHANCE) makeElite(e); // a rare golden ELITE (quests.js)
   if (e.spawnT > 0 && inAnyView(e.x, e.y, 10)) sfx.warp();
   R.enemies.push(e);
   return e;
@@ -550,6 +554,7 @@ function killEnemy(e, owner, quiet) {
     sfx.clank();
   }
   if (quiet) return;
+  if (e.elite) eliteLoot(e);
   if (e.d.xp) dropAt(e.x, e.y, 'xp', e.d.xp * xpMul());
   const coinChance = (e.type === 'tank' ? 0.2 : 0.06) * (1 + 0.5 * (owner && owner.up ? lvl(owner, 'greed') : 0));
   if (owner && owner.up && lvl(owner, 'vamp') && !owner.down) owner.hp = Math.min(owner.maxHp, owner.hp + 0.4 * lvl(owner, 'vamp'));
@@ -1772,17 +1777,18 @@ function drawEnemy(e) {
   }
   const frame = Math.floor(e.anim * (e.d.ai === 'charger' ? 4 : 8)) % 2;
   const s = enemySprite(e.type, frame, e.d.fx === 'goo' ? null : R.theme.tint);
-  const sc = e.boss ? 2 : 1;
+  const sc = e.boss ? 2 : e.elite ? 1.5 : 1;
   let sx = 1, sy = 1, bob = 0;
   if (e.d.fx === 'goo') { const q = Math.sin(e.anim * 8); sx = 1 + q * 0.12; sy = 1 - q * 0.12; }
   else if (e.d.fly) bob = -6 + Math.round(Math.sin(e.anim * 5) * 2);
   else bob = -Math.round(Math.abs(Math.sin(e.anim * 10)) * 1.5);
   if (e.boss && e.bs === 'wind') { sx = 1.1; sy = 0.9; } else if (e.flash > 0) { sx *= 1.14; sy *= 0.88; } // squash when hit
   const fuse = e.fuse >= 0;
-  if (e.d.ai === 'charger') drawSprX(s, e.x, e.y + bob, { rot: e.rot, white: e.flash > 0 });
+  if (e.d.ai === 'charger') drawSprX(s, e.x, e.y + bob, { rot: e.rot, white: e.flash > 0, sc });
   else drawSprX(s, e.x, e.y + bob - e.z + s.h * sc / 2, { flip: e.flip, white: e.flash > 0, sc, sx, sy, ay: 1 });
   if (fuse) pring(e.x, e.y, 4 + (1 - e.fuse / 0.45) * 22, 'rgba(232,52,59,0.6)');
   if (!e.boss && e.d.ai !== 'charger' && R.eventHat) drawSprX(R.eventHat, e.x, e.y + bob - e.z - s.h * sc / 2 + 3, { ay: 1 }); // events: pumpkins, santa hats...
+  if (e.elite) drawEliteMark(e, e.y + bob - e.z - s.h * sc / 2 - (R.eventHat ? 2 : 0));
   if (e.slowT > 0) { // frozen: icy ring and sparkles
     pring(e.x, e.y + 1, e.r * sc + 2, 'rgba(159,220,255,0.75)');
     if ((e.anim * 6 | 0) % 2) { ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(e.x + Math.sin(e.anim * 9) * e.r * sc), Math.round(e.y - e.r * sc + bob), 1, 1); }

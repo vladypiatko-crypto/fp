@@ -497,7 +497,7 @@ GameScene.prototype.buildSnapshot = function () {
       (p.choice || []).map(c => c.k), r2(p.hurtFlash), r2(p.squash), r2(p.spd), Object.keys(p.over)]),
     // enemies: [id, type, x, y, hp, maxHp, bits, z, state, flash, fuse, rot]
     e: this.enemies.filter(e => !e.dead && (e.boss || near(e.x, e.y))).map(e => [e.id, NET_TYPES.indexOf(e.type), r1(e.x), r1(e.y), Math.ceil(e.hp), Math.ceil(e.maxHp),
-      (e.flip ? 1 : 0) | (e.boss ? 2 : 0) | (e.spawnT > 0 ? 4 : 0) | (e.fuse >= 0 ? 8 : 0) | (e.phase === 2 ? 16 : 0) | (e.slowT > 0 ? 32 : 0),
+      (e.flip ? 1 : 0) | (e.boss ? 2 : 0) | (e.spawnT > 0 ? 4 : 0) | (e.fuse >= 0 ? 8 : 0) | (e.phase === 2 ? 16 : 0) | (e.slowT > 0 ? 32 : 0) | (e.elite ? 64 : 0),
       ri(e.z || 0), stIdx(e.bs || e.st), r2(e.flash || 0), r2(Math.max(0, e.fuse)), r1(e.rot || 0)]),
     // shots: [kind, x, y, vx, vy, life, max, r, col (plain bullets only), ownerPid, weapon, (boomerangs: rot, ang, back, sp)]
     s: this.shots.filter(b => near(b.x, b.y)).map(b => {
@@ -576,7 +576,7 @@ GameScene.prototype.applySnapshot = function (s) {
     let e = prev.get(id);
     if (!e) {
       const name = NET_TYPES[a[1]], d = ENEMIES[name] || bossDef(name);
-      e = { id, type: name, d, boss: !!(a[6] & 2), x: a[2], y: a[3], r: d.r, anim: rand(0, 10), kx: 0, ky: 0, eggCd: 0, dead: false, flash: 0 };
+      e = { id, type: name, d, boss: !!(a[6] & 2), elite: !!(a[6] & 64), x: a[2], y: a[3], r: a[6] & 64 ? Math.round(d.r * 1.4) : d.r, anim: rand(0, 10), kx: 0, ky: 0, eggCd: 0, dead: false, flash: 0 };
     }
     glide(e, a[2], a[3], 120);
     e.hp = a[4]; e.maxHp = a[5]; e.flip = !!(a[6] & 1); e.spawnT = a[6] & 4 ? 0.3 : 0;

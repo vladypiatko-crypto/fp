@@ -115,7 +115,7 @@ function drawValentineView(v, T) {
   drawFloaters(v.x, v.y, v.w, v.h, T, 8, (x, y, i) => heartAt(x, y, 1, i % 2 ? 'rgba(255,77,141,0.7)' : 'rgba(255,179,209,0.7)'), -12);
   ctx.restore();
 }
-EVENTS.valentine = { name: "VALENTINE'S DAY", col: '#ff4d8d', kind: 'holiday', level: VALENTINE_LEVEL, song: 'candy', title: drawValentineTitle, view: drawValentineView, hat: DECO_ART.heartS,
+EVENTS.valentine = { name: "VALENTINE'S DAY", short: 'VALENTINE', col: '#ff4d8d', kind: 'holiday', level: VALENTINE_LEVEL, song: 'candy', title: drawValentineTitle, view: drawValentineView, hat: DECO_ART.heartS,
   icon: PROJ_ART.heartshot, chest: 'heartbox', bg: '#3b1428', btn: '#8a1f4a', tcol: '#ffd1e6' };
 
 // ================================================================ SUMMER
