@@ -24,7 +24,7 @@
   "build": {
     "appId": "com.quackattack.game",
     "productName": "Quack Attack",
-    "files": ["main.js", "www/**/*", "build/icon.png"],
+    "files": ["main.js", "preload.js", "www/**/*", "build/icon.png"],
     "directories": { "output": "dist", "buildResources": "build" },
     "win": { "target": [{ "target": "portable", "arch": ["x64"] }], "icon": "build/icon.png" },
     "portable": { "artifactName": "QuackAttack-Windows.exe" }
