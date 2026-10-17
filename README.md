@@ -112,12 +112,14 @@ The **host's device runs the real game**. Everyone else sends their moves and bu
 
 With Firebase switched on, every player picks a **name** and a **unique username** on first start (needs internet once). The admin account gets an **ADMIN** button on the title screen: search players by username, **flag** them (3 flags = automatic ban), **ban / unban**, **reset progress**, and send gifts from the **gift tab**: every item in a grid (admin items first, owned ones marked), coin amounts that add up, pick as many as you like and send them together with an optional **message** (or a message alone). Players get an animated **ADMIN GIFT!** popup that shows what they got and the message. Gifts can go to one player or **to everyone** at once, and the admin tab shows how many players there are. Items with the rainbow **ADMIN** rarity (wizard hat, Galaxy skin, Admin Halo, Admin Sparks trail, Golden Quacker, Ban Hammer) only exist as admin gifts. In a game, the admin's pause menu has **ADMIN POWERS**: heal everyone, level up, clear robots, spawn the boss, god mode.
 
+**More admins:** the first account is the **OWNER**. The owner can open any player in the admin tab and tap **MAKE ADMIN** (or **REMOVE ADMIN**); that player gets the admin tab straight away. Other admins can do everything except make or remove admins, and nobody but the owner can flag, ban or reset the owner. The admin tab marks the OWNER and ADMINs in the player list.
+
 Setup (once):
 
 1. Create a project at [console.firebase.google.com](https://console.firebase.google.com), add a **Web app**, turn on **Authentication → Anonymous** and create a **Firestore Database** in production mode.
 2. Put the web app's `firebaseConfig` into `FIREBASE_CONFIG` in `www/js/cloud.js` and set `ACCOUNTS_ON = true`.
 3. Paste the whole of `firebase/firestore.rules` into **Firestore Database → Rules** and press **Publish**. The rules are what stop anyone else from using admin powers, even with an edited app. (Paste them again whenever this file changes: events like Halloween need the newest rules.)
-4. **The first account ever made becomes the admin**, for good. So the admin installs the build and creates their account before anyone else.
+4. **The first account ever made becomes the admin (the owner)**, for good. So the admin installs the build and creates their account before anyone else.
 
 Good to know: accounts are anonymous and live in the app's storage. Uninstalling or clearing the app's data starts a new account (the old username stays taken), and a banned player could get a fresh account that way. Without `FIREBASE_CONFIG` the game skips accounts and runs fully offline.
 

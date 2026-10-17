@@ -16,7 +16,8 @@ const FIREBASE_CONFIG = {
 };
 // Accounts switch on only when this is true (set once Firebase Authentication and Firestore are set up).
 const ACCOUNTS_ON = true;
-// The admin is the very first account ever made: it claims meta/admin in the database (see firebase/firestore.rules).
+// The OWNER is the very first account ever made: it claims meta/admin in the database (see firebase/firestore.rules).
+// The owner can make other players admins too (admins/{uid}); only the owner decides who is an admin.
 const USERNAME_MIN = 3, USERNAME_MAX = 12;
 const MAX_FLAGS = 3;
 
@@ -26,12 +27,20 @@ const withTimeout = (p, ms) => Promise.race([p, new Promise((res, rej) => setTim
 const serverTime = () => firebase.firestore.FieldValue.serverTimestamp();
 
 const Cloud = {
-  enabled: false, auth: null, db: null, uid: null, me: null, live: false, dirty: false, adminUid: null,
+  enabled: false, auth: null, db: null, uid: null, me: null, live: false, dirty: false, adminUid: null, coAdmin: false,
   unsubs: [], popups: [], pushTimer: null,
   // only decides whether the admin tab is shown; the database rules decide what really works
-  isAdmin() { return !!(this.me && this.adminUid && this.adminUid === this.uid); },
-  // find out who the admin is; if nobody is yet, this account is the first one and becomes it
+  isOwner() { return !!(this.me && this.adminUid && this.adminUid === this.uid); },
+  isAdmin() { return this.isOwner() || !!(this.me && this.coAdmin); },
+  // find out who the owner is; if nobody is yet, this account is the first one and becomes it.
+  // Then keep an eye on whether the owner has made us an admin (or taken it away again).
   async checkAdmin() {
+    await this.checkOwner();
+    if (this.isOwner() || this.adminWatch) return;
+    this.adminWatch = this.db.doc('admins/' + this.uid).onSnapshot(s => { this.coAdmin = s.exists; }, () => { this.coAdmin = false; });
+    this.unsubs.push(this.adminWatch);
+  },
+  async checkOwner() {
     const ref = this.db.doc('meta/admin');
     try {
       const s = await withTimeout(ref.get(), 12000);
@@ -178,6 +187,10 @@ const Cloud = {
       tx.update(ref, by > 0 && flags >= MAX_FLAGS ? { flags, banned: true } : { flags });
     });
   },
+  // the owner makes a player an admin, or takes it away
+  setAdmin(uid, on) { const ref = this.db.doc('admins/' + uid); return withTimeout(on ? ref.set({ by: (this.me && this.me.username) || 'OWNER', at: serverTime() }) : ref.delete(), 12000); },
+  watchAdminOf(uid, fn) { return this.db.doc('admins/' + uid).onSnapshot(s => fn(s.exists), () => fn(false)); },
+  async adminUids() { const qs = await withTimeout(this.db.collection('admins').get(), 12000); return new Set(qs.docs.map(d => d.id)); },
   ban(uid, on) { return this.db.doc('users/' + uid).update(on ? { banned: true } : { banned: false, flags: 0 }); },
   resetProgress(uid) { return this.db.doc('users/' + uid).update({ resetAt: Date.now(), save: { coins: 150, unlocked: DEFAULT_UNLOCKS.slice() } }); },
   give(uid, gift) { return this.db.collection('users/' + uid + '/gifts').add(Object.assign({ from: (this.me && this.me.username) || 'ADMIN', at: serverTime() }, gift)); },

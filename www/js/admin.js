@@ -13,7 +13,7 @@ class AdminScene {
   resumed() { this.search(); }
   async search() {
     this.busy = true; this.note = ''; this.typing = false;
-    try { this.results = await Cloud.searchUsers(this.kb.value); this.scroll = 0; if (!this.results.length) this.note = 'NOBODY FOUND'; }
+    try { this.results = await Cloud.searchUsers(this.kb.value); this.scroll = 0; if (!this.results.length) this.note = 'NOBODY FOUND'; Cloud.adminUids().then(a => { this.admins = a; }).catch(() => {}); }
     catch (e) { this.note = e.message === 'timeout' ? 'NO INTERNET CONNECTION?' : 'ONLY THE ADMIN CAN DO THAT'; this.results = []; }
     this.busy = false;
   }
@@ -49,6 +49,7 @@ class AdminScene {
       panel(8, y, W - 16, rowH - 3, f ? C.uiSel : C.ui, f ? C.gold : OUT, C.uiL, false);
       text(keep(u.username), 14, y + 4, C.gold, 1, 0, null);
       text(keep(u.name || ''), 14 + textW(keep(u.username)) + 8, y + 4, C.white, 1, 0, null);
+      if (u.uid === Cloud.adminUid || (this.admins && this.admins.has(u.uid))) { const lab = u.uid === Cloud.adminUid ? 'OWNER' : 'ADMIN', lw = textW(lab) + 6; panel(W - 70 - lw, y + 2, lw, 10, rarityCol('admin', this.T), OUT, null, false); text(lab, W - 70 - lw / 2, y + 4, OUT, 1, 1, null); }
       if (u.banned) { panel(W - 62, y + 2, 48, 10, C.red, OUT, null, false); text('BANNED', W - 38, y + 4, C.white, 1, 1, null); }
       else if (u.flags) text(fmt('FLAGS {0}/{1}', u.flags, MAX_FLAGS), W - 14, y + 4, C.orange, 1, 2, null);
       this.ui.add(id, 8, y, W - 16, rowH - 3, () => Trans.go(() => Scenes.push(new AdminUserScene(u.uid))), { def: i === 0 });
@@ -117,8 +118,9 @@ class AdminUserScene {
     this.uid = uid; this.T = 0; this.ui = new UI(); this.u = undefined; this.note = ''; this.noteT = 0; this.sure = 0;
     this.msg = '';
     this.off = Cloud.watchUser(uid, u => { this.u = u; });
+    this.offAdm = Cloud.watchAdminOf(uid, a => { this.isAdm = a; });
   }
-  close() { if (this.off) this.off(); Trans.go(() => Scenes.pop()); }
+  close() { if (this.off) this.off(); if (this.offAdm) this.offAdm(); Trans.go(() => Scenes.pop()); }
   say(msg) { this.note = msg; this.noteT = 2.5; }
   act(p, done) { p.then(() => { this.say(done); sfx.pickup(); }).catch(e => { this.say(e.message === 'timeout' ? 'NO INTERNET CONNECTION?' : 'ONLY THE ADMIN CAN DO THAT'); sfx.uiBack(); }); }
   update(dt) {
@@ -132,23 +134,30 @@ class AdminUserScene {
     drawButton(this.ui, 'back', 4, 4, 40, 13, 'BACK', { on: () => this.close(), icon: ICON.back });
     const u = this.u;
     if (!u) { text(u === null ? 'NOBODY FOUND' : 'LOADING...', W / 2, H / 2, C.white, 1, 1); return; }
-    const me = u.uid === Cloud.uid, sv = u.save || {};
+    const me = u.uid === Cloud.uid, sv = u.save || {}, owner = u.uid === Cloud.adminUid, safe = me || (owner && !Cloud.isOwner()); // only the owner can touch the owner
     // who
     text(keep(u.username), W / 2, 5, C.gold, 2, 1, 'outline');
     text(keep(u.name || ''), W / 2, 22, C.white, 1, 1);
     const status = u.banned ? 'BANNED' : u.flags ? fmt('FLAGS {0}/{1}', u.flags, MAX_FLAGS) : 'ALL GOOD';
     text(status, W / 2, 31, u.banned ? C.red : u.flags ? C.orange : C.green, 1, 1);
+    if (owner || this.isAdm) { const lab = owner ? 'OWNER' : 'ADMIN', lw = textW(lab) + 6; panel(W / 2 + 50, 20, lw, 10, rarityCol('admin', this.T), OUT, null, false); text(lab, W / 2 + 50 + lw / 2, 22, OUT, 1, 1, null); }
     text(fmt('COINS {0}   UNLOCKED {1}   STORY LEVEL {2}', sv.coins || 0, (sv.unlocked || []).length, (sv.story && sv.story.reached) || 1), W / 2, 40, C.gray, 1, 1, null);
     // actions
     const bw = Math.min(96, Math.floor((W - 28) / 3)), x0 = Math.floor(W / 2 - (bw * 3 + 8) / 2), bh = 14;
     let y = 52;
-    drawButton(this.ui, 'flag', x0, y, bw, bh, fmt('FLAG ({0}/{1})', u.flags || 0, MAX_FLAGS), { disabled: me || u.banned, col: '#5c3a16', def: true,
+    drawButton(this.ui, 'flag', x0, y, bw, bh, fmt('FLAG ({0}/{1})', u.flags || 0, MAX_FLAGS), { disabled: safe || u.banned, col: '#5c3a16', def: true,
       on: () => this.act(Cloud.flag(u.uid, 1), (u.flags || 0) + 1 >= MAX_FLAGS ? 'FLAGGED 3 TIMES - BANNED!' : 'FLAGGED') });
-    drawButton(this.ui, 'unflag', x0 + bw + 4, y, bw, bh, 'REMOVE FLAG', { disabled: !u.flags, on: () => this.act(Cloud.flag(u.uid, -1), 'FLAG REMOVED') });
-    drawButton(this.ui, 'ban', x0 + (bw + 4) * 2, y, bw, bh, u.banned ? 'UNBAN' : 'BAN', { disabled: me, col: u.banned ? '#1f5c3a' : '#6b1f2a',
+    drawButton(this.ui, 'unflag', x0 + bw + 4, y, bw, bh, 'REMOVE FLAG', { disabled: !u.flags || (owner && !Cloud.isOwner()), on: () => this.act(Cloud.flag(u.uid, -1), 'FLAG REMOVED') });
+    drawButton(this.ui, 'ban', x0 + (bw + 4) * 2, y, bw, bh, u.banned ? 'UNBAN' : 'BAN', { disabled: safe, col: u.banned ? '#1f5c3a' : '#6b1f2a',
       on: () => this.act(Cloud.ban(u.uid, !u.banned), u.banned ? 'UNBANNED' : 'BANNED') });
     y += bh + 4;
-    drawButton(this.ui, 'reset', x0, y, bw * 3 + 8, bh, this.sure ? 'SURE? TAP AGAIN TO RESET' : 'RESET PROGRESS', { col: this.sure ? '#6b1f2a' : C.ui,
+    // the owner can make this player an admin too (or take it away again)
+    if (Cloud.isOwner() && !me) {
+      drawButton(this.ui, 'mkadmin', x0, y, bw * 3 + 8, bh, this.isAdm ? 'REMOVE ADMIN' : 'MAKE ADMIN', { col: this.isAdm ? '#6b1f2a' : '#6b2a6b',
+        on: () => this.act(Cloud.setAdmin(u.uid, !this.isAdm), this.isAdm ? 'NOT AN ADMIN ANY MORE' : fmt('{0} IS NOW AN ADMIN!', keep(u.username))) });
+      y += bh + 4;
+    }
+    drawButton(this.ui, 'reset', x0, y, bw * 3 + 8, bh, this.sure ? 'SURE? TAP AGAIN TO RESET' : 'RESET PROGRESS', { disabled: safe && !me, col: this.sure ? '#6b1f2a' : C.ui,
       on: () => { if (!this.sure) { this.sure = 3; return; } this.sure = 0; this.act(Cloud.resetProgress(u.uid), 'PROGRESS RESET'); } });
     y += bh + 8;
     // gifts and messages: everything you can give on one screen
@@ -444,5 +453,7 @@ addPhrases([
   ['ADMIN SALE PRICE', 'ADMIN-VERKAUFSPREIS', 'ЦЕНА АДМИН-РАСПРОДАЖИ'], ['THE ADMIN SALE IS ON', 'DER ADMIN-VERKAUF LÄUFT', 'АДМИН-РАСПРОДАЖА ИДЁТ'], ['START THE ADMIN SALE IN EVENTS', 'STARTE DEN ADMIN-VERKAUF BEI EVENTS', 'ЗАПУСТИ АДМИН-РАСПРОДАЖУ В ИВЕНТАХ'],
   ['NORMAL SHOP', 'NORMALER LADEN', 'ОБЫЧНЫЙ МАГАЗИН'], ['SAVE FOR EVERYONE', 'FÜR ALLE SPEICHERN', 'СОХРАНИТЬ ДЛЯ ВСЕХ'], ['SAVING...', 'SPEICHERT...', 'СОХРАНЯЮ...'],
   ['THE SHOP IS UPDATED FOR EVERYONE!', 'DER LADEN IST FÜR ALLE AKTUALISIERT!', 'МАГАЗИН ОБНОВЛЁН ДЛЯ ВСЕХ!'], ['MAX {0} ITEMS', 'MAXIMAL {0} SACHEN', 'МАКСИМУМ {0} ПРЕДМЕТОВ'],
+  ['MAKE ADMIN', 'ZUM ADMIN MACHEN', 'СДЕЛАТЬ АДМИНОМ'], ['REMOVE ADMIN', 'ADMIN ENTFERNEN', 'УБРАТЬ АДМИНА'], ['OWNER', 'BESITZER', 'ВЛАДЕЛЕЦ'],
+  ['NOT AN ADMIN ANY MORE', 'KEIN ADMIN MEHR', 'БОЛЬШЕ НЕ АДМИН'], ['{0} IS NOW AN ADMIN!', '{0} IST JETZT ADMIN!', '{0} ТЕПЕРЬ АДМИН!'],
   ['PICK UP TO {0} ITEMS ({1}/{0})', 'WÄHLE BIS ZU {0} SACHEN ({1}/{0})', 'ВЫБЕРИ ДО {0} ПРЕДМЕТОВ ({1}/{0})'], ['DONE', 'FERTIG', 'ГОТОВО'], ['HOLIDAY EVENT', 'FEIERTAGS-EVENT', 'ПРАЗДНИЧНЫЙ ИВЕНТ'],
 ]);
