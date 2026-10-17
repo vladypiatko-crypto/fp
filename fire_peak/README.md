@@ -23,9 +23,9 @@ from the bar-aligned stutter-build re-entries (23.84 / 27.04 / 28.64 s).
 | 0:23.8    | + noise riser (4 bars) |
 | 0:29.0    | Flamewall pre-drop bar |
 | **0:30.7**| **Creo drop** + C-tuned sub impact |
-| ~0:48     | Creo breakdown / riser |
+| ~1:01     | Creo breakdown / riser |
 | ~1:15     | Creo second drop |
-| ~1:55     | Creo outro |
+| ~1:50     | Creo outro (fades by 2:13) |
 
 Both halves are time-stretched with rubberband (pitch preserved) to meet at
 140 BPM (Flamewall −6.7 %, Creo +9.4 %). Post-stretch downbeats verify within
