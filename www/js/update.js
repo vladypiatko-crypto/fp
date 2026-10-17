@@ -12,16 +12,16 @@ const NATIVE_ANDROID = !!(window.Capacitor && window.Capacitor.nativePromise);
 const DESKTOP = !!window.quackDesktop; // the Windows app (preload.js)
 const updater = (method, opts = {}) => window.Capacitor.nativePromise('QuackUpdater', method, opts);
 
-// the newest build number: GitHub's release list first; if that says no (it only allows 60 questions an hour from
-// one internet address, and phones often share one), the little file every build publishes (build-apps.yml)
+// the newest build number: first the little file every build publishes (build-apps.yml) - quick, and there's no
+// limit on how often it can be asked; if that doesn't answer, GitHub's release list (60 questions an hour per address)
 async function newestBuild() {
   try {
-    const r = await withTimeout(fetch('https://api.github.com/repos/' + UPDATE_REPO + '/releases/latest'), 10000);
-    if (r.ok) { const n = parseInt(String((await r.json()).tag_name || '').replace('build-', ''), 10); if (n > 0) return n; }
+    const r = await withTimeout(fetch('https://raw.githubusercontent.com/' + UPDATE_REPO + '/update-info/latest.json?t=' + Date.now(), { cache: 'no-store' }), 6000);
+    if (r.ok) { const n = parseInt((await r.json()).build, 10); if (n > 0) return n; }
   } catch (e) { /* try the other way */ }
-  const r = await withTimeout(fetch('https://raw.githubusercontent.com/' + UPDATE_REPO + '/update-info/latest.json?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' }), 10000);
+  const r = await withTimeout(fetch('https://api.github.com/repos/' + UPDATE_REPO + '/releases/latest', { cache: 'no-store' }), 8000);
   if (!r.ok) throw new Error('HTTP ' + r.status);
-  return parseInt((await r.json()).build, 10) || 0;
+  return parseInt(String((await r.json()).tag_name || '').replace('build-', ''), 10) || 0;
 }
 // 'newer' | 'newest' | 'failed' (offline...) | 'local' (a copy without a build number)
 async function checkForUpdate() {
@@ -47,9 +47,9 @@ function checkNow(done) {
     : r === 'local' ? 'THIS COPY HAS NO BUILD NUMBER' : "COULDN'T CHECK - NO INTERNET?"));
 }
 // phones keep the game running in the background, so it's rarely really "started": check again whenever you come
-// back to it (at most once a minute), and every 15 minutes while it's open
-AppState.onBack.push(() => { if (Date.now() - Update.checkedAt > 60000) checkForUpdate(); });
-setInterval(() => { if (!AppState.away) checkForUpdate(); }, 15 * 60 * 1000);
+// back to it (unless we just did), and every 2 minutes while it's open
+AppState.onBack.push(() => { if (Date.now() - Update.checkedAt > 20000) checkForUpdate(); });
+setInterval(() => { if (!AppState.away) checkForUpdate(); }, 2 * 60 * 1000);
 // pops up on the next menu (never in the middle of a fight)
 function showUpdatePopup() {
   if (!Update.latest || Update.shown || Trans.busy()) return;
