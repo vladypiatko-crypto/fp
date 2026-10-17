@@ -92,3 +92,12 @@ jobs:
             out/QuackAttack-Windows.exe
             out/QuackAttack-Android.apk
             out/QuackAttack.html
+      # a tiny file with the newest build number, which the game reads if GitHub's API won't answer (www/js/update.js)
+      - name: Publish the newest build number (update-info branch)
+        run: |
+          mkdir info && cd info
+          echo '{"build": ${{ github.run_number }}}' > latest.json
+          git init -q -b update-info
+          git add latest.json
+          git -c user.name=quack-builds -c user.email=quack-builds@users.noreply.github.com commit -q -m "build ${{ github.run_number }}"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" update-info

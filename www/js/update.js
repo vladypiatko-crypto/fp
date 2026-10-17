@@ -12,24 +12,39 @@ const NATIVE_ANDROID = !!(window.Capacitor && window.Capacitor.nativePromise);
 const DESKTOP = !!window.quackDesktop; // the Windows app (preload.js)
 const updater = (method, opts = {}) => window.Capacitor.nativePromise('QuackUpdater', method, opts);
 
+// the newest build number: GitHub's release list first; if that says no (it only allows 60 questions an hour from
+// one internet address, and phones often share one), the little file every build publishes (build-apps.yml)
+async function newestBuild() {
+  try {
+    const r = await withTimeout(fetch('https://api.github.com/repos/' + UPDATE_REPO + '/releases/latest'), 10000);
+    if (r.ok) { const n = parseInt(String((await r.json()).tag_name || '').replace('build-', ''), 10); if (n > 0) return n; }
+  } catch (e) { /* try the other way */ }
+  const r = await withTimeout(fetch('https://raw.githubusercontent.com/' + UPDATE_REPO + '/update-info/latest.json?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' }), 10000);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return parseInt((await r.json()).build, 10) || 0;
+}
+// 'newer' | 'newest' | 'failed' (offline...) | 'local' (a copy without a build number)
 async function checkForUpdate() {
   const q = new URLSearchParams(location.search);
-  if (q.get('update')) { Update.latest = +q.get('update'); return; } // tests: ?update=99 pretends build 99 is out
-  if (!GAME_BUILD) return; // a local copy, not a published build
+  if (q.get('update')) { Update.latest = +q.get('update'); return 'newer'; } // tests: ?update=99 pretends build 99 is out
+  if (!GAME_BUILD) return 'local'; // a local copy, not a published build
   Update.checkedAt = Date.now();
-  try {
-    const r = await withTimeout(fetch('https://api.github.com/repos/' + UPDATE_REPO + '/releases/latest'), 12000);
-    if (!r.ok) return;
-    const j = await r.json(), n = parseInt(String(j.tag_name || '').replace('build-', ''), 10);
-    if (!(n > GAME_BUILD)) return;
-    const apk = (j.assets || []).find(a => /\.apk$/i.test(a.name));
-    const exe = (j.assets || []).find(a => /\.exe$/i.test(a.name));
-    Update.apk = apk ? apk.browser_download_url : null;
-    Update.exe = exe ? exe.browser_download_url : null;
-    if (j.html_url) Update.page = j.html_url;
-    if (n > Update.latest) Update.shown = false; // an even newer build than the one we told you about: ask again
-    Update.latest = n;
-  } catch (e) { /* offline: play this version */ }
+  let n;
+  try { n = await newestBuild(); } catch (e) { return 'failed'; }
+  Update.newest = n;
+  if (!(n > GAME_BUILD)) return 'newest';
+  const dl = 'https://github.com/' + UPDATE_REPO + '/releases/download/build-' + n + '/';
+  Update.apk = dl + 'QuackAttack-Android.apk'; Update.exe = dl + 'QuackAttack-Windows.exe';
+  Update.page = 'https://github.com/' + UPDATE_REPO + '/releases/tag/build-' + n;
+  if (n > Update.latest) Update.shown = false; // an even newer build than the one we told you about: ask again
+  Update.latest = n;
+  return 'newer';
+}
+// Settings -> CHECK FOR UPDATES: check right now and say what happened
+function checkNow(done) {
+  Update.shown = false;
+  checkForUpdate().then(r => done(r === 'newer' ? fmt('BUILD {0} IS OUT!', Update.latest) : r === 'newest' ? fmt('YOU HAVE THE NEWEST BUILD ({0})', GAME_BUILD)
+    : r === 'local' ? 'THIS COPY HAS NO BUILD NUMBER' : "COULDN'T CHECK - NO INTERNET?"));
 }
 // phones keep the game running in the background, so it's rarely really "started": check again whenever you come
 // back to it (at most once a minute), and every 15 minutes while it's open
@@ -114,5 +129,7 @@ addPhrases([
   ['UPDATE TO GET ALL THE NEWEST STUFF', 'AKTUALISIERE FÜR ALLE NEUEN SACHEN', 'ОБНОВИСЬ, ЧТОБЫ ПОЛУЧИТЬ ВСЁ НОВОЕ'], ['UPDATE', 'AKTUALISIEREN', 'ОБНОВИТЬ'], ['CLOSE', 'SCHLIESSEN', 'ЗАКРЫТЬ'],
   ['DOWNLOAD FAILED - CHECK YOUR INTERNET', 'DOWNLOAD FEHLGESCHLAGEN - PRÜFE DEIN INTERNET', 'ОШИБКА ЗАГРУЗКИ - ПРОВЕРЬ ИНТЕРНЕТ'], ['TRY AGAIN', 'NOCHMAL', 'ЕЩЁ РАЗ'],
   ['DOWNLOADING... {0}%', 'LÄDT HERUNTER... {0}%', 'ЗАГРУЗКА... {0}%'], ['TAP INSTALL, THEN OPEN', 'TIPPE AUF INSTALLIEREN, DANN ÖFFNEN', 'НАЖМИ УСТАНОВИТЬ, ПОТОМ ОТКРЫТЬ'],
-  ['INSTALL AGAIN', 'NOCHMAL INSTALLIEREN', 'УСТАНОВИТЬ СНОВА'], ['RESTARTING WITH THE NEW VERSION...', 'STARTE MIT DER NEUEN VERSION NEU...', 'ПЕРЕЗАПУСК С НОВОЙ ВЕРСИЕЙ...'],
+  ['INSTALL AGAIN', 'NOCHMAL INSTALLIEREN', 'УСТАНОВИТЬ СНОВА'], ['CHECK FOR UPDATES', 'NACH UPDATES SUCHEN', 'ПРОВЕРИТЬ ОБНОВЛЕНИЯ'], ['CHECKING...', 'PRÜFE...', 'ПРОВЕРЯЮ...'],
+  ['BUILD {0} IS OUT!', 'BUILD {0} IST DA!', 'ВЫШЛА ВЕРСИЯ {0}!'], ['YOU HAVE THE NEWEST BUILD ({0})', 'DU HAST DEN NEUESTEN BUILD ({0})', 'У ТЕБЯ САМАЯ НОВАЯ ВЕРСИЯ ({0})'],
+  ['THIS COPY HAS NO BUILD NUMBER', 'DIESE KOPIE HAT KEINE BUILD-NUMMER', 'У ЭТОЙ КОПИИ НЕТ НОМЕРА ВЕРСИИ'], ["COULDN'T CHECK - NO INTERNET?", 'PRÜFEN FEHLGESCHLAGEN - KEIN INTERNET?', 'НЕ УДАЛОСЬ ПРОВЕРИТЬ - НЕТ ИНТЕРНЕТА?'], ['RESTARTING WITH THE NEW VERSION...', 'STARTE MIT DER NEUEN VERSION NEU...', 'ПЕРЕЗАПУСК С НОВОЙ ВЕРСИЕЙ...'],
 ]);

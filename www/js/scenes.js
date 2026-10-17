@@ -307,8 +307,8 @@ class TitleScene {
   drawSettings() {
     ctx.fillStyle = 'rgba(15,10,26,0.7)'; ctx.fillRect(0, 0, W, H);
     const k = Ease.outBack(Math.min(1, this.modalT / 0.3));
-    const rowH = Math.min(18, Math.floor((H - 70) / 6));
-    const pw = Math.min(W - 20, 200), ph = 50 + rowH * 6, px = Math.floor(W / 2 - pw / 2), py = Math.floor(H / 2 - ph / 2 + (1 - k) * 30);
+    const rowH = Math.min(18, Math.floor((H - 70) / 7));
+    const pw = Math.min(W - 20, 200), ph = 50 + rowH * 7, px = Math.floor(W / 2 - pw / 2), py = Math.floor(H / 2 - ph / 2 + (1 - k) * 30);
     panel(px, py, pw, ph, C.uiD, OUT, C.uiL);
     text('SETTINGS', W / 2, py + 7, C.gold, 2, 1, 'outline');
     const ui = this.modalUI; ui.begin();
@@ -323,6 +323,10 @@ class TitleScene {
     drawButton(ui, 'set_lang', px + 10, py + 26 + 4 * rowH, pw - 20, rowH - 3, fmt('{0}: {1}  >', 'LANGUAGE', keep(langName())), {
       on: () => { const i = LANGS.findIndex(l => l[0] === LANG), next = LANGS[(i + 1) % LANGS.length][0]; st.lang = next; Save.write(); setLang(next); } });
     drawButton(ui, 'set_name', px + 10, py + 26 + 5 * rowH, pw - 20, rowH - 3, fmt('{0}: {1}  >', 'NAME', keep(Save.data.name + (Save.data.account ? '  (' + Save.data.account.username + ')' : ''))), { on: () => Scenes.push(new NameScene()) });
+    // check for a new build right now (and say what happened)
+    drawButton(ui, 'set_upd', px + 10, py + 26 + 6 * rowH, pw - 20, rowH - 3, this.updNote === '...' ? 'CHECKING...' : 'CHECK FOR UPDATES', { col: '#1f5c3a',
+      on: () => { if (this.updNote === '...') return; this.updNote = '...'; checkNow(msg => { this.updNote = msg; this.updT = 4; }); } });
+    if (this.updNote && this.updNote !== '...' && (this.updT -= 1 / 60) > 0) text(this.updNote, W / 2, py + ph + 4, C.gold, 1, 1, 'outline');
     drawButton(ui, 'set_back', Math.floor(W / 2 - 30), py + ph - 20, 60, 13, 'BACK', { on: () => { this.modal = null; } });
   }
   // several events at once: pick which event level to play
