@@ -114,9 +114,18 @@ const Cloud = {
       Save.write(); // the fresh save goes back up
     } else Save.write(true);
   },
+  // "last online" for the admin tab: on start, whenever you come back to the app, and every 5 minutes while playing
+  seen(force) {
+    if (!this.me || this.me.banned || (!force && Date.now() - (this.seenAt || 0) < 60000)) return;
+    this.seenAt = Date.now();
+    this.db.doc('users/' + this.uid).update({ seen: serverTime() }).catch(() => {});
+  },
   listen() {
     if (this.live) return;
     this.live = true;
+    this.seen(true);
+    AppState.onBack.push(() => this.seen());
+    setInterval(() => { if (!AppState.away) this.seen(); }, 5 * 60 * 1000);
     this.unsubs.push(this.db.doc('users/' + this.uid).onSnapshot(s => {
       if (!s.exists) return;
       const was = !!(this.me && this.me.banned);

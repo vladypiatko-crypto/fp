@@ -2,6 +2,17 @@
 /* QUACK ATTACK! — the admin tab (only shown to the admin account; the database rules enforce it).
  * Search players by username, then flag (3 flags = ban), ban, unban, reset progress or send gifts (the gift tab). */
 
+// ================================================================ when: joined on, last online
+const tsMs = t => !t ? 0 : typeof t.toMillis === 'function' ? t.toMillis() : typeof t === 'number' ? t : t.seconds ? t.seconds * 1000 : 0;
+const lastOnline = u => Math.max(tsMs(u.seen), tsMs(u.updated));
+const onlineNow = u => Date.now() - lastOnline(u) < 6 * 60 * 1000;
+function agoText(ms) {
+  if (!ms) return '?';
+  const m = Math.max(0, (Date.now() - ms) / 60000);
+  return m < 6 ? 'ONLINE NOW' : m < 60 ? fmt('{0}M AGO', Math.floor(m)) : m < 48 * 60 ? fmt('{0}H AGO', Math.floor(m / 60)) : fmt('{0}D AGO', Math.floor(m / 1440));
+}
+function dateText(ms) { if (!ms) return '?'; const d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
 // ================================================================ search
 class AdminScene {
   constructor() {
@@ -48,7 +59,9 @@ class AdminScene {
       const y = top + i * rowH, id = 'u' + u.uid, f = this.ui.isFocus(id);
       panel(8, y, W - 16, rowH - 3, f ? C.uiSel : C.ui, f ? C.gold : OUT, C.uiL, false);
       text(keep(u.username), 14, y + 4, C.gold, 1, 0, null);
+      const nx = 14 + textW(keep(u.username)) + 8 + textW(keep(u.name || '')) + 8;
       text(keep(u.name || ''), 14 + textW(keep(u.username)) + 8, y + 4, C.white, 1, 0, null);
+      text(agoText(lastOnline(u)), nx, y + 4, onlineNow(u) ? C.green : C.grayD, 1, 0, null);
       if (u.uid === Cloud.adminUid || (this.admins && this.admins.has(u.uid))) { const lab = u.uid === Cloud.adminUid ? 'OWNER' : 'ADMIN', lw = textW(lab) + 6; panel(W - 70 - lw, y + 2, lw, 10, rarityCol('admin', this.T), OUT, null, false); text(lab, W - 70 - lw / 2, y + 4, OUT, 1, 1, null); }
       if (u.banned) { panel(W - 62, y + 2, 48, 10, C.red, OUT, null, false); text('BANNED', W - 38, y + 4, C.white, 1, 1, null); }
       else if (u.flags) text(fmt('FLAGS {0}/{1}', u.flags, MAX_FLAGS), W - 14, y + 4, C.orange, 1, 2, null);
@@ -142,9 +155,11 @@ class AdminUserScene {
     text(status, W / 2, 31, u.banned ? C.red : u.flags ? C.orange : C.green, 1, 1);
     if (owner || this.isAdm) { const lab = owner ? 'OWNER' : 'ADMIN', lw = textW(lab) + 6; panel(W / 2 + 50, 20, lw, 10, rarityCol('admin', this.T), OUT, null, false); text(lab, W / 2 + 50 + lw / 2, 22, OUT, 1, 1, null); }
     text(fmt('COINS {0}   UNLOCKED {1}   STORY LEVEL {2}', sv.coins || 0, (sv.unlocked || []).length, (sv.story && sv.story.reached) || 1), W / 2, 40, C.gray, 1, 1, null);
+    const seen = agoText(lastOnline(u));
+    text(fmt('JOINED {0}   LAST ONLINE: {1}', dateText(tsMs(u.created)), seen), W / 2, 49, onlineNow(u) ? C.green : C.gray, 1, 1, null);
     // actions
     const bw = Math.min(96, Math.floor((W - 28) / 3)), x0 = Math.floor(W / 2 - (bw * 3 + 8) / 2), bh = 14;
-    let y = 52;
+    let y = 60;
     drawButton(this.ui, 'flag', x0, y, bw, bh, fmt('FLAG ({0}/{1})', u.flags || 0, MAX_FLAGS), { disabled: safe || u.banned, col: '#5c3a16', def: true,
       on: () => this.act(Cloud.flag(u.uid, 1), (u.flags || 0) + 1 >= MAX_FLAGS ? 'FLAGGED 3 TIMES - BANNED!' : 'FLAGGED') });
     drawButton(this.ui, 'unflag', x0 + bw + 4, y, bw, bh, 'REMOVE FLAG', { disabled: !u.flags || (owner && !Cloud.isOwner()), on: () => this.act(Cloud.flag(u.uid, -1), 'FLAG REMOVED') });
@@ -453,6 +468,8 @@ addPhrases([
   ['ADMIN SALE PRICE', 'ADMIN-VERKAUFSPREIS', 'ЦЕНА АДМИН-РАСПРОДАЖИ'], ['THE ADMIN SALE IS ON', 'DER ADMIN-VERKAUF LÄUFT', 'АДМИН-РАСПРОДАЖА ИДЁТ'], ['START THE ADMIN SALE IN EVENTS', 'STARTE DEN ADMIN-VERKAUF BEI EVENTS', 'ЗАПУСТИ АДМИН-РАСПРОДАЖУ В ИВЕНТАХ'],
   ['NORMAL SHOP', 'NORMALER LADEN', 'ОБЫЧНЫЙ МАГАЗИН'], ['SAVE FOR EVERYONE', 'FÜR ALLE SPEICHERN', 'СОХРАНИТЬ ДЛЯ ВСЕХ'], ['SAVING...', 'SPEICHERT...', 'СОХРАНЯЮ...'],
   ['THE SHOP IS UPDATED FOR EVERYONE!', 'DER LADEN IST FÜR ALLE AKTUALISIERT!', 'МАГАЗИН ОБНОВЛЁН ДЛЯ ВСЕХ!'], ['MAX {0} ITEMS', 'MAXIMAL {0} SACHEN', 'МАКСИМУМ {0} ПРЕДМЕТОВ'],
+  ['ONLINE NOW', 'GERADE ONLINE', 'СЕЙЧАС В СЕТИ'], ['{0}M AGO', 'VOR {0} MIN', '{0} МИН. НАЗАД'], ['{0}H AGO', 'VOR {0} STD', '{0} Ч. НАЗАД'], ['{0}D AGO', 'VOR {0} TAGEN', '{0} ДН. НАЗАД'],
+  ['JOINED {0}   LAST ONLINE: {1}', 'DABEI SEIT {0}   ZULETZT ONLINE: {1}', 'С НАМИ С {0}   БЫЛ В СЕТИ: {1}'],
   ['MAKE ADMIN', 'ZUM ADMIN MACHEN', 'СДЕЛАТЬ АДМИНОМ'], ['REMOVE ADMIN', 'ADMIN ENTFERNEN', 'УБРАТЬ АДМИНА'], ['OWNER', 'BESITZER', 'ВЛАДЕЛЕЦ'],
   ['NOT AN ADMIN ANY MORE', 'KEIN ADMIN MEHR', 'БОЛЬШЕ НЕ АДМИН'], ['{0} IS NOW AN ADMIN!', '{0} IST JETZT ADMIN!', '{0} ТЕПЕРЬ АДМИН!'],
   ['PICK UP TO {0} ITEMS ({1}/{0})', 'WÄHLE BIS ZU {0} SACHEN ({1}/{0})', 'ВЫБЕРИ ДО {0} ПРЕДМЕТОВ ({1}/{0})'], ['DONE', 'FERTIG', 'ГОТОВО'], ['HOLIDAY EVENT', 'FEIERTAGS-EVENT', 'ПРАЗДНИЧНЫЙ ИВЕНТ'],
