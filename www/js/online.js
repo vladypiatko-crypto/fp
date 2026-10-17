@@ -89,6 +89,7 @@ const Hub = {
       const r = this.room, fail = msg => { try { conn.send(JSON.stringify({ t: 'error', msg })); } catch (e) { /* gone */ } setTimeout(() => conn.close(), 500); };
       if (r.state !== 'lobby') { fail('THAT GAME HAS ALREADY STARTED'); return; }
       if (r.members.length >= MAX_PLAYERS) { fail('THAT LOBBY IS FULL'); return; }
+      if (m.v !== GAME_BUILD) { fail(m.v > GAME_BUILD ? 'THE HOST NEEDS TO UPDATE THE GAME' : 'UPDATE THE GAME TO JOIN THIS LOBBY'); return; } // different builds don't understand each other
       mem = { id: 'p' + (this.nextId++), conn, name: cleanName(m.name), user: cleanUser(m.user), lo: cleanLoadout(m.lo), tr: cleanTrain(m.tr), bo: cleanBoost(m.bo), ready: false };
       r.members.push(mem);
       this.to(mem, { t: 'hello', id: mem.id });
@@ -225,7 +226,7 @@ Object.assign(Net, {
           if (m && m.t !== 'ka') this.onMsg(m);
         });
         conn.on('close', () => { if (this.conn === conn) this.lost('LOST THE HOST'); });
-        conn.send(JSON.stringify({ t: 'join', name, lo, user: myUsername(), tr: Save.data.train, bo: armedBoosters() }));
+        conn.send(JSON.stringify({ t: 'join', v: GAME_BUILD, name, lo, user: myUsername(), tr: Save.data.train, bo: armedBoosters() }));
         res();
       });
       conn.on('error', () => { clearTimeout(t); rej(new Error("COULDN'T CONNECT TO YOUR FRIEND")); });
@@ -462,8 +463,8 @@ GameScene.prototype.onNet = function (m) {
   return false;
 };
 GameScene.prototype.toLobby = function () { Net.role = null; Trans.go(() => Scenes.set(new RoomScene()), true); };
-GameScene.prototype.leaveOnline = function (reason) { Net.close(); Trans.go(() => Scenes.set(new OnlineScene(reason)), true); };
-GameScene.prototype.quitOnline = function () { Net.send({ t: 'leave' }); Net.close(); Trans.go(() => Scenes.set(new OnlineScene('LEFT THE GAME'))); };
+GameScene.prototype.leaveOnline = function (reason) { this.bankCoins(); Net.close(); Trans.go(() => Scenes.set(new OnlineScene(reason)), true); };
+GameScene.prototype.quitOnline = function () { this.bankCoins(); Net.send({ t: 'leave' }); Net.close(); Trans.go(() => Scenes.set(new OnlineScene('LEFT THE GAME'))); };
 GameScene.prototype.onlineResultButtons = function () {
   if (this.role === 'host') return [['lobby', 'BACK TO LOBBY', () => Net.send({ t: 'back' })]];
   return [['leave', 'LEAVE', () => this.quitOnline()]];
@@ -485,20 +486,22 @@ GameScene.prototype.netPump = function (dt) {
   Net.relay('all', this.buildSnapshot());
 };
 // what the host tells everyone: positions, stats and the few visuals that can't be rebuilt locally
+const trimZeros = a => { let n = a.length; while (n > 7 && !a[n - 1]) n--; a.length = n; return a; };
 GameScene.prototype.buildSnapshot = function () {
   const ev = Net.evt.splice(0, Net.evt.length); Net.sfxSent = {};
   const ps = this.players.filter(p => !p.gone), near = (x, y) => ps.some(p => Math.abs(p.x - x) < NEAR && Math.abs(p.y - y) < NEAR);
   return {
-    t: 'snap', T: r2(this.t), st: this.state, n: r2(this.stateT), pb: this.pausedBy,
+    t: 'snap', T: r2(this.t), c: this.coins, st: this.state, n: r2(this.stateT), pb: this.pausedBy,
     // players: [x, y, face, aim, hp, maxHp, bits, dashT, dashCd, reviveT, level, xp, xpNext, kills, pending, upgrades, choiceKeys, hurtFlash, squash, speed, over]
     p: this.players.map(p => [r1(p.x), r1(p.y), NET_FACE.indexOf(p.facing), r2(p.aim), Math.ceil(p.hp), p.maxHp,
       (p.down ? 1 : 0) | (p.gone ? 2 : 0) | (p.moving ? 4 : 0) | (p.iframes > 0 ? 8 : 0) | (lvl(p, 'shield') && p.shieldT <= 0 ? 16 : 0),
       r2(p.dashT), r2(p.dashCd), r2(p.reviveT), p.level, Math.floor(p.xp), p.xpNext, p.kills, p.pending, p.up,
       (p.choice || []).map(c => c.k), r2(p.hurtFlash), r2(p.squash), r2(p.spd), Object.keys(p.over)]),
     // enemies: [id, type, x, y, hp, maxHp, bits, z, state, flash, fuse, rot]
-    e: this.enemies.filter(e => !e.dead && (e.boss || near(e.x, e.y))).map(e => [e.id, NET_TYPES.indexOf(e.type), r1(e.x), r1(e.y), Math.ceil(e.hp), Math.ceil(e.maxHp),
+    // (trailing zeros are left off: most robots end after bits)
+    e: this.enemies.filter(e => !e.dead && (e.boss || near(e.x, e.y))).map(e => trimZeros([e.id, NET_TYPES.indexOf(e.type), ri(e.x), ri(e.y), Math.ceil(e.hp), Math.ceil(e.maxHp),
       (e.flip ? 1 : 0) | (e.boss ? 2 : 0) | (e.spawnT > 0 ? 4 : 0) | (e.fuse >= 0 ? 8 : 0) | (e.phase === 2 ? 16 : 0) | (e.slowT > 0 ? 32 : 0) | (e.elite ? 64 : 0),
-      ri(e.z || 0), stIdx(e.bs || e.st), r2(e.flash || 0), r2(Math.max(0, e.fuse)), r1(e.rot || 0)]),
+      ri(e.z || 0), (stIdx(e.bs || e.st) + 1) % NET_STATES.length, r2(e.flash || 0), r2(Math.max(0, e.fuse)), r1(e.rot || 0)])),
     // shots: [kind, x, y, vx, vy, life, max, r, col (plain bullets only), ownerPid, weapon, (boomerangs: rot, ang, back, sp)]
     s: this.shots.filter(b => near(b.x, b.y)).map(b => {
       const a = [b.kind, ri(b.x), ri(b.y), ri(b.vx), ri(b.vy), r2(b.life), b.max, b.r, b.kind === 'bullet' ? b.col : 0, b.owner.id, b.owner.weapon];
@@ -516,8 +519,8 @@ GameScene.prototype.buildSnapshot = function () {
       const o = {}; for (const k in f) { const v = f[k]; o[k] = typeof v === 'number' ? r1(v) : k === 'pts' ? v.map(q => [ri(q[0]), ri(q[1])]) : v; }
       return o;
     }),
-    // floating texts: [x, y, str, col, life, max, sc, vy]
-    tx: this.texts.filter(t => near(t.x, t.y)).map(t => [ri(t.x), ri(t.y), t.str, t.col, r2(t.life), t.max, t.sc, ri(t.vy)]),
+    // floating texts, each sent once (friends float them up themselves): [x, y, str, col, life, max, sc, vy]
+    tx: this.texts.filter(t => !t.sent && (t.sent = true) && near(t.x, t.y)).map(t => [ri(t.x), ri(t.y), t.str, t.col, r2(t.life), t.max, t.sc, ri(t.vy)]),
     ban: this.banners.map(b => ({ str: b.str, col: b.col, t: r2(b.t), dur: b.dur, sub: b.sub })),
     bi: this.bossIntro ? { t: r2(this.bossIntro.t), name: this.bossIntro.name } : null,
     res: this.results,
@@ -525,7 +528,7 @@ GameScene.prototype.buildSnapshot = function () {
   };
 };
 GameScene.prototype.applySnapshot = function (s) {
-  this.t = s.T; this.stateT = s.n;
+  this.t = s.T; this.stateT = s.n; this.coins = s.c || 0;
   // how often snapshots really arrive: everything glides from where it is to the new spot over that long
   const now = nowS();
   if (this.snapAt) this.snapDt = clamp((this.snapDt || 1 / SNAP_HZ) * 0.8 + (now - this.snapAt) * 0.2, 1 / 40, 0.3);
@@ -581,7 +584,7 @@ GameScene.prototype.applySnapshot = function (s) {
     glide(e, a[2], a[3], 120);
     e.hp = a[4]; e.maxHp = a[5]; e.flip = !!(a[6] & 1); e.spawnT = a[6] & 4 ? 0.3 : 0;
     e.fuse = a[10] > 0 ? a[10] : -1; e.phase = a[6] & 16 ? 2 : 1; e.slowT = a[6] & 32 ? 1 : 0;
-    e.z = a[7]; e.bs = e.st = NET_STATES[a[8]] || ''; e.flash = Math.max(e.flash, a[9]); e.rot = a[11];
+    e.z = a[7] || 0; e.bs = e.st = NET_STATES[((a[8] || 0) + NET_STATES.length - 1) % NET_STATES.length] || ''; e.flash = Math.max(e.flash, a[9] || 0); e.rot = a[11] || 0;
     next.set(id, e); list.push(e);
   }
   // enemies that disappeared were destroyed: give them a little death burst
@@ -598,7 +601,8 @@ GameScene.prototype.applySnapshot = function (s) {
   this.marks = s.mk.map(a => ({ x: a[0], y: a[1], r: a[2], t: a[3], dur: a[4], friendly: !!a[5] }));
   this.puddles = (s.pd || []).map(a => ({ x: a[0], y: a[1], r: a[2], t: a[3], dur: a[4], lava: !!a[5] }));
   this.fx = s.fx;
-  this.texts = s.tx.map(a => ({ x: a[0], y: a[1], str: a[2], col: a[3], life: a[4], max: a[5], sc: a[6], vy: a[7] }));
+  for (const a of s.tx) this.texts.push({ x: a[0], y: a[1], str: a[2], col: a[3], life: a[4], max: a[5], sc: a[6], vy: a[7] });
+  if (this.texts.length > 90) this.texts.splice(0, this.texts.length - 90);
   this.banners = s.ban;
   this.bossIntro = s.bi ? { t: s.bi.t, name: s.bi.name } : null;
   // one-off things the host did: sounds, impact frames, screen shake
@@ -726,6 +730,8 @@ GameScene.prototype.clientTick = function (dt) {
   for (const q of this.puddles) q.t += dt;
   for (const f of this.fx) f.t += dt;
   this.fx = this.fx.filter(f => f.t < f.dur);
+  for (const t of this.texts) { t.y += t.vy * dt; t.vy *= 0.94; t.life -= dt; }
+  this.texts = this.texts.filter(t => t.life > 0);
   for (const b of this.banners) b.t += dt;
   this.banners = this.banners.filter(b => b.t < b.dur);
   updateParticles(dt);

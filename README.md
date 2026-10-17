@@ -93,6 +93,7 @@ Each chapter has an animated intro and ending, and the map has a page per chapte
 - **Combo counter**: kills close together build a combo, with an announcer at 10, 25, 50, 100 and 200 (QUACKTASTIC!, QUACKPOCALYPSE!…)
 - **Elite robots**: rare bigger golden robots with a crown, 4x the HP and much better loot
 - **Vibration**: phones buzz a little when you get hurt (switch it off in settings)
+- **Quitting keeps your coins**: leave a run early (pause → QUIT, or LEAVE GAME online) and you still get the coins you picked up (no end-of-run bonus). The pause menu shows the coins so far and your weapon and power-ups.
 - **Settings** (gear icon): turn off screen shake, impact flashes or music, pick your **language** (English, Deutsch, Русский, or QUACK, where every word is QUACK) and set your **name**.
 - **Your own name**: type any name up to 12 letters and numbers. Rude names (English, German and Russian, including l33t spellings) are refused, and the host filters friends' names too.
 - Ducks turn in 4 directions, blink, squash & stretch and leave afterimages when dashing.
@@ -125,6 +126,7 @@ The **host's device runs the real game**. Everyone else sends their moves and bu
 
 - Every device needs internet, also when you're all on the same Wi-Fi (the matchmaker lives online).
 - No public lobby list: you join by code only.
+- Everyone needs the same build: a friend on an older (or newer) version is asked to update before joining.
 - If the host closes the game, locks the phone or loses connection, the lobby ends for everyone. A friend whose device goes quiet for about 12 seconds is dropped.
 - Online depends on the free PeerJS service being up. If it's down, local play still works.
 - For testing you can point the game at your own PeerJS server with `?peer=host:port` in the address.

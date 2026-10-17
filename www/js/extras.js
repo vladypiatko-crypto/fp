@@ -196,3 +196,19 @@ addPhrases([
   ['PLAY WHILE THE EVENT IS ON TO EARN THEM', 'SPIELE WÄHREND DES EVENTS, UM SIE ZU VERDIENEN', 'ИГРАЙ ВО ВРЕМЯ ИВЕНТА, ЧТОБЫ ИХ ПОЛУЧИТЬ'],
   ['PET LOVER', 'TIERFREUND', 'ЛЮБИТЕЛЬ ПИТОМЦЕВ'], ['OWN 3 PETS', 'BESITZE 3 HAUSTIERE', 'СОБЕРИ 3 ПИТОМЦА'], ['SHOP', 'LADEN', 'МАГАЗИН'],
 ]);
+
+// ================================================================ toast: a short message over any screen (e.g. coins kept after quitting a run)
+const TOAST = { msg: '', t: 0, coin: false };
+function showToast(msg, coin) { TOAST.msg = msg; TOAST.t = 3; TOAST.coin = !!coin; if (coin) sfx.coin(); }
+function drawToast(dt) {
+  if (TOAST.t <= 0) return;
+  TOAST.t -= dt;
+  const k = Math.min(1, (3 - TOAST.t) / 0.25, TOAST.t / 0.3), w = textW(tr(TOAST.msg)) + (TOAST.coin ? 22 : 12), x = Math.floor(W / 2 - w / 2), y = Math.round(H + 4 - 40 * Ease.outCubic(Math.max(0, k)));
+  panel(x, y, w, 16, C.uiD, C.gold, C.uiL);
+  if (TOAST.coin) coinIcon(x + 5, y + 4, performance.now() / 1000);
+  text(TOAST.msg, x + (TOAST.coin ? 16 : 6), y + 5, C.gold, 1, 0, null);
+}
+addPhrases([
+  ['+{0} COINS FROM YOUR RUN', '+{0} MÜNZEN AUS DEINER RUNDE', '+{0} МОНЕТ ЗА ЗАБЕГ'], ['{0} COINS SO FAR', 'BISHER {0} MÜNZEN', 'ПОКА {0} МОНЕТ'],
+  ['THE HOST NEEDS TO UPDATE THE GAME', 'DER HOST MUSS DAS SPIEL AKTUALISIEREN', 'ХОСТУ НУЖНО ОБНОВИТЬ ИГРУ'], ['UPDATE THE GAME TO JOIN THIS LOBBY', 'AKTUALISIERE DAS SPIEL, UM BEIZUTRETEN', 'ОБНОВИ ИГРУ, ЧТОБЫ ВОЙТИ'],
+]);

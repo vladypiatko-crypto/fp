@@ -38,6 +38,7 @@ function frame(now) {
     if (cur) cur.draw();
     Impact.draw();
     Trans.draw();
+    drawToast(dt);
   } catch (err) { console.error(err); }
   Input.endFrame();
   requestAnimationFrame(frame);

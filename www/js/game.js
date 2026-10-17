@@ -261,6 +261,16 @@ class GameScene {
     this.tickCosmetics(dt);
     this.netPump(dt); // online: keep friends up to date (they see the pause too)
   }
+  // leaving a run early: you still keep the coins you picked up (no bonus)
+  bankCoins() {
+    if (this.banked || this.state === 'results' || !(this.coins > 0)) return 0;
+    this.banked = true;
+    const dbl = this.boost && this.boost.double, ev = eventOn('doublecoins');
+    const n = Math.round(this.coins * (1 + 0.1 * (cleanTrain(Save.data.train).coin || 0)) * (dbl ? 2 : 1) * (ev ? 2 : 1));
+    Save.addCoins(n);
+    showToast(fmt('+{0} COINS FROM YOUR RUN', n), true);
+    return n;
+  }
   // end of a run: work out coins and unlocks, then show the results panel
   finish(won) {
     const res = { won, t: this.t, kills: this.kills, coins: this.coins, bonus: 0, reward: null, best: false, shown: 0 };
@@ -347,7 +357,7 @@ class GameScene {
     labels.push(['sound', AU.muted ? 'SOUND: OFF' : 'SOUND: ON', () => { setMuted(!AU.muted); Save.data.muted = AU.muted; Save.write(); }]);
     if (fsSupported()) labels.push(['fs', document.fullscreenElement ? 'EXIT FULLSCREEN' : 'FULLSCREEN', toggleFullscreen]);
     labels.push(['quit', this.online ? 'LEAVE GAME' : this.mode === 'story' ? 'QUIT TO MAP' : 'QUIT TO MENU',
-      () => (this.online ? this.quitOnline() : Trans.go(() => { Music.paused = false; Scenes.set(this.mode === 'story' ? new MapScene(this.np) : new TitleScene(true)); }))]);
+      () => (this.online ? this.quitOnline() : Trans.go(() => { Music.paused = false; this.bankCoins(); Scenes.set(this.mode === 'story' ? new MapScene(this.np) : new TitleScene(true)); }))]);
     const total = labels.length * (bh + gap) - gap + 26;
     const px = Math.floor(W / 2 - bw / 2 - 8), py = Math.floor(H / 2 - total / 2);
     panel(px, py, bw + 16, total + 12, C.uiD, OUT, C.uiL);
@@ -358,12 +368,34 @@ class GameScene {
       drawButton(ui, id, px + 8, py + 26 + i * (bh + gap), bw, bh, label, { on, def: i === 0 });
       if (id === 'locker' && Save.anyNew()) drawNewTag(px + bw - 6, py + 26 + i * (bh + gap), performance.now() / 1000);
     });
+    this.drawPauseLoot(py + total + 18);
     // the ducks dance a little while you wait
     this.players.forEach((p, i) => {
       const x = px - 22 + (i ? bw + 60 : 0), y = py + total / 2 + 12;
       if (x < 8 || x > W - 8) return;
       shadow(x, y, 6);
       drawDuck(x, y + Math.round(Math.abs(Math.sin(p.anim * 5)) * -2), { skin: p.lo.skin, hat: p.lo.hat, halo: p.lo.halo, facing: ['down', 'right', 'up', 'left'][Math.floor(p.anim * 2) % 4], frame: Math.floor(p.anim * 6) % 2, blink: p.blinkT < 0, t: p.anim, sc: 2 });
+    });
+  }
+  // under the pause menu: the coins picked up so far and each duck's weapon and power-ups
+  drawPauseLoot(y) {
+    const ps = this.online ? [this.players[this.localPid]] : this.players;
+    const cw = textW(fmt('{0} COINS SO FAR', this.coins)) + 16;
+    panel(Math.floor(W / 2 - cw / 2), y, cw, 12, C.uiD, OUT, null, false);
+    coinIcon(Math.floor(W / 2 - cw / 2) + 3, y + 2, this.t);
+    text(fmt('{0} COINS SO FAR', this.coins), W / 2 + 5, y + 3, C.gold, 1, 1, null);
+    ps.forEach((p, r) => {
+      if (!p) return;
+      const owned = ownedPowers(p), rw = 20 + owned.length * 22, rx = Math.floor(W / 2 - rw / 2), ry = y + 16 + r * 15;
+      if (ry > H - 14) return;
+      panel(rx, ry, 16, 12, C.uiD, PCOL[p.id], null, false);
+      drawSprX(GUN_ART[p.weapon] || GUN_ART.blaster, rx + 8, ry + 6, { ax: 0.5 });
+      owned.forEach((k, i) => {
+        const x = rx + 20 + i * 22, ov = p.over[k];
+        panel(x, ry, 20, 12, C.uiD, ov ? '#ff3b3b' : OUT, null, false);
+        drawSpr(ICON[k], x + 6, ry + 6);
+        text(ov ? '+' : lvl(p, k) >= UPGRADES.find(u => u.k === k).max ? 'M' : lvl(p, k), x + 12, ry + 3, ov ? '#ff8080' : C.white, 1, 0, null);
+      });
     });
   }
   drawAdminPowers(ui) {
@@ -1826,7 +1858,7 @@ function drawPlayer(p) {
     if ((p.anim * 2 | 0) % 2 === 0) text('HELP!', p.x, p.y - 20, PCOL[p.id], 1, 1);
     return;
   }
-  if (p.iframes > 0 && p.dashT <= 0 && (p.iframes * 16 | 0) % 2 === 0) return;
+  if (p.iframes > 0 && p.dashT <= 0 && ((R.role === 'client' ? p.anim : p.iframes) * 16 | 0) % 2 === 0) return; // online friends only know "blinking", not for how long
   let sx = 1, sy = 1;
   if (p.moving) { const q = Math.sin(p.anim * 18); sx = 1 - q * 0.05; sy = 1 + q * 0.06; }
   else { const q = Math.sin(p.anim * 3); sy = 1 + q * 0.03; sx = 1 - q * 0.02; }
@@ -1898,8 +1930,9 @@ function drawHud(v, p, cx, cy) {
     }
   }
   // partner arrow
-  if (R.players.length > 1) {
-    const o = R.players[(p.id + 1) % R.players.length], ox = o.x - cx, oy = o.y - cy;
+  for (const o of R.players) {
+    if (o === p || o.gone) continue;
+    const ox = o.x - cx, oy = o.y - cy;
     if (ox < 0 || oy < 0 || ox > v.w || oy > v.h) {
       const mx = v.w / 2, my = v.h / 2, dx = ox - mx, dy = oy - my;
       const k = Math.min((v.w / 2 - 12) / Math.abs(dx || 1e-6), (v.h / 2 - 12) / Math.abs(dy || 1e-6));
