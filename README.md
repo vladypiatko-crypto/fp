@@ -14,6 +14,8 @@ A pixel-art **survival shooter** for **1–4 players**: split screen on one devi
 
 **Chapter 5: Save the Pond!** One morning Puddle Pond is empty: the **Kraken-Bot** is pumping all the water in Duckland down to its undersea factory. With Dr. Honk's snorkels the ducks dive after it, all the way down to Atlantis.
 
+**Chapter 6: Mecha-Quack.** In the old scrapyard all the broken robots from chapters 1 to 5 rattle together into **Mecha-Quack**, a robot duck that wants to be the better duck. The ducks chase it through a robot circus, a glowing mushroom forest and into cyber space, up to its Mecha Fortress.
+
 | Level | World | Boss | Reward |
 | --- | --- | --- | --- |
 | 1 | Puddle Pond | Clanky Crab | Quackshot |
@@ -41,8 +43,13 @@ A pixel-art **survival shooter** for **1–4 players**: split screen on one devi
 | 23 | Kelp Forest | Eel-Tron | Mermaid skin |
 | 24 | The Abyss | Angler-Bot | Glow Fish halo |
 | 25 | Atlantis | Kraken-Bot | Deep Sea skin |
+| 26 | The Scrapyard | Magna-Bot | Scrap Launcher |
+| 27 | Robo Circus | Clown-Bot | Clown Hat |
+| 28 | Glowshroom Forest | Spore-Bot | Shroomy skin |
+| 29 | Cyber Space | Virus.exe | Binary Halo |
+| 30 | Mecha Fortress | Mecha-Quack | Mecha Duck skin |
 
-Each chapter has an animated intro and ending, and the map has a page per chapter. Chapter 2 and 3 cosmetics only come from the story, never from chests. Chapter 3 adds **Turret Bots** and **Spider Bots**, and its own songs. **Endless** mode is a pure survival run where all twenty-five bosses take turns.
+Each chapter has an animated intro and ending, and the map has a page per chapter. Chapter 2 and 3 cosmetics only come from the story, never from chests. Chapter 3 adds **Turret Bots** and **Spider Bots**, and its own songs. **Endless** mode is a pure survival run where all thirty bosses take turns.
 
 **Halloween event.** The admin starts and stops it (admin tab, EVENTS) and every player sees it live: a spooky title screen and music, night-time levels where the robots wear pumpkins, the **Haunted Pond** event level with the **Pumpkin King** (reward: Pumpkin Head), and the **Pumpkin Chest** full of **LIMITED** items (Skeleton and Vampire skins, Witch Hat, Bat Orbit, Candy Corn trail, Reaper Scythe, Candy Cannon). When the event stops, limited items can't be found any more; whoever has them keeps them.
 
@@ -53,8 +60,10 @@ Each chapter has an animated intro and ending, and the map has a page per chapte
 - **Valentine's Day**: Sweetheart Candy Land vs. the Love Crab (Heart Crown), Lovebird skin, Rose Petals trail, Cupid's Bow (homing hearts)
 - **Summer**: Summer Splash Beach vs. the Surf Shark (Straw Hat), Surfer skin, Splash trail, Super Soaker
 - **New Year**: Countdown City vs. the Midnight Clock (Party Hat), Disco skin, Fireworks halo, Confetti trail, Firecracker
+- **Lunar New Year**: red lanterns and fireworks, the Lantern Festival vs. Dragon-Bot (Dragon Hat), Lucky Red skin, Lantern Ring halo, Lantern trail, Lantern Chest
+- **St. Patrick's Day**: a rainbow and clovers, Rainbow Meadow vs. the Shamrock Golem (Lucky Top Hat), Clover skin, Shamrocks trail, Pot of Gold (spinning gold coins), Lucky Chest
 
-**Bonus events** change the rules for everyone while they run: **Double Coins**, **Double XP**, **Chest Sale** (all chests half price) and the **Admin Sale** (every admin item can be bought in the shop, for a lot of coins). Any mix of events can run at once; with several event levels, the title screen gets an EVENTS button.
+**Bonus events** change the rules for everyone while they run: **Double Coins**, **Double XP**, **Chest Sale** (all chests half price), **Elite Hunt** (5x more golden elite robots), **Lucky Drops** (twice the coins and hearts) and the **Admin Sale** (every admin item can be bought in the shop, for a lot of coins). Any mix of events can run at once; with several event levels, the title screen gets an EVENTS button.
 
 ## Features
 
@@ -73,9 +82,9 @@ Each chapter has an animated intro and ending, and the map has a page per chapte
   - **Daily deals**: 4 items you don't have yet, to buy straight away. New ones every day.
   - **Boosters** for one game: Double Coins, Head Start (2 free upgrade cards) and Extra Life. Switch them on and they're used at the start of your next game, online too.
   - **The admin decides what's in the shop** (admin tab → SHOP): pick up to 8 items as special offers with your own prices (instead of the random daily deals), and set the Admin Sale price and booster prices. Saved for every player at once.
-- **Boss Rush** (BOSS RUSH on the title screen): all 25 story bosses one after another, with only a few robots in between. After each boss you heal up and get 2 free upgrade cards. Your record is how many bosses you beat.
+- **Boss Rush** (BOSS RUSH on the title screen): all 30 story bosses one after another, with only a few robots in between. After each boss you heal up and get 2 free upgrade cards. Your record is how many bosses you beat.
 - **Pets** (new PETS tab in the locker, found in chests): little buddies that follow your duck and help: Baby Chick (bigger magnet), Piglet (finds coins), Froggy (tongue zaps), Mini Drone (lasers), Ninja Cat (ninja stars), Fairy (heals), Baby Dragon (exploding fireballs), Robo Pup (fast lasers), and the admin-only Golden Goose.
-- **Event coins**: while a holiday event runs, every game also pays purple EVENT COINS (more for winning the event level). The event chests (Pumpkin, Present, Easter, Love, Beach, Party) cost 30 event coins instead of normal coins.
+- **Event coins**: while a holiday event runs, every game also pays purple EVENT COINS (more for winning the event level). The event chests (Pumpkin, Present, Easter, Love, Beach, Party, Lantern, Lucky) cost 30 event coins instead of normal coins.
 - **Quests** (QUESTS button on the title screen, with a red number when rewards are waiting):
   - **Daily quests**: 3 new quests every day (scrap robots, beat bosses, survive in endless, get a combo…) paying coins, plus a bonus for finishing all 3
   - **Achievements**: 24 big goals (scrap 10000 robots, finish every chapter, survive 20 minutes, own 100 items…), each with a coin reward to claim
@@ -126,6 +135,8 @@ The **host's device runs the real game**. Everyone else sends their moves and bu
 With Firebase switched on, every player picks a **name** and a **unique username** on first start (needs internet once). The admin account gets an **ADMIN** button on the title screen: search players by username, **flag** them (3 flags = automatic ban), **ban / unban**, **reset progress**, and send gifts from the **gift tab**: every item in a grid (admin items first, owned ones marked), coin amounts that add up, pick as many as you like and send them together with an optional **message** (or a message alone). Players get an animated **ADMIN GIFT!** popup that shows what they got and the message. Gifts can go to one player or **to everyone** at once, and the admin tab shows how many players there are. Items with the rainbow **ADMIN** rarity (wizard hat, Galaxy skin, Admin Halo, Admin Sparks trail, Golden Quacker, Ban Hammer) only exist as admin gifts. In a game, the admin's pause menu has **ADMIN POWERS**: heal everyone, level up, clear robots, spawn the boss, god mode.
 
 **More admins:** the first account is the **OWNER**. The owner can open any player in the admin tab and tap **MAKE ADMIN** (or **REMOVE ADMIN**); that player gets the admin tab straight away. Other admins can do everything except make or remove admins, and nobody but the owner can flag, ban or reset the owner. The admin tab marks the OWNER and ADMINs in the player list.
+
+**News:** the NEWS button in the admin tab sends a message to every player. It pops up once for each of them (as NEWS! from the admin) the next time they're on a menu, also for players who were offline when it was sent. The gift tab's COINS page also has **event coins** to give away.
 
 Setup (once):
 

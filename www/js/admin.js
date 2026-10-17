@@ -76,6 +76,7 @@ class AdminScene {
     drawButton(this.ui, 'back', 4, H - 17, 40, 13, 'BACK', { on: () => Trans.go(() => Scenes.pop()), icon: ICON.back });
     drawButton(this.ui, 'events', 4, 22, 40, 14, 'EVENTS', { on: () => Trans.go(() => Scenes.push(new EventAdminScene())), col: '#8f4a00' });
     drawButton(this.ui, 'shopadm', W - 44, 22, 40, 14, 'SHOP', { on: () => Trans.go(() => Scenes.push(new ShopAdminScene())), col: '#7a1f24' });
+    drawButton(this.ui, 'newsadm', W - 44, 4, 40, 14, 'NEWS', { on: () => Trans.go(() => Scenes.push(new NewsAdminScene())), col: '#1f5c7a' });
   }
 }
 
@@ -186,21 +187,23 @@ class AdminUserScene {
 const GIFT_TABS = ['admin', 'skin', 'hat', 'halo', 'trail', 'weapon', 'pet', 'coins'];
 const GIFT_TAB_NAME = { admin: 'ADMIN', skin: 'SKINS', hat: 'HATS', halo: 'HALOS', trail: 'TRAILS', weapon: 'WEAPONS', pet: 'PETS', coins: 'COINS' };
 const GIFT_COINS = [50, 100, 250, 500, 1000, 2500, 5000, 10000];
+const GIFT_TOKENS = [10, 30, 60, 100, 300]; // event coins (extras.js)
 class GiftPickScene {
   constructor(owner) {
     this.owner = owner; this.T = 0; this.ui = new UI(); this.tab = 'admin'; this.page = 0;
-    this.sel = new Set(); this.coins = new Set(); this.msg = owner.msg || ''; this.note = ''; this.noteT = 0; this.busy = false;
+    this.sel = new Set(); this.coins = new Set(); this.tokens = new Set(); this.msg = owner.msg || ''; this.note = ''; this.noteT = 0; this.busy = false;
   }
   get u() { return this.owner.u; }
   owns(cat, id) { const sv = (this.u && this.u.save) || {}; return (sv.unlocked || []).includes(cat + ':' + id); }
   // the cells of a tab: [cat, item] for items, amounts for coins
   cells(tab) {
-    if (tab === 'coins') return GIFT_COINS;
+    if (tab === 'coins') return [...GIFT_COINS.map(n => ({ n })), ...GIFT_TOKENS.map(n => ({ n, tok: true }))]; // coins, then event coins
     if (tab === 'admin') { const out = []; for (const c of CATS) for (const it of COSMETICS[c]) if (it.rarity === 'admin') out.push([c, it]); return out; }
     return COSMETICS[tab].filter(it => it.id !== 'none').map(it => [tab, it]);
   }
   coinTotal() { let n = 0; for (const c of this.coins) n += c; return n; }
-  count() { return this.sel.size + (this.coins.size ? 1 : 0); }
+  tokenTotal() { let n = 0; for (const c of this.tokens) n += c; return n; }
+  count() { return this.sel.size + (this.coins.size ? 1 : 0) + (this.tokens.size ? 1 : 0); }
   toggle(key) { if (this.sel.has(key)) { this.sel.delete(key); sfx.uiBack(); } else { this.sel.add(key); sfx.uiMove(); } }
   selectMissing() {
     let added = 0;
@@ -214,10 +217,11 @@ class GiftPickScene {
     const items = [...this.sel].map(k => { const [cat, id] = k.split(':'); return { cat, id }; });
     if (items.length === 1) Object.assign(gift, items[0]); else if (items.length) gift.items = items;
     if (this.coins.size) gift.coins = this.coinTotal();
+    if (this.tokens.size) gift.tokens = this.tokenTotal();
     if (this.msg) gift.msg = this.msg;
     this.busy = true;
     (this.toAll ? Cloud.giveAll(gift) : Cloud.give(this.owner.uid, gift)).then(n => {
-      this.busy = false; this.sel.clear(); this.coins.clear(); this.msg = ''; this.owner.msg = '';
+      this.busy = false; this.sel.clear(); this.coins.clear(); this.tokens.clear(); this.msg = ''; this.owner.msg = '';
       this.say(this.toAll ? fmt('SENT TO {0} PLAYERS!', n) : 'SENT!'); sfx.chestOpen('epic');
     }).catch(e => { this.busy = false; this.say(e.message === 'timeout' ? 'NO INTERNET CONNECTION?' : 'ONLY THE ADMIN CAN DO THAT'); sfx.uiBack(); });
   }
@@ -237,7 +241,7 @@ class GiftPickScene {
     const tw = Math.floor((W - 16 - (GIFT_TABS.length - 1) * 2) / GIFT_TABS.length), ty = 15;
     GIFT_TABS.forEach((t, i) => {
       const x = 8 + i * (tw + 2), on = this.tab === t;
-      const n = t === 'coins' ? this.coins.size : [...this.sel].filter(k => (t === 'admin' ? this.cells('admin').some(([c, it]) => c + ':' + it.id === k) : k.startsWith(t + ':'))).length;
+      const n = t === 'coins' ? this.coins.size + this.tokens.size : [...this.sel].filter(k => (t === 'admin' ? this.cells('admin').some(([c, it]) => c + ':' + it.id === k) : k.startsWith(t + ':'))).length;
       drawButton(this.ui, 'tab' + t, x, ty, tw, 13, GIFT_TAB_NAME[t], { col: on ? (t === 'admin' ? '#6b2a6b' : '#4b3a72') : C.ui, on: () => { this.tab = t; this.page = 0; } });
       if (t === 'admin') { ctx.fillStyle = rarityCol('admin', T); ctx.fillRect(x + 2, ty + 11, tw - 4, 1); }
       if (n) { pcirc(x + tw - 2, ty + 1, 4, C.red); text(String(n), x + tw - 2, ty - 1, C.white, 1, 1, null); }
@@ -258,12 +262,12 @@ class GiftPickScene {
     cells.slice(this.page * per, this.page * per + per).forEach((cell, i) => {
       const x = gx + (i % cols) * (cw + 2), y = gy + Math.floor(i / cols) * (ch + 2);
       if (coinsTab) {
-        const n = cell, on = this.coins.has(n), id = 'coin' + n, f = this.ui.isFocus(id);
-        panel(x, y, cw, ch, on ? '#5c4a16' : C.ui, f ? C.white : on ? C.gold : OUT, null, false);
-        coinIcon(x + 4, y + 7, T + i * 0.2);
-        text('+' + n, x + 14, y + 8, on ? C.gold : C.white, 1, 0, null);
+        const n = cell.n, set = cell.tok ? this.tokens : this.coins, on = set.has(n), id = (cell.tok ? 'tok' : 'coin') + n, f = this.ui.isFocus(id);
+        panel(x, y, cw, ch, on ? (cell.tok ? '#4b2a72' : '#5c4a16') : cell.tok ? '#2f1f48' : C.ui, f ? C.white : on ? (cell.tok ? '#d9a6ff' : C.gold) : OUT, null, false);
+        if (cell.tok) drawSpr(TOKEN_ICON, x + 7, y + ch / 2); else coinIcon(x + 4, y + 7, T + i * 0.2);
+        text('+' + n, x + 14, y + 8, on ? (cell.tok ? '#d9a6ff' : C.gold) : C.white, 1, 0, null);
         if (on) this.tick(x + cw - 7, y + 3);
-        this.ui.add(id, x, y, cw, ch, () => { if (on) this.coins.delete(n); else this.coins.add(n); sfx.uiMove(); }, { silent: true, def: i === 0 });
+        this.ui.add(id, x, y, cw, ch, () => { if (on) set.delete(n); else set.add(n); sfx.uiMove(); }, { silent: true, def: i === 0 });
         return;
       }
       const [cat, it] = cell, key = cat + ':' + it.id, on = this.sel.has(key), has = this.owns(cat, it.id), id = 'g' + key, f = this.ui.isFocus(id);
@@ -293,9 +297,10 @@ class GiftPickScene {
       text(it.name, ix, iy, col, 1, 0, null);
       text(this.owns(cat, it.id) ? 'ALREADY HAS IT' : RARITY[it.rarity].name, ix + textW(it.name) + 6, iy, this.owns(cat, it.id) ? C.green : col, 1, 0, null);
     } else {
-      const a = this.sel.size, c = this.coinTotal();
-      const line = a && c ? fmt('{0} ITEMS + {1} COINS', a, c) : a ? fmt('{0} ITEMS', a) : c ? fmt('{0} COINS', c) : coinsTab ? 'TAP AMOUNTS TO ADD THEM UP' : 'TAP ITEMS TO PICK THEM';
-      text(line, ix, iy, a || c ? C.gold : C.gray, 1, 0, null);
+      const a = this.sel.size, c = this.coinTotal(), tk = this.tokenTotal();
+      let line = a && c ? fmt('{0} ITEMS + {1} COINS', a, c) : a ? fmt('{0} ITEMS', a) : c ? fmt('{0} COINS', c) : coinsTab ? 'TAP AMOUNTS TO ADD THEM UP' : 'TAP ITEMS TO PICK THEM';
+      if (tk) line = (a || c) ? fmt('{0} + {1} EVENT COINS', line, tk) : fmt('{0} EVENT COINS', tk);
+      text(line, ix, iy, a || c || tk ? C.gold : C.gray, 1, 0, null);
     }
     if (!coinsTab) drawButton(this.ui, 'all', W - 78, H - 36, 70, 13, 'ALL MISSING', { on: () => this.selectMissing() });
     // bottom bar: back, message, send
@@ -303,9 +308,9 @@ class GiftPickScene {
     drawButton(this.ui, 'back', 8, by, 44, 14, 'BACK', { on: () => { this.owner.msg = this.msg; Trans.go(() => Scenes.pop()); }, icon: ICON.back });
     const mw = Math.max(80, W - 8 - 56 - 4 - 92 - 8 - 46);
     drawButton(this.ui, 'msg', 56, by, mw, 14, fmt('MESSAGE: {0}', this.msg ? keep(this.msg.length > 18 ? this.msg.slice(0, 17) + '...' : this.msg) : '(NONE)'), { on: () => { this.owner.msg = this.msg; Scenes.push(new MessageScene(this.owner)); } });
-    drawButton(this.ui, 'clear', 56 + mw + 4, by, 42, 14, 'CLEAR', { disabled: !this.count() && !this.msg, on: () => { this.sel.clear(); this.coins.clear(); this.msg = ''; this.owner.msg = ''; sfx.uiBack(); } });
+    drawButton(this.ui, 'clear', 56 + mw + 4, by, 42, 14, 'CLEAR', { disabled: !this.count() && !this.msg, on: () => { this.sel.clear(); this.coins.clear(); this.tokens.clear(); this.msg = ''; this.owner.msg = ''; sfx.uiBack(); } });
     const n = this.count();
-    drawButton(this.ui, 'send', W - 8 - 92, by, 92, 14, this.busy ? 'SENDING...' : n ? fmt('SEND ({0})', this.sel.size + (this.coins.size ? 1 : 0)) : this.msg ? 'SEND MESSAGE' : 'SEND', { disabled: !n && !this.msg, col: '#3d2f63', def: false, on: () => this.send() });
+    drawButton(this.ui, 'send', W - 8 - 92, by, 92, 14, this.busy ? 'SENDING...' : n ? fmt('SEND ({0})', n) : this.msg ? 'SEND MESSAGE' : 'SEND', { disabled: !n && !this.msg, col: '#3d2f63', def: false, on: () => this.send() });
   }
   tick(x, y) { // a little check mark
     ctx.fillStyle = OUT; ctx.fillRect(x - 1, y - 1, 7, 6);
@@ -462,7 +467,43 @@ class ShopPickScene {
   }
 }
 
+// ================================================================ news: one message every player sees once (as a popup on their next menu)
+class NewsAdminScene {
+  constructor() { this.T = 0; this.ui = new UI(); this.msg = ''; this.note = ''; this.noteT = 0; this.busy = false; }
+  say(m) { this.note = m; this.noteT = 2.5; }
+  send() {
+    if (this.busy || !this.msg) return;
+    this.busy = true;
+    Cloud.setNews(this.msg).then(() => { this.say('EVERYONE WILL SEE IT ON THEIR NEXT MENU!'); sfx.chestOpen('epic'); })
+      .catch(e => { this.say(e.message === 'timeout' ? 'NO INTERNET CONNECTION?' : 'UPDATE THE DATABASE RULES FIRST'); sfx.uiBack(); })
+      .then(() => { this.busy = false; });
+  }
+  update(dt) {
+    this.T += dt; this.noteT = Math.max(0, this.noteT - dt);
+    const acts = Input.menu();
+    if (acts.back) { sfx.uiBack(); Trans.go(() => Scenes.pop()); return; }
+    this.ui.update(dt, acts);
+  }
+  draw() {
+    drawChecker(); this.ui.begin();
+    text('NEWS FOR EVERYONE', W / 2, 5, '#5ec8ff', 2, 1, 'outline');
+    text('A MESSAGE THAT POPS UP ONCE FOR EVERY PLAYER', W / 2, 24, C.gray, 1, 1, null);
+    const bw = Math.min(W - 40, 260), bx = Math.floor(W / 2 - bw / 2), lines = this.msg ? wrapText(keep(this.msg), bw - 16).slice(0, 3) : [];
+    panel(bx, 38, bw, 40, '#fff8e7', OUT, null, false);
+    if (lines.length) lines.forEach((ln, i) => text(ln, bx + 8, 46 + i * 8, OUT, 1, 0, null));
+    else text('TAP WRITE TO TYPE YOUR NEWS', W / 2, 54, C.gray, 1, 1, null);
+    drawButton(this.ui, 'write', Math.floor(W / 2 - 104), 86, 100, 16, 'WRITE', { col: '#3d2f63', def: true, on: () => Scenes.push(new MessageScene(this)) });
+    drawButton(this.ui, 'send', Math.floor(W / 2 + 4), 86, 100, 16, this.busy ? 'SENDING...' : 'SEND TO EVERYONE', { disabled: !this.msg, col: '#1f5c3a', on: () => this.send() });
+    if (this.noteT > 0) text(this.note, W / 2, 112, C.gold, 1, 1, 'outline');
+    drawButton(this.ui, 'back', 4, H - 17, 44, 14, 'BACK', { on: () => Trans.go(() => Scenes.pop()), icon: ICON.back });
+  }
+}
+
 addPhrases([
+  ['NEWS', 'NEWS', 'НОВОСТИ'], ['NEWS!', 'NEWS!', 'НОВОСТИ!'], ['NEWS FOR EVERYONE', 'NEWS FÜR ALLE', 'НОВОСТИ ДЛЯ ВСЕХ'], ['A MESSAGE THAT POPS UP ONCE FOR EVERY PLAYER', 'EINE NACHRICHT, DIE BEI JEDEM SPIELER EINMAL AUFPOPPT', 'СООБЩЕНИЕ, КОТОРОЕ ОДИН РАЗ ПОКАЖЕТСЯ КАЖДОМУ'],
+  ['TAP WRITE TO TYPE YOUR NEWS', 'TIPPE AUF SCHREIBEN FÜR DEINE NEWS', 'НАЖМИ НАПИСАТЬ, ЧТОБЫ ВВЕСТИ НОВОСТЬ'], ['WRITE', 'SCHREIBEN', 'НАПИСАТЬ'], ['SEND TO EVERYONE', 'AN ALLE SENDEN', 'ОТПРАВИТЬ ВСЕМ'],
+  ['EVERYONE WILL SEE IT ON THEIR NEXT MENU!', 'ALLE SEHEN ES IM NÄCHSTEN MENÜ!', 'ВСЕ УВИДЯТ ЭТО В СЛЕДУЮЩЕМ МЕНЮ!'], ['{0} EVENT COINS', '{0} EVENT-MÜNZEN', '{0} МОНЕТ ИВЕНТА'],
+  ['{0} + {1} EVENT COINS', '{0} + {1} EVENT-MÜNZEN', '{0} + {1} МОНЕТ ИВЕНТА'], ['AND {0} EVENT COINS!', 'UND {0} EVENT-MÜNZEN!', 'И {0} МОНЕТ ИВЕНТА!'], ['YOU GOT {0} EVENT COINS!', 'DU HAST {0} EVENT-MÜNZEN BEKOMMEN!', 'ТЫ ПОЛУЧИЛ {0} МОНЕТ ИВЕНТА!'],
   ['SHOP EDITOR', 'LADEN-EDITOR', 'РЕДАКТОР МАГАЗИНА'], ['SPECIAL OFFERS:', 'SONDERANGEBOTE:', 'СПЕЦПРЕДЛОЖЕНИЯ:'], ['MY PICKS', 'MEINE AUSWAHL', 'МОЙ ВЫБОР'], ['RANDOM EVERY DAY', 'JEDEN TAG ZUFÄLLIG', 'СЛУЧАЙНО КАЖДЫЙ ДЕНЬ'],
   ['ADD', 'DAZU', 'ДОБАВИТЬ'], ['4 NEW RANDOM ITEMS EVERY DAY, PRICED BY RARITY', 'JEDEN TAG 4 NEUE ZUFALLS-SACHEN, PREIS NACH SELTENHEIT', '4 СЛУЧАЙНЫХ ПРЕДМЕТА В ДЕНЬ, ЦЕНА ПО РЕДКОСТИ'],
   ['ADMIN SALE PRICE', 'ADMIN-VERKAUFSPREIS', 'ЦЕНА АДМИН-РАСПРОДАЖИ'], ['THE ADMIN SALE IS ON', 'DER ADMIN-VERKAUF LÄUFT', 'АДМИН-РАСПРОДАЖА ИДЁТ'], ['START THE ADMIN SALE IN EVENTS', 'STARTE DEN ADMIN-VERKAUF BEI EVENTS', 'ЗАПУСТИ АДМИН-РАСПРОДАЖУ В ИВЕНТАХ'],

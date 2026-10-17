@@ -455,7 +455,7 @@ function spawnEnemy(type, pos, opts = {}) {
     dmg: d.dmg * (R.mode === 'story' ? 1 + (R.level.diff - 1) * 0.08 : 1 + R.t / 400), flash: 0, anim: rand(0, 10), dead: false, eggCd: 0,
     spawnT: opts.instant ? 0 : 0.45, flip: false, st: 'move', stT: rand(1, 2), shootT: rand(1.5, 3), fuse: -1, rot: 0, z: 0,
   };
-  if (!opts.instant && R.t > 20 && Math.random() < ELITE_CHANCE) makeElite(e); // a rare golden ELITE (quests.js)
+  if (!opts.instant && R.t > 20 && Math.random() < eliteChance()) makeElite(e); // a rare golden ELITE (quests.js)
   if (e.spawnT > 0 && inAnyView(e.x, e.y, 10)) sfx.warp();
   R.enemies.push(e);
   return e;
@@ -464,7 +464,8 @@ function spawnEnemy(type, pos, opts = {}) {
 const WORLD_SONG = { pond: 'battle', woods: 'battle', peaks: 'sky', factory: 'factory', tower: 'factory', beach: 'beach', swamp: 'swamp', clouds: 'sky', moon: 'space', ship: 'factory',
   volcano: 'volcano', desert: 'beach', candy: 'candy', crystal: 'cave', castle: 'castle',
   jungle: 'jungle', pirate: 'pirate', knight: 'castle', west: 'western', neon: 'neon',
-  reef: 'ocean', wreck: 'deep', kelp: 'ocean', abyss: 'deep', atlantis: 'ocean' };
+  reef: 'ocean', wreck: 'deep', kelp: 'ocean', abyss: 'deep', atlantis: 'ocean',
+  junkyard: 'junk', circus: 'candy', shroom: 'swamp', cyber: 'cyber', fortress: 'junk' };
 const worldSong = w => WORLD_SONG[w] || 'battle';
 function spawnBoss(id) {
   const b = BOSSES[id];
@@ -567,11 +568,11 @@ function killEnemy(e, owner, quiet) {
   if (quiet) return;
   if (e.elite) eliteLoot(e);
   if (e.d.xp) dropAt(e.x, e.y, 'xp', e.d.xp * xpMul());
-  const coinChance = (e.type === 'tank' ? 0.2 : 0.06) * (1 + 0.5 * (owner && owner.up ? lvl(owner, 'greed') : 0));
+  const coinChance = (e.type === 'tank' ? 0.2 : 0.06) * (1 + 0.5 * (owner && owner.up ? lvl(owner, 'greed') : 0)) * luckMul(); // LUCKY DROPS event: x2
   if (owner && owner.up && lvl(owner, 'vamp') && !owner.down) owner.hp = Math.min(owner.maxHp, owner.hp + 0.4 * lvl(owner, 'vamp'));
   if (Math.random() < coinChance) dropAt(e.x + rand(-3, 3), e.y + rand(-3, 3), 'coin', 1);
   const luck = Math.random();
-  if (luck < 0.011) R.items.push({ k: 'heart', x: e.x, y: e.y, t: 0 });
+  if (luck < 0.011 * luckMul()) R.items.push({ k: 'heart', x: e.x, y: e.y, t: 0 });
   else if (luck < 0.015) R.items.push({ k: 'magnet', x: e.x, y: e.y, t: 0 });
   else if (luck < 0.018) R.items.push({ k: 'sauce', x: e.x, y: e.y, t: 0 });
   if (e.d.ai === 'bomber') explode(e.x, e.y, 24, 22 * hpMul(), owner, false);

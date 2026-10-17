@@ -174,7 +174,8 @@ function drawWallet(x, y, t) {
 
 ACHIEVEMENTS.push(
   { id: 'rush5', name: 'BOSS RUSHER', d: 'BEAT 5 BOSSES IN ONE BOSS RUSH', goal: 5, v: () => statOf('rush'), pay: 300 },
-  { id: 'rush25', name: 'BOSS RUSH CHAMPION', d: 'BEAT ALL 25 BOSSES IN A BOSS RUSH', goal: 25, v: () => statOf('rush'), pay: 2000 },
+  { id: 'rush25', name: 'BOSS RUSH CHAMPION', d: 'BEAT EVERY BOSS IN A BOSS RUSH', goal: RUSH_ORDER.length, v: () => statOf('rush'), pay: 2000 },
+  { id: 'ch6', name: fmt('CHAPTER {0} HERO', 6), d: fmt('FINISH CHAPTER {0} OF THE STORY', 6), goal: 1, v: () => (Save.data.story.reached > 30 ? 1 : 0), pay: 300 },
   { id: 'pets3', name: 'PET LOVER', d: 'OWN 3 PETS', goal: 3, v: () => Save.data.unlocked.filter(k => k.startsWith('pet:') && k !== 'pet:none').length, pay: 250 },
 );
 
@@ -190,7 +191,7 @@ addPhrases([
   ['BABY DRAGON', 'BABY-DRACHE', 'ДРАКОНЧИК'], ['SPITS EXPLODING FIREBALLS', 'SPUCKT EXPLODIERENDE FEUERBÄLLE', 'ПЛЮЁТСЯ ВЗРЫВНЫМИ ФАЕРБОЛАМИ'], ['ROBO PUP', 'ROBO-WELPE', 'РОБО-ЩЕНОК'],
   ['FAST LASER BARKS', 'SCHNELLES LASER-BELLEN', 'БЫСТРЫЙ ЛАЗЕРНЫЙ ЛАЙ'], ['GOLDEN GOOSE', 'GOLDENE GANS', 'ЗОЛОТОЙ ГУСЬ'], ['GOLD SHOTS AND GOLD COINS', 'GOLDSCHÜSSE UND GOLDMÜNZEN', 'ЗОЛОТЫЕ ВЫСТРЕЛЫ И МОНЕТЫ'],
   ['BOSS RUSHER', 'BOSS-STÜRMER', 'БОСС-РАШЕР'], ['BEAT 5 BOSSES IN ONE BOSS RUSH', 'BESIEGE 5 BOSSE IN EINEM BOSS-ANSTURM', 'ПОБЕДИ 5 БОССОВ В ОДНОМ БОСС-РАШЕ'],
-  ['BOSS RUSH CHAMPION', 'BOSS-ANSTURM-CHAMPION', 'ЧЕМПИОН БОСС-РАША'], ['BEAT ALL 25 BOSSES IN A BOSS RUSH', 'BESIEGE ALLE 25 BOSSE IM BOSS-ANSTURM', 'ПОБЕДИ ВСЕХ 25 БОССОВ В БОСС-РАШЕ'],
+  ['BOSS RUSH CHAMPION', 'BOSS-ANSTURM-CHAMPION', 'ЧЕМПИОН БОСС-РАША'], ['BEAT EVERY BOSS IN A BOSS RUSH', 'BESIEGE JEDEN BOSS IM BOSS-ANSTURM', 'ПОБЕДИ КАЖДОГО БОССА В БОСС-РАШЕ'],
   ['EVENT COINS', 'EVENT-MÜNZEN', 'МОНЕТЫ ИВЕНТА'], ['ONLY WITH EVENT COINS', 'NUR MIT EVENT-MÜNZEN', 'ТОЛЬКО ЗА МОНЕТЫ ИВЕНТА'],
   ['PLAY WHILE THE EVENT IS ON TO EARN THEM', 'SPIELE WÄHREND DES EVENTS, UM SIE ZU VERDIENEN', 'ИГРАЙ ВО ВРЕМЯ ИВЕНТА, ЧТОБЫ ИХ ПОЛУЧИТЬ'],
   ['PET LOVER', 'TIERFREUND', 'ЛЮБИТЕЛЬ ПИТОМЦЕВ'], ['OWN 3 PETS', 'BESITZE 3 HAUSTIERE', 'СОБЕРИ 3 ПИТОМЦА'], ['SHOP', 'LADEN', 'МАГАЗИН'],

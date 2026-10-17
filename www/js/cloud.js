@@ -106,7 +106,7 @@ const Cloud = {
     const acc = Save.data.account = Object.assign({ resetSeen: 0 }, Save.data.account, { uid: this.uid, username: d.username, banned: !!d.banned });
     // the admin reset this player's progress: start over, keeping name, settings and account
     if (d.resetAt && d.resetAt > (acc.resetSeen || 0)) {
-      const keep = { name: Save.data.name, settings: Save.data.settings, muted: Save.data.muted, account: acc, giftsTaken: Save.data.giftsTaken, events: Save.data.events, shopCfg: Save.data.shopCfg };
+      const keep = { name: Save.data.name, settings: Save.data.settings, muted: Save.data.muted, account: acc, giftsTaken: Save.data.giftsTaken, events: Save.data.events, shopCfg: Save.data.shopCfg, newsSeen: Save.data.newsSeen };
       Save.data = Object.assign(defaultSave(), keep);
       acc.resetSeen = d.resetAt;
       this.popups.push({ notice: 'THE ADMIN RESET YOUR PROGRESS' });
@@ -143,6 +143,14 @@ const Cloud = {
       for (const k of Object.keys(EVENTS)) EVENT_STATE[k] = !!d[k];
       Save.data.events = Object.assign({}, EVENT_STATE); Save.write(true);
     }, () => {}));
+    // announcements from the admin: shown once to every player, as a message popup
+    this.unsubs.push(this.db.doc('meta/news').onSnapshot(s => {
+      const d = s.exists ? s.data() : null;
+      if (!d || typeof d.msg !== 'string' || !d.msg || !(d.at > (Save.data.newsSeen || 0))) return;
+      if (d.byUid === this.uid) { Save.data.newsSeen = d.at; Save.write(true); return; }
+      this.popups = this.popups.filter(p => !p.news); // only the newest news waits in line
+      this.popups.push({ msg: d.msg.toUpperCase().slice(0, 60), from: String(d.by || 'ADMIN').slice(0, 12), news: true, at: d.at });
+    }, () => {}));
     // what the admin has put in the shop (special offers, admin sale price, booster prices)
     this.unsubs.push(this.db.doc('meta/shop').onSnapshot(s => {
       SHOP_CFG = cleanShopCfg(s.exists ? s.data() : null);
@@ -151,6 +159,7 @@ const Cloud = {
     this.pushTimer = setInterval(() => this.push(), 5000);
   },
   setEvent(id, on) { return withTimeout(this.db.doc('meta/event').set({ [id]: !!on }, { merge: true }), 12000); },
+  setNews(msg) { return withTimeout(this.db.doc('meta/news').set({ msg, at: Date.now(), by: (this.me && this.me.username) || 'ADMIN', byUid: this.uid }), 12000); },
   setShop(cfg) { return withTimeout(this.db.doc('meta/shop').set(cfg), 12000); },
   // a gift from the admin: apply it to the save straight away, remember it so it can't count twice, delete it
   takeGift(doc) {
@@ -158,6 +167,7 @@ const Cloud = {
     if (!taken.includes(doc.id)) {
       taken.push(doc.id); if (taken.length > 60) taken.shift();
       if (g.coins > 0) Save.addCoins(Math.min(100000, g.coins));
+      if (g.tokens > 0) Save.data.tokens = (Save.data.tokens || 0) + Math.min(100000, Math.floor(g.tokens)); // event coins
       // one item (cat + id) or several (items: [{cat, id}, ...])
       const list = (Array.isArray(g.items) ? g.items.slice(0, 80) : [{ cat: g.cat, id: g.id }])
         .filter(x => x && COSMETICS[x.cat] && COSMETICS[x.cat].some(c => c.id === x.id)).map(x => ({ cat: x.cat, id: x.id }));
@@ -165,7 +175,7 @@ const Cloud = {
       Save.write();
       const msg = typeof g.msg === 'string' ? g.msg.toUpperCase().slice(0, 60) : '', from = String(g.from || 'ADMIN').slice(0, 12);
       const one = list.length === 1 ? list[0] : null;
-      if (g.coins > 0 || list.length || msg) this.popups.push({ coins: g.coins > 0 ? g.coins : 0, cat: one ? one.cat : null, id: one ? one.id : null, items: list.length > 1 ? list : null, msg, from });
+      if (g.coins > 0 || g.tokens > 0 || list.length || msg) this.popups.push({ coins: g.coins > 0 ? g.coins : 0, tokens: g.tokens > 0 ? Math.floor(g.tokens) : 0, cat: one ? one.cat : null, id: one ? one.id : null, items: list.length > 1 ? list : null, msg, from });
     }
     doc.ref.delete().catch(() => {});
   },
@@ -341,14 +351,14 @@ class GiftScene {
       text(g.notice, W / 2, H / 2 - 10, C.white, 1, 1, 'outline');
     } else {
       const many = g.items && g.items.map(x => Object.assign({ it: itemOf(x.cat, x.id) }, x)).filter(x => x.it);
-      const gift = it || g.coins || (many && many.length), admin = (it && it.rarity === 'admin') || (many && many.some(x => x.it.rarity === 'admin'));
+      const gift = it || g.coins || g.tokens || (many && many.length), admin = (it && it.rarity === 'admin') || (many && many.some(x => x.it.rarity === 'admin'));
       if (gift) { // turning light rays (rainbow for ADMIN items)
         ctx.save(); ctx.translate(W / 2, H * 0.47); ctx.rotate(T * 0.6);
         for (let i = 0; i < 8; i++) { ctx.rotate(TAU / 8); ctx.fillStyle = admin ? RAINBOW[i % RAINBOW.length] : '#ffd23f'; ctx.globalAlpha = admin ? 0.1 : 0.12; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-10, -H); ctx.lineTo(10, -H); ctx.fill(); }
         ctx.restore(); ctx.globalAlpha = 1;
       }
       for (const q of this.parts) { ctx.fillStyle = q.col; ctx.fillRect(Math.round(q.x), Math.round(q.y), 2, 2); }
-      drawZoomText(gift ? 'ADMIN GIFT!' : 'A MESSAGE FROM THE ADMIN', W / 2, H * 0.1, lerp(6, 2, k), gift ? C.pink : C.gold);
+      drawZoomText(gift ? 'ADMIN GIFT!' : g.news ? 'NEWS!' : 'A MESSAGE FROM THE ADMIN', W / 2, H * 0.1, lerp(6, 2, k), gift ? C.pink : C.gold);
       const msgH = g.msg ? 12 + 7 * Math.min(3, wrapText(keep(g.msg), Math.min(W - 60, 220)).length) : 0;
       const cy = Math.round(H * 0.47 - msgH * 0.35);
       let bubY = H * 0.42; // where the message bubble goes: under whatever was given
@@ -365,7 +375,8 @@ class GiftScene {
         text(it.name, W / 2, cy + 24, col, 1, 1, 'outline');
         text(RARITY[it.rarity].name, W / 2, cy + 33, col, 1, 1, null);
         if (g.coins) text(fmt('AND {0} COINS!', g.coins), W / 2, cy + 42, C.gold, 1, 1, 'outline');
-        bubY = cy + (g.coins ? 52 : 42);
+        if (g.tokens) text(fmt('AND {0} EVENT COINS!', g.tokens), W / 2, cy + (g.coins ? 51 : 42), '#d9a6ff', 1, 1, 'outline');
+        bubY = cy + 42 + (g.coins ? 10 : 0) + (g.tokens ? 10 : 0);
       } else if (many && many.length) { // a whole bundle: a grid of everything, popping in one by one
         text(fmt('YOU GOT {0} ITEMS!', many.length), W / 2, H * 0.1 + 12, C.white, 1, 1, 'outline');
         const cs = 22, cols = Math.min(many.length, Math.max(4, Math.floor((W - 40) / (cs + 2)))), rows = Math.ceil(many.length / cols);
@@ -380,12 +391,14 @@ class GiftScene {
         if (show < many.length) text(fmt('+{0} MORE', many.length - show), W / 2, gy + Math.ceil(show / cols) * (cs + 2) + 1, C.gray, 1, 1, null);
         let ly = gy + Math.ceil(show / cols) * (cs + 2) + (show < many.length ? 9 : 1);
         if (g.coins) { text(fmt('AND {0} COINS!', g.coins), W / 2, ly, C.gold, 1, 1, 'outline'); ly += 9; }
+        if (g.tokens) { text(fmt('AND {0} EVENT COINS!', g.tokens), W / 2, ly, '#d9a6ff', 1, 1, 'outline'); ly += 9; }
         bubY = ly + 6;
-      } else if (g.coins) {
+      } else if (g.coins || g.tokens) {
         const bob = Math.abs(Math.sin(T * 4)) * 4;
-        ctx.save(); ctx.translate(W / 2, cy - 6 - bob); ctx.scale(3 * k, 3 * k); coinIcon(-4, -4, T); ctx.restore();
-        text(fmt('YOU GOT {0} COINS!', g.coins), W / 2, cy + 18, C.gold, 1, 1, 'outline');
-        bubY = cy + 32;
+        ctx.save(); ctx.translate(W / 2, cy - 6 - bob); ctx.scale(3 * k, 3 * k); if (g.coins) coinIcon(-4, -4, T); else drawSpr(TOKEN_ICON, 0, 0); ctx.restore();
+        text(g.coins ? fmt('YOU GOT {0} COINS!', g.coins) : fmt('YOU GOT {0} EVENT COINS!', g.tokens), W / 2, cy + 18, g.coins ? C.gold : '#d9a6ff', 1, 1, 'outline');
+        if (g.coins && g.tokens) text(fmt('AND {0} EVENT COINS!', g.tokens), W / 2, cy + 27, '#d9a6ff', 1, 1, 'outline');
+        bubY = cy + (g.coins && g.tokens ? 41 : 32);
       }
       if (g.msg) { // speech bubble with the admin's note
         const bw = Math.min(W - 40, 240), lines = wrapText(keep(g.msg), bw - 16).slice(0, 3), bh = 14 + lines.length * 7;
@@ -403,5 +416,8 @@ class GiftScene {
 function showCloudPopups() {
   if (!Cloud.popups.length || Trans.busy()) return;
   const top = Scenes.top();
-  if (top instanceof TitleScene || top instanceof MapScene || top instanceof LockerScene || top instanceof OnlineScene) Scenes.push(new GiftScene(Cloud.popups.shift()));
+  if (!(top instanceof TitleScene || top instanceof MapScene || top instanceof LockerScene || top instanceof OnlineScene)) return;
+  const p = Cloud.popups.shift();
+  if (p.news) { Save.data.newsSeen = Math.max(Save.data.newsSeen || 0, p.at); Save.write(true); } // seen only once it's really on screen
+  Scenes.push(new GiftScene(p));
 }

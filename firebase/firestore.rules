@@ -42,6 +42,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // news from the admin: everybody can read it (it pops up once), only admins write it
+    match /meta/news {
+      allow get: if signedIn();
+      allow write: if isAdmin();
+    }
+
     // what's in the shop (the admin's special offers and prices): everybody can see it, only the admin changes it
     match /meta/shop {
       allow get: if signedIn();
