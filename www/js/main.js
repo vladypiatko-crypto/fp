@@ -15,6 +15,7 @@ window.addEventListener('blur', () => { const top = Scenes.top(); if (top instan
 
 // with accounts switched on, sign in first (first start: pick a name and username; banned: stop here)
 Scenes.set(Cloud.enabled ? new BootScene() : new TitleScene(false));
+checkForUpdate(); // is there a newer build? (update.js)
 
 let lastFrame = performance.now();
 function frame(now) {
@@ -28,6 +29,7 @@ function frame(now) {
     if (Trans.phase === 'out') { Input.ptrEv.length = 0; Input.hit.clear(); }
     if (top) { top.update(dt); }
     showCloudPopups();
+    showUpdatePopup();
     ctx.imageSmoothingEnabled = false;
     const cur = Scenes.top();
     if (cur) cur.draw();

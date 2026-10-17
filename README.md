@@ -79,6 +79,8 @@ Each chapter has an animated intro and ending, and the map has a page per chapte
 
 ## Downloads
 
+**Updates:** every build knows its own build number. When the game starts it checks GitHub for a newer build; if there is one, an UPDATE screen pops up. On Android, UPDATE downloads the new APK inside the game and opens the installer (it installs over the old version and keeps your save), then tap Open. On PC it opens the download page. CLOSE leaves the game.
+
 Every push builds the apps (GitHub Actions → **Build game apps**) and publishes them on the **Releases** page:
 
 | File | Runs on |

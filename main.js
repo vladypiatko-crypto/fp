@@ -1,5 +1,5 @@
 // Electron entry point for the Windows desktop build.
-const { app, BrowserWindow, Menu } = require('electron');
+const { app, BrowserWindow, Menu, shell } = require('electron');
 const path = require('path');
 
 function createWindow() {
@@ -16,6 +16,11 @@ function createWindow() {
   });
   Menu.setApplicationMenu(null);
   win.loadFile(path.join(__dirname, 'www', 'index.html'));
+  // links the game opens (the update page) go to the normal web browser
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://')) shell.openExternal(url);
+    return { action: 'deny' };
+  });
   // F11 or Alt+Enter toggles fullscreen
   win.webContents.on('before-input-event', (event, input) => {
     if (input.type === 'keyDown' && (input.key === 'F11' || (input.alt && input.key === 'Enter'))) {

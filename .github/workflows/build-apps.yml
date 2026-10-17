@@ -27,6 +27,8 @@ jobs:
         run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - name: Stamp the build number into the game
+        run: echo "const GAME_BUILD = ${{ github.run_number }};" > www/js/version.js
       - name: Copy web game into the Android project
         run: npx cap sync android
       - name: Build APK
@@ -51,6 +53,9 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Stamp the build number into the game
+        shell: bash
+        run: echo "const GAME_BUILD = ${{ github.run_number }};" > www/js/version.js
       - name: Build portable EXE
         run: npm run build:win
       - name: Build single-file HTML
