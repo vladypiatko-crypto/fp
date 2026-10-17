@@ -36,7 +36,7 @@ const lvl = (p, k) => p.up[k] || 0;
 // a duck's permanent training from the shop (p.train), e.g. trainLv(p, 'hp')
 const trainLv = (p, k) => (p.train && p.train[k]) || 0;
 const pSpeed = p => 70 * (1 + 0.1 * lvl(p, 'speed')) * (1 + 0.04 * trainLv(p, 'spd'));
-const pMagnet = p => 34 * (1 + 0.45 * lvl(p, 'magnet')) * (1 + 0.12 * trainLv(p, 'mag'));
+const pMagnet = p => 34 * (1 + 0.45 * lvl(p, 'magnet')) * (1 + 0.12 * trainLv(p, 'mag')) * (1 + petMag(p));
 const reachMul = p => 1 + 0.15 * lvl(p, 'reach');
 const pDashCd = p => 1.2 * (1 - 0.12 * lvl(p, 'dash'));
 const xpFor = lv => Math.round(3 + lv * 4 + lv * lv * 0.45);
@@ -83,7 +83,7 @@ class GameScene {
   //         world?, net?: { role: 'host' | 'client', pid, members, seed } for online play }
   constructor(opts) {
     R = this;
-    this.mode = opts.mode; this.level = opts.level || null; this.np = opts.np;
+    this.mode = opts.mode; this.level = opts.level || null; this.np = opts.np; this.rush = !!opts.rush; // rush: BOSS RUSH (extras.js)
     this.net = opts.net || null; this.online = !!this.net; this.role = this.net ? this.net.role : 'local';
     this.world = opts.world || (this.level ? this.level.world : pick(Object.keys(WORLD_THEME)));
     this.rnd = this.net ? mulberry32(this.net.seed) : Math.random; // online: everyone decorates the same world
@@ -102,6 +102,7 @@ class GameScene {
     const members = this.net ? this.net.members : null;
     for (let i = 0; i < this.np; i++) this.players.push(this.newPlayer(i, members ? members[i].lo : null, members ? members[i].name : null, members ? members[i].tr : null));
     this.useBoosters();
+    if (this.rush) for (const p of this.players) p.pending += 2; // boss rush: start with 2 cards
     this.makeDecor();
     this.layout();
     for (const v of this.views) { const p = this.players[v.pid]; v.camX = p.x - v.w / 2; v.camY = p.y - v.h / 2; }
@@ -277,7 +278,11 @@ class GameScene {
       const rw = rewardOf(this.level);
       if (Save.unlock(rw.cat, rw.id)) res.reward = rw;
     }
-    if (this.mode === 'endless') {
+    if (this.rush) { // boss rush: the record is how many bosses you beat
+      res.bonus += res.bosses * 40;
+      const k = 'rush' + this.np;
+      if (res.bosses > (Save.data.best[k] || 0)) { Save.data.best[k] = res.bosses; res.best = true; }
+    } else if (this.mode === 'endless') {
       const k = 'e' + this.np;
       if (this.t > Save.data.best[k]) { Save.data.best[k] = this.t; res.best = true; }
     }
@@ -313,6 +318,7 @@ class GameScene {
     this.ui.begin();
     drawTopBar();
     if (this.state === 'play') this.drawJuice();
+    if (this.rush && this.state !== 'results') drawRushHud();
     if (this.state === 'play') for (const v of this.views) drawLevelUp(v);
     if (this.state === 'dialog') this.dialog.draw();
     if (this.state === 'paused') this.drawPause();
@@ -385,8 +391,10 @@ class GameScene {
     row('ROBOTS SCRAPPED', r.kills);
     row('COINS PICKED UP', r.coins, C.gold);
     row('BONUS', '+' + r.bonus, C.gold);
+    if (this.rush) row('BOSSES BEATEN', r.bosses, C.red);
     if (this.myPerk) row(this.myPerkLabel || 'SHOP BONUS', '+' + this.myPerk, C.gold);
-    if (r.best) { if ((this.stateT * 4 | 0) % 2) text('NEW BEST TIME!', W / 2, y, C.pink, 1, 1); y += 8; }
+    if (this.myEventCoins) row('EVENT COINS', '+' + this.myEventCoins, '#d9a6ff');
+    if (r.best) { if ((this.stateT * 4 | 0) % 2) text(this.rush ? 'NEW RECORD!' : 'NEW BEST TIME!', W / 2, y, C.pink, 1, 1); y += 8; }
     y += 2;
     coinIcon(Math.floor(W / 2 - textW('+' + Math.floor(r.shown), 2) / 2 - 8), y + 1, this.stateT);
     text('+' + Math.floor(r.shown), W / 2 + 4, y, C.gold, 2, 1);
@@ -425,7 +433,7 @@ class GameScene {
         : [['retry', 'RETRY', () => Trans.go(() => Scenes.set(new GameScene({ mode: 'story', level: this.level, np: this.np })))],
           ['map', 'MAP', () => Trans.go(() => Scenes.set(new MapScene(this.np)))]];
     } else {
-      btns = [['retry', 'RETRY', () => Trans.go(() => Scenes.set(new GameScene({ mode: 'endless', np: this.np })))],
+      btns = [['retry', 'RETRY', () => Trans.go(() => Scenes.set(new GameScene({ mode: 'endless', np: this.np, rush: this.rush })))],
         ['locker', 'LOCKER', () => Trans.go(() => Scenes.push(new LockerScene({})))],
         ['menu', 'MENU', () => Trans.go(() => Scenes.set(new TitleScene(true)))]];
     }
@@ -462,7 +470,8 @@ function spawnBoss(id) {
   const b = BOSSES[id];
   const pos = spawnPos();
   let hp = b.hp * (1 + 0.6 * (R.np - 1));
-  if (R.mode === 'endless') hp *= (1 + R.bossCount * 0.6) * (1 + R.t / 600);
+  if (R.rush) hp *= rushHpMul();
+  else if (R.mode === 'endless') hp *= (1 + R.bossCount * 0.6) * (1 + R.t / 600);
   const e = {
     id: R.uid++, type: id, d: Object.assign({ xp: 0, fx: b.fx || 'metal', heavy: 0.05 }, b), boss: true, x: pos.x, y: pos.y, kx: 0, ky: 0,
     hp, maxHp: hp, r: b.r, spd: b.spd, dmg: b.dmg, flash: 0, anim: 0, dead: false, eggCd: 0, spawnT: 0.8, flip: false,
@@ -501,11 +510,12 @@ function director(dt) {
   else rate = Math.min(11, 0.9 + t * 0.024 + Math.max(0, t - 180) * 0.02);
   rate *= 1 + 0.5 * (R.np - 1);
   if (R.boss && !R.boss.dead) rate *= 0.4;
+  if (R.rush) rate *= 0.35; // boss rush: just a few robots between the bosses
   R.spawnAcc += rate * dt;
   const cap = R.np >= 2 ? 360 : 260;
   while (R.spawnAcc >= 1) { R.spawnAcc -= 1; if (R.enemies.length < cap) spawnEnemy(rollType(), spawnPos()); }
   // swarm events
-  if (t >= R.nextEvent && !(R.boss && !R.boss.dead)) {
+  if (t >= R.nextEvent && !R.rush && !(R.boss && !R.boss.dead)) {
     R.nextEvent += R.mode === 'story' ? 35 : 50;
     const alive = alivePlayers();
     if (alive.length) {
@@ -524,7 +534,8 @@ function director(dt) {
   }
   // bosses
   if (R.mode === 'story' && !R.bossSpawned && t >= R.level.time) { R.bossSpawned = true; spawnBoss(R.level.boss); }
-  if (R.mode === 'endless' && t >= R.nextBoss) { R.nextBoss += 150; spawnBoss(BOSS_ORDER[R.bossCount % BOSS_ORDER.length]); }
+  if (R.rush) rushTick();
+  else if (R.mode === 'endless' && t >= R.nextBoss) { R.nextBoss += 150; spawnBoss(BOSS_ORDER[R.bossCount % BOSS_ORDER.length]); }
 }
 
 // ================================================================ damage
@@ -583,6 +594,7 @@ function bossDefeated(e) {
   for (let i = 0; i < R.np; i++) R.items.push({ k: 'goldegg', x: e.x - 10 + i * 6, y: e.y + 8, t: 0 });
   banner(fmt('{0} DESTROYED!', e.d.name), C.gold, 2.6);
   R.boss = null;
+  if (R.rush) rushBossDown();
   if (R.mode === 'story') { R.state = 'clear'; R.stateT = 0; Music.play(null); sfx.win(); for (const p of R.players) if (p.down) { p.down = false; p.hp = p.maxHp * 0.5; } }
   else Music.play(worldSong(R.world));
 }
@@ -1830,6 +1842,7 @@ function drawPlayer(p) {
     ember: (x, y) => R.tparts.push({ x, y, vx: rand(-4, 4), vy: rand(-18, -8), life: 0.4, max: 0.4, col: pick(['#ff8c1a', '#ffd23f']), size: 1 }),
   });
   for (const [x, y] of eggs) if (y >= p.y - 3) drawSprX(ART.eggOrb, x, y, { sc: eggSc });
+  drawPet(p); // pets (extras.js)
   if (lvl(p, 'turret')) for (const [x, y] of turretSpots(p)) { shadow(x, y + 12, 3); drawSprX(ICON.turret, x, y); }
   if (lvl(p, 'shield') && p.shieldT <= 0 && !p.choice) { // bubble shield is up
     const r = 11 + Math.sin(p.anim * 4) * 0.6, ov = p.over && p.over.shield;

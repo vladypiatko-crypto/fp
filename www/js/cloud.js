@@ -360,6 +360,7 @@ class GiftScene {
         else if (g.cat === 'halo') drawDuck(W / 2, y, { skin: lo.skin, halo: g.id, facing: 'down', sc, t: T });
         else if (g.cat === 'weapon') drawSprX(GUN_ART[g.id], W / 2, y - 16, { sc: 3 * k });
         else if (g.cat === 'trail') { ctx.save(); ctx.translate(W / 2, y - 14); ctx.scale(3 * k, 3 * k); drawTrailIcon(g.id, 0, 0, T); ctx.restore(); }
+        else if (g.cat === 'pet') drawPetAt(g.id, W / 2, y, T, Math.max(1, Math.round(3 * k)));
         const col = rarityCol(it.rarity, T);
         text(it.name, W / 2, cy + 24, col, 1, 1, 'outline');
         text(RARITY[it.rarity].name, W / 2, cy + 33, col, 1, 1, null);

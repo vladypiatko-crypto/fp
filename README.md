@@ -73,6 +73,9 @@ Each chapter has an animated intro and ending, and the map has a page per chapte
   - **Daily deals**: 4 items you don't have yet, to buy straight away. New ones every day.
   - **Boosters** for one game: Double Coins, Head Start (2 free upgrade cards) and Extra Life. Switch them on and they're used at the start of your next game, online too.
   - **The admin decides what's in the shop** (admin tab → SHOP): pick up to 8 items as special offers with your own prices (instead of the random daily deals), and set the Admin Sale price and booster prices. Saved for every player at once.
+- **Boss Rush** (BOSS RUSH on the title screen): all 25 story bosses one after another, with only a few robots in between. After each boss you heal up and get 2 free upgrade cards. Your record is how many bosses you beat.
+- **Pets** (new PETS tab in the locker, found in chests): little buddies that follow your duck and help: Baby Chick (bigger magnet), Piglet (finds coins), Froggy (tongue zaps), Mini Drone (lasers), Ninja Cat (ninja stars), Fairy (heals), Baby Dragon (exploding fireballs), Robo Pup (fast lasers), and the admin-only Golden Goose.
+- **Event coins**: while a holiday event runs, every game also pays purple EVENT COINS (more for winning the event level). The event chests (Pumpkin, Present, Easter, Love, Beach, Party) cost 30 event coins instead of normal coins.
 - **Quests** (QUESTS button on the title screen, with a red number when rewards are waiting):
   - **Daily quests**: 3 new quests every day (scrap robots, beat bosses, survive in endless, get a combo…) paying coins, plus a bonus for finishing all 3
   - **Achievements**: 24 big goals (scrap 10000 robots, finish every chapter, survive 20 minutes, own 100 items…), each with a coin reward to claim

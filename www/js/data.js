@@ -92,8 +92,8 @@ function defaultSave() {
   return {
     v: 2, coins: 150, name: 'QUACKER', settings: { shake: true, flash: true, music: true, lang: 'en' }, unlocked: DEFAULT_UNLOCKS.slice(),
     loadout: [
-      { skin: 'classic', hat: 'bandana_r', halo: 'none', trail: 'none', weapon: 'blaster' },
-      { skin: 'snowy', hat: 'bandana_b', halo: 'none', trail: 'none', weapon: 'blaster' },
+      { skin: 'classic', hat: 'bandana_r', halo: 'none', trail: 'none', weapon: 'blaster', pet: 'none' },
+      { skin: 'snowy', hat: 'bandana_b', halo: 'none', trail: 'none', weapon: 'blaster', pet: 'none' },
     ],
     train: {}, boosters: {}, armed: {}, deals: { day: -1, bought: [] }, // the shop (shop.js)
     story: { reached: 1, cleared: {} }, best: { e1: 0, e2: 0 }, muted: false, introSeen: false, wizardSeen: false, onlineNewsSeen: true, events: {},

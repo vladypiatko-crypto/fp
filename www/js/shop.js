@@ -80,6 +80,7 @@ function payRun(res, client) {
   const total = Math.round(base * (1 + 0.1 * (cleanTrain(Save.data.train).coin || 0)) * (dbl ? 2 : 1) * (ev ? 2 : 1));
   Save.addCoins(total);
   recordRun(res); // quests and stats (quests.js)
+  payEventCoins(res); // event coins while a holiday event runs (extras.js)
   if (R) { R.myPerk = total - base; R.myPerkLabel = dbl && ev ? 'BONUS (X4 COINS!)' : ev ? 'DOUBLE COINS EVENT!' : dbl ? 'SHOP BONUS (X2 COINS!)' : 'SHOP BONUS'; }
   return total - base;
 }

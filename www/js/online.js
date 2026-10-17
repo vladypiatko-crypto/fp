@@ -49,7 +49,7 @@ const cleanUser = u => String(u || '').toUpperCase().replace(/[^A-Z0-9]/g, '').s
 const myUsername = () => (Save.data.account && Save.data.account.username) || '';
 function cleanLoadout(lo) {
   const out = {};
-  for (const k of ['skin', 'hat', 'halo', 'trail', 'weapon']) out[k] = String((lo && lo[k]) || 'none').replace(/[^a-z_]/g, '').slice(0, 24);
+  for (const k of ['skin', 'hat', 'halo', 'trail', 'weapon', 'pet']) out[k] = String((lo && lo[k]) || 'none').replace(/[^a-z_]/g, '').slice(0, 24);
   return out;
 }
 const Hub = {

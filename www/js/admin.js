@@ -183,8 +183,8 @@ class AdminUserScene {
 }
 
 // ================================================================ the gift tab: every item, coins and a message, pick as many as you like
-const GIFT_TABS = ['admin', 'skin', 'hat', 'halo', 'trail', 'weapon', 'coins'];
-const GIFT_TAB_NAME = { admin: 'ADMIN', skin: 'SKINS', hat: 'HATS', halo: 'HALOS', trail: 'TRAILS', weapon: 'WEAPONS', coins: 'COINS' };
+const GIFT_TABS = ['admin', 'skin', 'hat', 'halo', 'trail', 'weapon', 'pet', 'coins'];
+const GIFT_TAB_NAME = { admin: 'ADMIN', skin: 'SKINS', hat: 'HATS', halo: 'HALOS', trail: 'TRAILS', weapon: 'WEAPONS', pet: 'PETS', coins: 'COINS' };
 const GIFT_COINS = [50, 100, 250, 500, 1000, 2500, 5000, 10000];
 class GiftPickScene {
   constructor(owner) {

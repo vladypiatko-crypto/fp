@@ -132,6 +132,7 @@ class TitleScene {
     const kind = this.modal;
     Trans.go(() => {
       if (kind === 'endless') Scenes.set(new GameScene({ mode: 'endless', np }));
+      else if (kind === 'rush') Scenes.set(new GameScene({ mode: 'endless', np, rush: true }));
       else if (kind.startsWith('event:')) Scenes.set(new GameScene({ mode: 'story', level: EVENTS[kind.slice(6)].level, np }));
       else if (!Save.data.introSeen) { Save.data.introSeen = true; Save.write(); Scenes.set(new CutsceneScene('intro', () => Scenes.set(new MapScene(np)), np)); }
       else Scenes.set(new MapScene(np));
@@ -163,6 +164,7 @@ class TitleScene {
         let sx = 1;
         if (d.turnT > 0) sx = 1 - 0.55 * Math.sin(Math.PI * (1 - d.turnT / 0.14));
         const hop = d.hop > 0 ? Math.sin(d.hop / 0.35 * Math.PI) * 8 : d.moving ? Math.abs(Math.sin(d.anim * 9)) : 0;
+        if (lo.pet && lo.pet !== 'none') drawPetAt(lo.pet, d.x + (d.facing === 'left' ? 16 : -16), d.y + 2, d.anim, 2, d.facing === 'left');
         drawDuck(d.x, d.y - hop, { skin: lo.skin, hat: lo.hat, halo: lo.halo, facing: d.facing, frame: d.moving ? Math.floor(d.anim * 9) % 2 : 0, blink: d.anim % 3.4 > 3.25, t: d.anim, sx: sx * pop, sy: pop, sc: 2,
           sparkle: (x, y) => this.parts.push({ x, y, vx: rand(-5, 5), vy: rand(-20, -8), life: 0.6, col: pick(['#fff3b0', '#c9a6ff']) }) });
         if (d.quackT > 0) text('QUACK!', d.x, d.y - 48, PCOL[i], 1, 1, 'outline');
@@ -203,31 +205,34 @@ class TitleScene {
     ctx.globalAlpha = clamp((this.t - 1.2) / 0.3, 0, 1);
     text(textW(sub) < W - 10 ? sub : 'DUCKS VS. ROBOTS', W / 2, subY, C.white, 1, 1, 'outline');
     ctx.globalAlpha = 1;
-    // main buttons slide up one after another
-    const labels = [['story', 'STORY', ICON.play, () => this.openModal('story')], ['endless', 'ENDLESS', null, () => this.openModal('endless')],
-      ['online', 'ONLINE', null, () => ONLINE_READY ? Trans.go(() => Scenes.set(new OnlineScene())) : this.openModal('online')], ['locker', 'LOCKER', ICON.locker, () => Trans.go(() => Scenes.push(new LockerScene({})))],
-      ['quests', 'QUESTS', null, () => Trans.go(() => Scenes.push(new QuestScene()))]];
-    // running events with a level: one button (or one EVENTS button that lists them all)
+    // the main menu: three big mode buttons, then a row of smaller ones; they slide up one after another
     const evLv = runningEvents().filter(id => EVENTS[id].level), ev1 = evLv.length === 1 ? EVENTS[evLv[0]] : null;
-    if (evLv.length) labels.push(['event', ev1 ? ev1.short || ev1.name : 'EVENTS', null, () => this.openModal(ev1 ? 'event:' + evLv[0] : 'events')]);
-    const stack = W < 300, n = labels.length;
-    const bw = stack ? 96 : Math.min(84, Math.floor((W - 40) / n)), bh = 18, gap = 6;
-    const rowW = stack ? bw : bw * n + gap * (n - 1);
-    const by0 = Math.min(subY + 12, H * 0.62 - (stack ? n * (bh + 4) : bh) - 4);
-    labels.forEach(([id, label, icon, on], i) => {
-      const k2 = Ease.outBack(clamp((this.t - 1.3 - i * 0.12) / 0.4, 0, 1));
-      const x = stack ? Math.floor(W / 2 - bw / 2) : Math.floor(W / 2 - rowW / 2) + i * (bw + gap);
-      const y = (stack ? by0 + i * (bh + 4) : by0) + Math.round((1 - k2) * (H - by0));
+    const big = [['story', 'STORY', ICON.play, '#4b3a92', () => this.openModal('story')], ['endless', 'ENDLESS', MENU_ICON.endless, '#1f5c7a', () => this.openModal('endless')],
+      ['online', 'ONLINE', MENU_ICON.online, '#1f6b3a', () => ONLINE_READY ? Trans.go(() => Scenes.set(new OnlineScene())) : this.openModal('online')]];
+    const small = [['rush', 'BOSS RUSH', MENU_ICON.rush, '#7a1f24', () => this.openModal('rush')], ['locker', 'LOCKER', ICON.locker, '#5c3416', () => Trans.go(() => Scenes.push(new LockerScene({})))],
+      ['shop', 'SHOP', MENU_ICON.shop, '#6b4a16', () => Trans.go(() => Scenes.push(new ShopScene()))], ['quests', 'QUESTS', MENU_ICON.quests, '#3a2a6b', () => Trans.go(() => Scenes.push(new QuestScene()))]];
+    // running events with a level: one button (or one EVENTS button that lists them all)
+    if (evLv.length) small.push(['event', ev1 ? ev1.short || ev1.name : 'EVENTS', null, ev1 ? ev1.btn : '#6b2a6b', () => this.openModal(ev1 ? 'event:' + evLv[0] : 'events')]);
+    const gap = 5, bh1 = 22, bh2 = 16, n2 = small.length;
+    const bw1 = Math.min(112, Math.floor((W - 24 - gap * 2) / 3)), row1 = bw1 * 3 + gap * 2;
+    const bw2 = Math.min(84, Math.floor((W - 24 - gap * (n2 - 1)) / n2)), row2 = bw2 * n2 + gap * (n2 - 1);
+    const by0 = subY + 9;
+    const all = [...big.map((b, i) => [...b, Math.floor(W / 2 - row1 / 2) + i * (bw1 + gap), by0, bw1, bh1, i]),
+      ...small.map((b, i) => [...b, Math.floor(W / 2 - row2 / 2) + i * (bw2 + gap), by0 + bh1 + 5, bw2, bh2, i + 3])];
+    all.forEach(([id, label, icon, col, on, x, y0, bw, bh, i]) => {
+      const k2 = Ease.outBack(clamp((this.t - 1.3 - i * 0.08) / 0.4, 0, 1));
+      const y = y0 + Math.round((1 - k2) * (H - y0));
       const ui = this.modal ? new UI() : this.ui;
+      const ic = icon && textW(label) + icon.w + 10 <= bw ? icon : null; // no room for the icon: just the word
       if (id === 'online' && !ONLINE_READY) drawWipButton(ui, id, x, y, bw, bh, label, this.T, on);
       else if (id === 'online' && this.news && this.news.t < 1.1) { this.onlineXY = [x + bw / 2, y + bh / 2]; this.drawUnveil(x, y, bw, bh, label); }
-      else drawButton(ui, id, x, y, bw, bh, label, { on, icon, def: i === 0, col: id === 'event' ? (ev1 ? ev1.btn : '#6b2a6b') : i === 0 ? '#3d2f63' : C.ui, tcol: id === 'event' ? (ev1 ? ev1.tcol : C.gold) : undefined });
+      else drawButton(ui, id, x, y, bw, bh, label, { on, icon: ic, col, def: i === 0, tcol: id === 'event' && ev1 ? ev1.tcol : undefined });
       if (id === 'event') { evLv.forEach((e, j) => drawSprX(EVENTS[e].hat, x + 4 + j * 5, y + 2 + Math.round(Math.sin(this.T * 4 + j)), { ay: 1 })); drawNewTag(x + bw - 10, y, this.T); }
       if (id === 'locker' && Save.anyNew()) drawNewTag(x + bw - 10, y, this.T);
       if (id === 'quests') { const n = claimable(); if (n) { pcirc(x + bw - 3, y + 1, 5, C.red); text(String(n), x + bw - 3, y - 1, C.white, 1, 1, null); } }
     });
     // corner widgets
-    drawCoins(4, 4, Save.data.coins, this.T);
+    drawWallet(4, 4, this.T);
     if (Cloud.isAdmin()) drawButton(this.modal ? new UI() : this.ui, 'admin', 4, 20, 44, 13, 'ADMIN', { on: () => Trans.go(() => Scenes.push(new AdminScene())), col: '#7a2a5c' });
     iconButton(this.ui, 'snd', W - 17, 4, drawSoundIcon, toggleSound);
     if (fsSupported()) iconButton(this.ui, 'fs', W - 33, 4, drawFsIcon, toggleFullscreen);
@@ -350,7 +355,7 @@ class TitleScene {
     const k = Ease.outBack(Math.min(1, this.modalT / 0.3));
     const pw = Math.min(W - 20, 200), ph = 96, px = Math.floor(W / 2 - pw / 2), py = Math.floor(H / 2 - ph / 2 + (1 - k) * 30);
     panel(px, py, pw, ph, C.uiD, OUT, C.uiL);
-    text(this.modal === 'story' ? 'STORY MODE' : ev ? fmt('{0} EVENT', ev.name) : 'ENDLESS MODE', W / 2, py + 6, ev ? ev.col : C.gold, 1, 1);
+    text(this.modal === 'story' ? 'STORY MODE' : this.modal === 'rush' ? 'BOSS RUSH' : ev ? fmt('{0} EVENT', ev.name) : 'ENDLESS MODE', W / 2, py + 6, this.modal === 'rush' ? C.red : ev ? ev.col : C.gold, 1, 1);
     text('HOW MANY DUCKS?', W / 2, py + 16, C.white, 2, 1, 'outline');
     const ui = this.modalUI; ui.begin();
     const bw = Math.floor((pw - 24) / 2), bh = 40;
@@ -367,6 +372,12 @@ class TitleScene {
     });
     drawButton(ui, 'back', W / 2 - 30, py + ph - 20, 60, 13, 'BACK', { on: () => { this.modal = null; } });
     if (this.modal === 'story') text('2 DUCKS = SPLIT SCREEN CO-OP!', W / 2, py + ph + 6, C.white, 1, 1, 'outline');
+    if (this.modal === 'rush') {
+      text('EVERY BOSS, ONE AFTER ANOTHER!', W / 2, py + ph + 6, C.red, 1, 1, 'outline');
+      text('HEAL UP AND 2 FREE CARDS AFTER EACH BOSS', W / 2, py + ph + 15, C.white, 1, 1, 'outline');
+      const best = Math.max(Save.data.best.rush1 || 0, Save.data.best.rush2 || 0);
+      if (best) text(fmt('BEST BOSS RUSH {0}', best + '/' + RUSH_ORDER.length), W / 2, py - 9, C.gold, 1, 1, 'outline');
+    }
     if (ev) { text('LIMITED ITEMS - ONLY WHILE THE EVENT IS ON!', W / 2, py + ph + 6, ev.col, 1, 1, 'outline'); if (ev.chest) text(fmt('{0} IN THE LOCKER!', CHESTS[ev.chest].name), W / 2, py + ph + 15, C.white, 1, 1, 'outline'); }
   }
 }
@@ -638,6 +649,7 @@ class LockerScene {
     const turn = ft < 0.14 ? 1 - 0.55 * Math.sin(Math.PI * (1 - ft / 0.14)) : 1;
     const hop = this.hop > 0 ? Math.sin(this.hop / 0.4 * Math.PI) * 10 : 0;
     const q = Math.sin(T * 3);
+    if (lo.pet && lo.pet !== 'none') drawPetAt(lo.pet, L.dx + 13 * L.sc, L.dy, T, Math.max(1, L.sc - 1), true);
     drawDuck(L.dx, L.dy - hop, { skin: lo.skin, hat: lo.hat, halo: lo.halo, weapon: lo.weapon, facing: faces[fi], frame: Math.floor(T * 4) % 2, blink: T % 3.3 > 3.15, t: T, sc: L.sc,
       sx: turn * (1 - q * 0.02), sy: 1 + q * 0.03, aim: faces[fi] === 'left' ? Math.PI : faces[fi] === 'up' ? -Math.PI / 2 : faces[fi] === 'down' ? Math.PI * 0.25 : 0,
       sparkle: (x, y) => this.parts.push({ x, y, vx: rand(-6, 6), vy: rand(-24, -10), life: 0.7, max: 0.7, col: pick(['#fff3b0', '#ffd23f', '#c9a6ff']) }),
@@ -654,8 +666,8 @@ class LockerScene {
     });
     drawCoins(4, H - 17, Save.data.coins, T);
     // category tabs
-    const tw = Math.min(26, Math.floor((L.gw - 4) / 5) - 2);
-    const tabIcons = { skin: ICON.tabSkin, hat: ICON.tabHat, halo: ICON.tabHalo, trail: ICON.tabTrail, weapon: ICON.tabWeapon };
+    const tw = Math.min(26, Math.floor((L.gw - 4) / CATS.length) - 2);
+    const tabIcons = { skin: ICON.tabSkin, hat: ICON.tabHat, halo: ICON.tabHalo, trail: ICON.tabTrail, weapon: ICON.tabWeapon, pet: ICON.tabPet };
     CATS.forEach((c, i) => {
       const x = L.gx + i * (tw + 2), y = L.gy - (L.port ? 0 : 16), sel = this.cat === c, id = 'cat' + c, f = this.ui.isFocus(id);
       panel(x, y + (sel ? 0 : 1), tw, 15, sel ? C.uiSel : C.ui, f ? C.gold : sel ? PCOL[this.pid] : OUT, C.uiL);
@@ -749,11 +761,15 @@ function drawItemIcon(cat, id, x, y, t, lo) {
   } else if (cat === 'halo') { if (id === 'none') text('-', x, y - 2, C.gray, 1, 1, null); else { drawHalo(id, x, y - 2, 2, t, 'back'); drawHalo(id, x, y - 2, 2, t, 'front'); } }
   else if (cat === 'trail') { if (id === 'none') text('-', x, y - 2, C.gray, 1, 1, null); else drawTrailIcon(id, x, y, t); }
   else if (cat === 'weapon') drawSprX(GUN_ART[id], x, y, { sc: GUN_ART[id].w >= 11 ? 1 : 2 });
+  else if (cat === 'pet') { if (id === 'none') text('-', x, y - 2, C.gray, 1, 1, null); else drawPetAt(id, x, y + 7, t, 2); }
 }
 
 // ================================================================ chests
 // what a chest costs right now (half price while the CHEST SALE event runs)
-const chestPrice = k => Math.round(CHESTS[k].price * (eventOn('chestsale') ? 0.5 : 1));
+// event chests cost EVENT COINS (extras.js), every other chest normal coins
+const chestPrice = k => Math.round((CHESTS[k].event ? EVENT_CHEST_COST : CHESTS[k].price) * (eventOn('chestsale') ? 0.5 : 1));
+const chestWallet = k => CHESTS[k].event ? Save.data.tokens || 0 : Save.data.coins;
+function chestPay(k, n) { if (CHESTS[k].event) { Save.data.tokens = Math.max(0, (Save.data.tokens || 0) + n); Save.write(); } else Save.addCoins(n); }
 function rollChest(kind) {
   const odds = CHESTS[kind].odds;
   const all = [];
@@ -802,10 +818,10 @@ class ChestScene {
   center() { return { x: Math.floor(W / 2), y: Math.floor(H * 0.58) }; }
   buy(kind) {
     const price = chestPrice(kind);
-    if (Save.data.coins < price) { sfx.uiBack(); this.nope = 0.5; return; }
-    Save.addCoins(-price); questBump('chests');
+    if (chestWallet(kind) < price) { sfx.uiBack(); this.nope = 0.5; return; }
+    chestPay(kind, -price); questBump('chests');
     this.kind = kind; this.result = rollChest(kind);
-    if (this.result.dup) Save.addCoins(Math.floor(price * 0.4));
+    if (this.result.dup) chestPay(kind, Math.floor(price * 0.4));
     else Save.unlock(this.result.cat, this.result.it.id);
     this.st = 'shake'; this.t = 0; this.thumps = 0; this.ui = new UI();
   }
@@ -821,7 +837,7 @@ class ChestScene {
     ctx.restore();
     for (const q of this.parts) { ctx.fillStyle = q.col; ctx.fillRect(Math.round(q.x), Math.round(q.y), q.conf ? 2 : 2, q.conf ? 3 : 2); }
     if (this.flash) { ctx.globalAlpha = this.flash; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
-    drawCoins(4, 4, Save.data.coins, T);
+    drawWallet(4, 4, T);
   }
   drawPick() {
     const T = this.T;
@@ -843,9 +859,11 @@ class ChestScene {
       drawSprX(ART.chest[k].lid, x + pw / 2, cy + 14 - ART.chest[k].base.h * 2 + 2, { sc: 2, ay: 1 });
       let ly = y + 56;
       for (const r of ['common', 'rare', 'epic', 'legendary', 'limited']) if (ch.odds[r]) { text(RARITY[r].name, x + 8, ly, RARITY[r].col, 1, 0); text(ch.odds[r] + '%', x + pw - 8, ly, C.white, 1, 2); ly += 7; }
-      const can = Save.data.coins >= price;
-      if (sale) { text(String(ch.price), x + pw / 2, y + ph - 28, C.gray, 1, 1, null); ctx.fillStyle = C.red; ctx.fillRect(Math.round(x + pw / 2 - textW(String(ch.price)) / 2 - 1), y + ph - 26, textW(String(ch.price)) + 2, 1); }
-      drawButton(this.ui, 'buy' + k, x + 8, y + ph - 20, pw - 16, 15, fmt(can ? 'OPEN  {0}' : 'NEED {0}', price), { on: () => this.buy(k), col: can ? '#3d2f63' : '#2a2535', tcol: can ? C.gold : C.gray, def: i === 0 });
+      const can = chestWallet(k) >= price, full = ch.event ? EVENT_CHEST_COST : ch.price;
+      if (sale) { text(String(full), x + pw / 2, y + ph - 28, C.gray, 1, 1, null); ctx.fillStyle = C.red; ctx.fillRect(Math.round(x + pw / 2 - textW(String(full)) / 2 - 1), y + ph - 26, textW(String(full)) + 2, 1); }
+      else if (ev) text('ONLY WITH EVENT COINS', x + pw / 2, y + ph - 30, '#d9a6ff', 1, 1, null);
+      drawButton(this.ui, 'buy' + k, x + 8, y + ph - 20, pw - 16, 15, fmt(can ? 'OPEN  {0}' : 'NEED {0}', price), { on: () => this.buy(k), icon: ev ? TOKEN_ICON : null,
+        col: can ? (ev ? '#4b2a72' : '#3d2f63') : '#2a2535', tcol: can ? (ev ? '#d9a6ff' : C.gold) : C.gray, def: i === 0 });
     });
     if (pages > 1) {
       drawButton(this.ui, 'cp', 6, H / 2 - 8, 14, 16, '<', { on: () => { this.cpage = (this.cpage + pages - 1) % pages; sfx.uiMove(); } });

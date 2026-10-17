@@ -37,6 +37,7 @@ function recordRun(res) {
   questBump('playTime', Math.round(res.t));
   if (R.online) questBump('online');
   if (R.bestCombo) questBump('combo', R.bestCombo, true);
+  if (R.rush) questBump('rush', res.bosses || 0, true);
 }
 
 // ================================================================ daily quests
@@ -280,6 +281,9 @@ const COMBO_CALLS = [[10, 'NICE!', '#5ec8ff'], [25, 'QUACKTASTIC!', '#51cf66'], 
 const vibrate = ms => { try { if (Save.data.settings.vibe !== false && navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* not supported */ } };
 GameScene.prototype.juice = function (dt) {
   const me = this.players[this.localPid || 0], mine = this.online ? [me] : this.players;
+  // pets follow their duck everywhere; what they do only happens where the game really runs (extras.js)
+  const live = this.state === 'play' && (!this.online || this.role === 'host') && !cardsPauseAll() && Impact.stop <= 0;
+  for (const p of this.players) { petFollow(p, dt); if (live) petAct(p, dt); }
   // phone buzz: getting hurt, levelling up
   for (const p of mine) {
     if (p.hp < (p.lastHp === undefined ? p.hp : p.lastHp) - 0.5 && !p.down) vibrate(30);
