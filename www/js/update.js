@@ -7,7 +7,7 @@
  *   CLOSE   leaves the game (in a browser tab, where that's impossible, it just closes the popup). */
 
 const UPDATE_REPO = 'vladypiatko-crypto/fp';
-const Update = { latest: 0, apk: null, exe: null, page: 'https://github.com/' + UPDATE_REPO + '/releases/latest', shown: false };
+const Update = { latest: 0, apk: null, exe: null, page: 'https://github.com/' + UPDATE_REPO + '/releases/latest', shown: false, checkedAt: 0 };
 const NATIVE_ANDROID = !!(window.Capacitor && window.Capacitor.nativePromise);
 const DESKTOP = !!window.quackDesktop; // the Windows app (preload.js)
 const updater = (method, opts = {}) => window.Capacitor.nativePromise('QuackUpdater', method, opts);
@@ -16,6 +16,7 @@ async function checkForUpdate() {
   const q = new URLSearchParams(location.search);
   if (q.get('update')) { Update.latest = +q.get('update'); return; } // tests: ?update=99 pretends build 99 is out
   if (!GAME_BUILD) return; // a local copy, not a published build
+  Update.checkedAt = Date.now();
   try {
     const r = await withTimeout(fetch('https://api.github.com/repos/' + UPDATE_REPO + '/releases/latest'), 12000);
     if (!r.ok) return;
@@ -26,9 +27,14 @@ async function checkForUpdate() {
     Update.apk = apk ? apk.browser_download_url : null;
     Update.exe = exe ? exe.browser_download_url : null;
     if (j.html_url) Update.page = j.html_url;
+    if (n > Update.latest) Update.shown = false; // an even newer build than the one we told you about: ask again
     Update.latest = n;
   } catch (e) { /* offline: play this version */ }
 }
+// phones keep the game running in the background, so it's rarely really "started": check again whenever you come
+// back to it (at most once a minute), and every 15 minutes while it's open
+AppState.onBack.push(() => { if (Date.now() - Update.checkedAt > 60000) checkForUpdate(); });
+setInterval(() => { if (!AppState.away) checkForUpdate(); }, 15 * 60 * 1000);
 // pops up on the next menu (never in the middle of a fight)
 function showUpdatePopup() {
   if (!Update.latest || Update.shown || Trans.busy()) return;

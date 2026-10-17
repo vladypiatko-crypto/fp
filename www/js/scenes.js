@@ -232,6 +232,7 @@ class TitleScene {
     iconButton(this.ui, 'snd', W - 17, 4, drawSoundIcon, toggleSound);
     if (fsSupported()) iconButton(this.ui, 'fs', W - 33, 4, drawFsIcon, toggleFullscreen);
     iconButton(this.ui, 'set', W - (fsSupported() ? 49 : 33), 4, drawGearIcon, () => this.openModal('settings'));
+    if (GAME_BUILD) text(fmt('BUILD {0}', GAME_BUILD), W - 4, H - 9, C.gray, 1, 2, null); // which version this is
     const b = Save.data.best;
     if (b.e1 || b.e2) text(fmt('BEST ENDLESS  1P {0}  2P {1}', fmtTime(b.e1), fmtTime(b.e2)), W / 2, H - 9, C.white, 1, 1, 'outline');
     // bonus events running right now (double coins, chest sale...): little banners in the corner

@@ -554,12 +554,12 @@ const SONGS = {
 };
 // the app went to the background or the phone screen turned off: silence all sound until it's back.
 // Browsers tell us with visibilitychange; the Android app also calls __appPause / __appResume itself (MainActivity.java)
-const AppState = { away: false, onAway: [] };
+const AppState = { away: false, onAway: [], onBack: [] };
 function appAway(away) {
   if (AppState.away === away) return;
   AppState.away = away;
   if (AU.ctx) { if (away) AU.ctx.suspend().catch(() => {}); else AU.ctx.resume().catch(() => {}); }
-  if (away) for (const f of AppState.onAway) f();
+  for (const f of away ? AppState.onAway : AppState.onBack) f();
 }
 window.__appPause = () => appAway(true);
 window.__appResume = () => appAway(false);
@@ -789,7 +789,7 @@ function shade(hex, amt) {
 function drawButton(ui, id, x, y, w, h, label, opts = {}) {
   const f = ui.isFocus(id), dn = ui.isDown(id), p = ui.pulseOf(id), off = opts.disabled;
   x = Math.round(x); y = Math.round(y + (f && !dn ? -1 : 0)); w = Math.round(w); h = Math.round(h);
-  const col = off ? '#2a2535' : f ? (opts.focusCol || C.uiSel) : (opts.col || C.ui);
+  const col = off ? '#2a2535' : f ? (opts.focusCol || (opts.col ? shade(opts.col, 0.18) : C.uiSel)) : (opts.col || C.ui);
   const depth = off || dn || h < 9 ? 1 : 2; // how thick the button is
   // shadow on the ground, outline, then the darker base the face sits on
   if (!dn) { ctx.fillStyle = 'rgba(10,6,18,0.45)'; ctx.fillRect(x + 1, y + h, w - 2, f ? 3 : 2); }

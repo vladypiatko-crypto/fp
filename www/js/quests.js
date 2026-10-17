@@ -371,5 +371,5 @@ addPhrases([
   ['DAILY REWARD', 'TAGESBELOHNUNG', 'НАГРАДА ДНЯ'], ['DAY {0} IN A ROW!', 'TAG {0} IN FOLGE!', 'ДЕНЬ {0} ПОДРЯД!'], ['DAY {0}', 'TAG {0}', 'ДЕНЬ {0}'], ['+{0} COINS!', '+{0} MÜNZEN!', '+{0} МОНЕТ!'],
   ['COME BACK TOMORROW FOR MORE!', 'KOMM MORGEN FÜR MEHR WIEDER!', 'ПРИХОДИ ЗАВТРА ЗА НОВОЙ!'], ['CLAIM', 'HOLEN', 'ЗАБРАТЬ'], ['YAY!', 'JUHU!', 'УРА!'],
   ['COMBO', 'KOMBO', 'КОМБО'], ['NICE!', 'NICE!', 'КЛАСС!'], ['QUACKTASTIC!', 'QUAKTASTISCH!', 'КРЯТАСТИЧНО!'], ['UNSTOPPABLE!', 'UNAUFHALTSAM!', 'НЕУДЕРЖИМ!'],
-  ['QUACKPOCALYPSE!', 'QUAKPOKALYPSE!', 'КРЯПОКАЛИПСИС!'], ['LEGENDARY DUCK!', 'LEGENDÄRE ENTE!', 'ЛЕГЕНДАРНАЯ УТКА!'], ['ELITE!', 'ELITE!', 'ЭЛИТА!'], ['VALENTINE', 'VALENTIN', 'ВАЛЕНТИН'], ['VIBRATION', 'VIBRATION', 'ВИБРАЦИЯ'],
+  ['QUACKPOCALYPSE!', 'QUAKPOKALYPSE!', 'КРЯПОКАЛИПСИС!'], ['LEGENDARY DUCK!', 'LEGENDÄRE ENTE!', 'ЛЕГЕНДАРНАЯ УТКА!'], ['ELITE!', 'ELITE!', 'ЭЛИТА!'], ['VALENTINE', 'VALENTIN', 'ВАЛЕНТИН'], ['BUILD {0}', 'BUILD {0}', 'ВЕРСИЯ {0}'], ['VIBRATION', 'VIBRATION', 'ВИБРАЦИЯ'],
 ]);
