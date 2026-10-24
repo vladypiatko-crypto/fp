@@ -56,7 +56,7 @@ const Hub = {
   room: null, nextId: 2,
   open(code, name, lo) {
     const host = { id: 'p1', conn: null, name: cleanName(name), user: cleanUser(myUsername()), lo: cleanLoadout(lo), tr: cleanTrain(Save.data.train), bo: armedBoosters(), ready: false };
-    this.room = { code, name: host.name, state: 'lobby', mode: 'endless', level: 1, hostId: host.id, members: [host] };
+    this.room = { code, name: host.name, state: 'lobby', mode: 'endless', level: 1, arena: 'pond', goal: 10, hostId: host.id, members: [host] };
     this.nextId = 2;
     this.to(host, { t: 'hello', id: host.id });
     this.to(host, { t: 'joined', code });
@@ -65,7 +65,7 @@ const Hub = {
   shut() { this.room = null; },
   view() {
     const r = this.room;
-    return { code: r.code, name: r.name, state: r.state, mode: r.mode, level: r.level,
+    return { code: r.code, name: r.name, state: r.state, mode: r.mode, level: r.level, arena: r.arena, goal: r.goal,
       members: r.members.map(m => ({ id: m.id, name: m.name, user: m.user, lo: m.lo, ready: m.ready, host: m.id === r.hostId })) };
   },
   // send to one member: the host's own messages are delivered locally, friends get them over their connection
@@ -119,8 +119,10 @@ const Hub = {
     switch (m.t) {
       case 'set': // host changes the mode / level
         if (!isHost || r.state !== 'lobby') break;
-        if (m.mode === 'endless' || m.mode === 'story') r.mode = m.mode;
+        if (m.mode === 'endless' || m.mode === 'story' || m.mode === 'pvp') r.mode = m.mode;
         if (Number.isInteger(m.level) && m.level >= 1 && m.level <= LEVELS.length) r.level = m.level;
+        if (PVP_ARENAS.includes(m.arena)) r.arena = m.arena; // PvP: where, and how many KOs win
+        if (PVP_GOALS.includes(m.goal)) r.goal = m.goal;
         this.sync(); break;
       case 'ready':
         if (r.state !== 'lobby') break;
@@ -129,7 +131,8 @@ const Hub = {
         if (!isHost || r.state !== 'lobby') break;
         r.state = 'game';
         const seed = Math.floor(Math.random() * 2147483647) + 1;
-        this.all({ t: 'start', mode: r.mode, level: r.level, seed, members: r.members.map(x => ({ id: x.id, name: x.name, lo: x.lo, tr: x.tr, bo: x.bo })) });
+        if (r.mode === 'pvp' && r.members.length < 2) { this.to(mem, { t: 'error', msg: 'PVP NEEDS AT LEAST 2 DUCKS' }); r.state = 'lobby'; break; }
+        this.all({ t: 'start', mode: r.mode, level: r.level, arena: r.arena, goal: r.goal, seed, members: r.members.map(x => ({ id: x.id, name: x.name, lo: x.lo, tr: x.tr, bo: x.bo })) });
         this.sync(); break;
       }
       case 'back': // host takes everyone back to the lobby after a game
@@ -277,9 +280,9 @@ function startOnlineGame(m) {
   Net.idToPid = {}; members.forEach((x, i) => { Net.idToPid[x.id] = i; });
   Net.inputs = [{}, {}, {}, {}]; Net.evt = []; Net.sfxSent = {}; Net.sndT = 0;
   const level = m.mode === 'story' ? LEVELS[m.level - 1] : null;
-  const world = level ? level.world : worldFromSeed(m.seed);
+  const world = level ? level.world : m.mode === 'pvp' && PVP_ARENAS.includes(m.arena) ? m.arena : worldFromSeed(m.seed);
   const net = { role: Net.role, pid, members: members.map(x => ({ id: x.id, name: x.name, lo: x.lo, tr: x.tr, bo: x.bo })), seed: m.seed };
-  Trans.go(() => Scenes.set(new GameScene({ mode: m.mode, level, np: members.length, world, net })), true);
+  Trans.go(() => Scenes.set(new GameScene({ mode: m.mode, level, np: members.length, world, net, goal: PVP_GOALS.includes(m.goal) ? m.goal : PVP_GOAL })), true);
 }
 
 // ================================================================ UI helpers
@@ -403,12 +406,6 @@ class RoomScene {
     return false;
   }
   leave() { Net.send({ t: 'leave' }); Net.close(); Trans.go(() => Scenes.set(new OnlineScene())); }
-  modes() { const out = [{ mode: 'endless', level: 1 }]; for (let i = 1; i <= LEVELS.length; i++) out.push({ mode: 'story', level: i }); return out; }
-  cycleMode(room) {
-    const list = this.modes(), i = list.findIndex(x => x.mode === room.mode && x.level === room.level);
-    const nx = list[(i + 1) % list.length];
-    Net.send({ t: 'set', mode: nx.mode, level: nx.level });
-  }
   update(dt) {
     this.T += dt;
     const acts = Input.menu();
@@ -436,10 +433,10 @@ class RoomScene {
         else text(mem.ready ? 'READY!' : 'NOT READY', W - 14, y + 5, mem.ready ? C.green : C.gray, 1, 2);
       } else text('OPEN SLOT', 42, y + 8, C.grayD, 1, 0);
     }
-    const label = room.mode === 'endless' ? 'ENDLESS' : fmt('STORY {0}: {1}', room.level, LEVELS[room.level - 1].name);
-    const my = top + 4 * rowH + 2;
-    if (isHost) drawButton(this.ui, 'mode', 8, my, W - 16, 15, fmt('MODE: {0}   >', label), { on: () => this.cycleMode(room) });
-    else text(fmt('MODE: {0}', label), W / 2, my + 4, C.white, 1, 1);
+    const label = roomModeLabel(room), my = top + 4 * rowH + 2;
+    const mcol = room.mode === 'pvp' ? '#8a1f5c' : room.mode === 'endless' ? '#1f5c7a' : '#4b3a92', micon = room.mode === 'pvp' ? PVP_CROWN : room.mode === 'endless' ? MENU_ICON.endless : ICON.play;
+    if (isHost) drawButton(this.ui, 'mode', 8, my, W - 16, 15, fmt('MODE: {0}   CHANGE >', label), { col: mcol, icon: micon, on: () => Trans.go(() => Scenes.push(new ModePickScene(room))) });
+    else { panel(8, my, W - 16, 15, mcol, OUT, null, false); text(fmt('MODE: {0}', label), W / 2, my + 4, C.white, 1, 1, null); }
     text(isHost ? 'START WHEN EVERYONE IS HERE. ALL DEVICES NEED TO STAY OPEN.' : 'WAITING FOR THE HOST TO START...', W / 2, my + 22, C.gray, 1, 1);
     const by = H - 17;
     if (isHost) drawButton(this.ui, 'start', Math.floor(W / 2 - 84), by, 90, 14, 'START', { on: () => Net.send({ t: 'start' }), def: true, col: '#3d2f63' });
@@ -496,10 +493,10 @@ GameScene.prototype.buildSnapshot = function () {
     p: this.players.map(p => [r1(p.x), r1(p.y), NET_FACE.indexOf(p.facing), r2(p.aim), Math.ceil(p.hp), p.maxHp,
       (p.down ? 1 : 0) | (p.gone ? 2 : 0) | (p.moving ? 4 : 0) | (p.iframes > 0 ? 8 : 0) | (lvl(p, 'shield') && p.shieldT <= 0 ? 16 : 0),
       r2(p.dashT), r2(p.dashCd), r2(p.reviveT), p.level, Math.floor(p.xp), p.xpNext, p.kills, p.pending, p.up,
-      (p.choice || []).map(c => c.k), r2(p.hurtFlash), r2(p.squash), r2(p.spd), Object.keys(p.over)]),
+      (p.choice || []).map(c => c.k), r2(p.hurtFlash), r2(p.squash), r2(p.spd), Object.keys(p.over), p.deaths || 0]),
     // enemies: [id, type, x, y, hp, maxHp, bits, z, state, flash, fuse, rot]
     // (trailing zeros are left off: most robots end after bits)
-    e: this.enemies.filter(e => !e.dead && (e.boss || near(e.x, e.y))).map(e => trimZeros([e.id, NET_TYPES.indexOf(e.type), ri(e.x), ri(e.y), Math.ceil(e.hp), Math.ceil(e.maxHp),
+    e: this.enemies.filter(e => !e.dead && !e.duck && (e.boss || near(e.x, e.y))).map(e => trimZeros([e.id, NET_TYPES.indexOf(e.type), ri(e.x), ri(e.y), Math.ceil(e.hp), Math.ceil(e.maxHp),
       (e.flip ? 1 : 0) | (e.boss ? 2 : 0) | (e.spawnT > 0 ? 4 : 0) | (e.fuse >= 0 ? 8 : 0) | (e.phase === 2 ? 16 : 0) | (e.slowT > 0 ? 32 : 0) | (e.elite ? 64 : 0),
       ri(e.z || 0), (stIdx(e.bs || e.st) + 1) % NET_STATES.length, r2(e.flash || 0), r2(Math.max(0, e.fuse)), r1(e.rot || 0)])),
     // shots: [kind, x, y, vx, vy, life, max, r, col (plain bullets only), ownerPid, weapon, (boomerangs: rot, ang, back, sp)]
@@ -557,6 +554,7 @@ GameScene.prototype.applySnapshot = function (s) {
     p.over = {}; for (const k of a[20] || []) p.over[k] = true;
     p.hp = a[4]; p.maxHp = a[5]; p.reviveT = a[9];
     if (i !== this.localPid) { p.dashT = a[7]; p.dashCd = a[8]; } // our own dash runs on this device
+    p.deaths = a[21] || 0;
     p.level = a[10]; p.xp = a[11]; p.xpNext = a[12]; p.kills = a[13]; p.pending = a[14]; p.up = a[15];
     p.aim = a[3]; p.facing = NET_FACE[a[2]] || p.facing; p.spd = a[19];
     p.hurtFlash = a[17]; p.squash = a[18];
@@ -629,6 +627,8 @@ GameScene.prototype.applyClientInput = function (from, msg) {
   r.mx = clamp(Number(msg.mx) || 0, -1, 1); r.my = clamp(Number(msg.my) || 0, -1, 1);
   if (Number.isFinite(msg.x) && Number.isFinite(msg.y)) { r.x = clamp(msg.x, 8, WORLD_SIZE - 8); r.y = clamp(msg.y, 10, WORLD_SIZE - 6); }
   if (msg.dash) r.dashUntil = nowS() + 0.35;
+  if (Number.isFinite(msg.aim)) r.aim = msg.aim; // PvP: where they aim, and whether they shoot
+  r.fire = !!msg.fire; r.dist = clamp(Number(msg.dist) || 0, 0, 400);
   if (msg.ok) r.ok = true;
   if (msg.pause && this.state === 'play') this.pause(pid);
   if (msg.resume && this.state === 'paused') this.resume();
@@ -636,7 +636,7 @@ GameScene.prototype.applyClientInput = function (from, msg) {
   if (p && !p.gone && Number.isInteger(msg.sel)) p.sel = clamp(msg.sel, 0, 2);
 };
 GameScene.prototype.localMove = function () {
-  const mv = Input.move(0, 1);
+  const mv = Input.move(0, this.pvp ? 2 : 1); // PvP: the arrow keys aim, so only WASD walks
   const s = this.sticks[this.localPid];
   if (s) { const dx = s.x - s.bx, dy = s.y - s.by, dl = Math.hypot(dx, dy); if (dl > 2) { const m = Math.min(1, dl / STICK_R); mv.x += dx / dl * m; mv.y += dy / dl * m; } }
   const l = Math.hypot(mv.x, mv.y);
@@ -670,7 +670,7 @@ GameScene.prototype.clientUpdate = function (dt) {
     let vx, vy;
     if (me.dashT > 0) { me.dashT -= dt; vx = me.dvx; vy = me.dvy; me.ghosts.push({ x: me.x, y: me.y, t: 0.18, facing: me.facing }); }
     else { const sp = pSpeed(me); vx = mv.x * sp; vy = mv.y * sp; }
-    me.x = clamp(me.x + vx * dt, 8, WORLD_SIZE - 8); me.y = clamp(me.y + vy * dt, 10, WORLD_SIZE - 6);
+    me.x = clampPX(me.x + vx * dt); me.y = clampPY(me.y + vy * dt);
     me.moving = Math.hypot(mv.x, mv.y) > 0.1; me.mvx = mv.x; me.mvy = mv.y;
     if (me.moving) me.moved = true;
   } else if (me) me.dashT = 0;
@@ -680,10 +680,14 @@ GameScene.prototype.clientUpdate = function (dt) {
     if (menu.right) { me.sel = (me.sel + 1) % 3; sfx.uiMove(); }
     if (menu.ok && me.choiceT > CARD_READY) this.pendOk = true;
   }
+  let aim = null; // PvP: aim here, the host shoots for us
+  if (this.pvp && me) { aim = me.down || this.state !== 'play' ? { ang: null, fire: false, dist: 0 } : localAim(me, mv, true); if (aim.ang !== null) me.aim = aim.ang; me.firing = aim.fire; }
   this.inAcc += dt;
   if (this.inAcc >= 1 / 30) {
     this.inAcc = 0;
-    Net.relay('host', { t: 'in', mx: r2(mv.x), my: r2(mv.y), x: me ? r1(me.x) : undefined, y: me ? r1(me.y) : undefined, dash: this.pendDash, ok: this.pendOk, sel: me ? me.sel : 1 });
+    const m = { t: 'in', mx: r2(mv.x), my: r2(mv.y), x: me ? r1(me.x) : undefined, y: me ? r1(me.y) : undefined, dash: this.pendDash, ok: this.pendOk, sel: me ? me.sel : 1 };
+    if (aim) { m.aim = r2(me.aim); m.fire = aim.fire ? 1 : 0; m.dist = ri(aim.dist); }
+    Net.relay('host', m);
     this.pendDash = false; this.pendOk = false;
   }
 };

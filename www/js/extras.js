@@ -111,7 +111,7 @@ function petFollow(p, dt) {
 }
 // what the pet does (only where the game really runs: offline, or the host)
 function petAct(p, dt) {
-  const d = petOf(p); if (!d || p.down || p.gone || p.petX === undefined) return;
+  const d = petOf(p); if (!d || p.down || p.gone || p.petX === undefined || R.pvp) return; // PvP: pets just watch
   const lvMul = 1 + 0.05 * (p.level - 1);
   p.petCd = (p.petCd || 0) - dt; p.petCoin = (p.petCoin || 0) - dt;
   if (d.coin && p.petCoin <= 0) { p.petCoin = d.coin; dropAt(p.petX, p.petY, 'coin', 1); burst(p.petX, p.petY - 4, ['#ffd23f', '#fff3b0'], 5, 40, 0.3); }

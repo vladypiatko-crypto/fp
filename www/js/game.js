@@ -8,6 +8,7 @@ let R = null;
 // ================================================================ spatial hash for robots
 const CELL = 32, grid = new Map();
 function buildGrid() {
+  if (R.pvp) pvpSync(); // PvP: every duck has a stand-in the weapons can hit (pvp.js)
   grid.clear();
   for (const e of R.enemies) {
     if (e.dead || e.spawnT > 0) continue;
@@ -22,10 +23,10 @@ function forNear(x, y, r, fn) {
     for (let i = 0; i < a.length; i++) if (!a[i].dead && fn(a[i]) === true) return;
   }
 }
-function nearestEnemy(x, y, maxR, skip) {
+function nearestEnemy(x, y, maxR, skip, me) {
   let best = null, bd = maxR * maxR;
   for (const e of R.enemies) {
-    if (e.dead || e.spawnT > 0 || e.bs === 'burrow' || (skip && skip.has(e))) continue;
+    if (e.dead || e.spawnT > 0 || e.bs === 'burrow' || (skip && skip.has(e)) || (me && e.duck === me)) continue; // me: never your own duck in PvP
     const dd = d2(x, y, e.x, e.y); if (dd < bd) { bd = dd; best = e; }
   }
   return best;
@@ -35,13 +36,16 @@ function nearestEnemy(x, y, maxR, skip) {
 const lvl = (p, k) => p.up[k] || 0;
 // a duck's permanent training from the shop (p.train), e.g. trainLv(p, 'hp')
 const trainLv = (p, k) => (p.train && p.train[k]) || 0;
+// where a duck may walk (a fenced arena in PvP)
+const clampPX = x => (R.pvp ? clamp(x, WORLD_SIZE / 2 - PVP_HALF, WORLD_SIZE / 2 + PVP_HALF) : clamp(x, 8, WORLD_SIZE - 8));
+const clampPY = y => (R.pvp ? clamp(y, WORLD_SIZE / 2 - PVP_HALF, WORLD_SIZE / 2 + PVP_HALF) : clamp(y, 10, WORLD_SIZE - 6));
 const pSpeed = p => 70 * (1 + 0.1 * lvl(p, 'speed')) * (1 + 0.04 * trainLv(p, 'spd'));
 const pMagnet = p => 34 * (1 + 0.45 * lvl(p, 'magnet')) * (1 + 0.12 * trainLv(p, 'mag')) * (1 + petMag(p));
 const reachMul = p => 1 + 0.15 * lvl(p, 'reach');
 const pDashCd = p => 1.2 * (1 - 0.12 * lvl(p, 'dash'));
 const xpFor = lv => Math.round(3 + lv * 4 + lv * lv * 0.45);
 const alivePlayers = () => R.players.filter(p => !p.down);
-const tScale = () => (R.mode === 'story' ? 1 + R.t / 450 : 1 + R.t / 500); // player damage growth over a run
+const tScale = () => (R.pvp ? 1 : R.mode === 'story' ? 1 + R.t / 450 : 1 + R.t / 500); // player damage growth over a run
 function hpMul() {
   // story robots toughen up over time, but stop shortly after the boss arrives so a long boss fight can't snowball
   if (R.mode === 'story') return (1 + (R.level.diff - 1) * 0.15) * (1 + Math.min(R.t, R.level.time + 20) / 150);
@@ -83,7 +87,7 @@ class GameScene {
   //         world?, net?: { role: 'host' | 'client', pid, members, seed } for online play }
   constructor(opts) {
     R = this;
-    this.mode = opts.mode; this.level = opts.level || null; this.np = opts.np; this.rush = !!opts.rush; // rush: BOSS RUSH (extras.js)
+    this.mode = opts.mode; this.pvp = this.mode === 'pvp'; this.goal = opts.goal || PVP_GOAL; this.aimSticks = [null, null, null, null]; this.level = opts.level || null; this.np = opts.np; this.rush = !!opts.rush; // rush: BOSS RUSH (extras.js)
     this.net = opts.net || null; this.online = !!this.net; this.role = this.net ? this.net.role : 'local';
     this.world = opts.world || (this.level ? this.level.world : pick(Object.keys(WORLD_THEME)));
     this.rnd = this.net ? mulberry32(this.net.seed) : Math.random; // online: everyone decorates the same world
@@ -101,7 +105,7 @@ class GameScene {
     this.players = [];
     const members = this.net ? this.net.members : null;
     for (let i = 0; i < this.np; i++) this.players.push(this.newPlayer(i, members ? members[i].lo : null, members ? members[i].name : null, members ? members[i].tr : null));
-    this.useBoosters();
+    if (!this.pvp) this.useBoosters();
     if (this.rush) for (const p of this.players) p.pending += 2; // boss rush: start with 2 cards
     this.makeDecor();
     this.layout();
@@ -114,13 +118,14 @@ class GameScene {
   begin() {
     this.state = 'play'; this.dialog = null;
     Music.play(worldSong(this.world));
+    if (this.pvp) { pvpBegin(); return; }
     banner(this.level ? fmt('LEVEL {0}: {1}', this.level.n, this.level.name) : 'SURVIVE!', C.gold, 2.4, this.level ? 'SURVIVE UNTIL THE BOSS ARRIVES' : '');
     for (let i = 0; i < 5; i++) spawnEnemy('bolt', spawnPos());
   }
   newPlayer(id, lo0, name, tr0) {
     const lo = lo0 || Save.data.loadout[id] || Save.data.loadout[0];
-    const train = cleanTrain(tr0 || (this.online ? {} : Save.data.train)), hp = 100 + 10 * (train.hp || 0);
-    const ring = this.np > 1 ? [Math.cos(id / this.np * TAU) * 28, Math.sin(id / this.np * TAU) * 28] : [0, 0];
+    const train = cleanTrain(this.pvp ? {} : tr0 || (this.online ? {} : Save.data.train)), hp = 100 + 10 * (train.hp || 0); // PvP: no training, everyone equal
+    const ring = this.pvp ? pvpStart(id, this.np) : this.np > 1 ? [Math.cos(id / this.np * TAU) * 28, Math.sin(id / this.np * TAU) * 28] : [0, 0];
     return {
       id, lo, name: name || 'P' + (id + 1), weapon: lo.weapon, x: WORLD_SIZE / 2 + ring[0], y: WORLD_SIZE / 2 + ring[1], r: 5, hp, maxHp: hp, spd: 70, gone: false, train,
       facing: 'down', turnT: 0, ax: 1, ay: 0, aim: 0, iframes: 0, dashT: 0, dashCd: 0, dvx: 0, dvy: 0, dashHit: new Set(),
@@ -179,7 +184,7 @@ class GameScene {
     this.t += dt; this.hintT += dt;
     if (this.bossIntro) this.bossIntro.t += dt;
     buildGrid();
-    if (this.state === 'play') director(dt);
+    if (this.state === 'play') { if (this.pvp) pvpTick(dt); else director(dt); }
     for (const p of this.players) updatePlayer(p, dt);
     updateEnemies(dt);
     buildGrid();
@@ -195,7 +200,7 @@ class GameScene {
     for (const b of this.banners) b.t += dt;
     this.banners = this.banners.filter(b => b.t < b.dur);
     this.gemComboT -= dt; if (this.gemComboT <= 0) this.gemCombo = 0;
-    if (this.state === 'play' && !alivePlayers().length) { this.state = 'dying'; this.stateT = 0; Music.play(null); }
+    if (this.state === 'play' && !this.pvp && !alivePlayers().length) { this.state = 'dying'; this.stateT = 0; Music.play(null); }
     this.updateCameras(dt);
     this.netPump(dt);
   }
@@ -209,16 +214,18 @@ class GameScene {
         const pid = v.pid, p = this.players[pid];
         if (p.choice) { cardTap(ev); continue; } // this screen's duck is picking a card
         if (Input.touch && d2(ev.x, ev.y, dashBtn(v).x, dashBtn(v).y) < 20 * 20) { this.dashFor(pid); continue; }
+        if (this.pvp && pvpPointerDown(ev, v, pid)) continue; // PvP: right side aims, a mouse just shoots
         if (!this.sticks[pid]) this.sticks[pid] = { id: ev.id, bx: ev.x, by: ev.y, x: ev.x, y: ev.y };
         else this.dashFor(pid);
       } else if (ev.type === 'move') {
-        for (const s of this.sticks) if (s && s.id === ev.id) {
+        for (const s of [...this.sticks, ...this.aimSticks]) if (s && s.id === ev.id) {
           s.x = ev.x; s.y = ev.y;
           const dx = s.x - s.bx, dy = s.y - s.by, dl = Math.hypot(dx, dy), lim = STICK_R * 1.6;
           if (dl > lim) { s.bx = s.x - dx / dl * lim; s.by = s.y - dy / dl * lim; }
         }
       } else if (ev.type === 'up') {
         for (let i = 0; i < this.sticks.length; i++) if (this.sticks[i] && this.sticks[i].id === ev.id) this.sticks[i] = null;
+        for (let i = 0; i < this.aimSticks.length; i++) if (this.aimSticks[i] && this.aimSticks[i].id === ev.id) this.aimSticks[i] = null;
       }
     }
   }
@@ -407,6 +414,7 @@ class GameScene {
     items.forEach(([id, label, on], i) => drawButton(ui, id, px + 8, py + 22 + i * (bh + gap), bw, bh, label, { on, def: i === 0, col: id === 'a_back' ? C.ui : '#4b2a6b' }));
   }
   drawResults() {
+    if (this.results.pvp) { this.drawPvpResults(); return; }
     const r = this.results, k = Math.min(1, this.stateT / 0.4);
     ctx.fillStyle = `rgba(15,10,26,${0.8 * k})`; ctx.fillRect(0, 0, W, H);
     const pw = Math.min(W - 16, 240), ph = Math.min(H - 12, 172);
@@ -573,6 +581,7 @@ function director(dt) {
 
 // ================================================================ damage
 function hurtEnemy(e, dmg, kx, ky, kb, owner) {
+  if (e.duck) { pvpHit(e.duck, dmg, kx, ky, kb, owner); return; } // PvP: it's another duck
   if (e.dead || e.spawnT > 0 || e.bs === 'burrow') return; // a burrowed boss is safe underground
   const crit = owner && owner.up && lvl(owner, 'crit') && Math.random() < 0.08 * lvl(owner, 'crit');
   if (crit) dmg *= 2; // lucky shot
@@ -687,6 +696,7 @@ function updatePlayer(p, dt) {
   p.blinkT -= dt; if (p.blinkT < -0.12) p.blinkT = rand(2, 5);
   p.weapon = p.lo.weapon;
   updateTrail(p, dt);
+  if (p.down && R.pvp) { pvpDownTick(p, dt); p.dashReq = false; return; } // PvP: wait to respawn
   if (p.down) {
     const helper = R.players.find(o => o !== p && !o.down && d2(o.x, o.y, p.x, p.y) < 22 * 22);
     if (helper) {
@@ -740,15 +750,16 @@ function updatePlayer(p, dt) {
         hurtEnemy(e, (14 + 12 * dl) * tScale(), Math.cos(a), Math.sin(a), 160, p);
       }
     });
-  } else { const sp = pSpeed(p); vx = mv.x * sp; vy = mv.y * sp; }
+  } else { const sp = pSpeed(p) * (p.slowT > 0 ? 0.55 : 1); vx = mv.x * sp; vy = mv.y * sp; }
   const ri = netRemote(p.id) && Net.inputs[p.id];
   if (ri && ri.x !== undefined && !busy) { // a friend's duck: their device moves it (dashes too), we glide it to where they say
     const k = Math.min(1, dt * 20);
-    p.x = clamp(p.x + (ri.x - p.x) * k, 8, WORLD_SIZE - 8); p.y = clamp(p.y + (ri.y - p.y) * k, 10, WORLD_SIZE - 6);
+    p.x = clampPX(p.x + (ri.x - p.x) * k); p.y = clampPY(p.y + (ri.y - p.y) * k);
   } else {
-    p.x = clamp(p.x + vx * dt, 8, WORLD_SIZE - 8);
-    p.y = clamp(p.y + vy * dt, 10, WORLD_SIZE - 6);
+    p.x = clampPX(p.x + vx * dt);
+    p.y = clampPY(p.y + vy * dt);
   }
+  if (R.pvp) { pvpAimFire(p, mv, dt); return; } // PvP: you aim yourself (pvp.js)
 
   // auto-aim: lock on the nearest robot within range
   const range = WEAPONS[p.weapon].range * reachMul(p);
@@ -1058,19 +1069,21 @@ function fireMain(p, tgt, wd) {
     return;
   }
   if (p.weapon === 'tesla') { // lightning: hits the target, then jumps on (multi shot and piercing add jumps)
-    let cur = tgt, d = dmg;
+    let cur = tgt.spot ? pvpConeTarget(p, base, wd.range * reachMul(p)) : tgt, d = dmg;
+    if (!cur) { R.fx.push({ k: 'zap', pts: [[mx, my], [mx + Math.cos(base) * 50 + rand(-6, 6), my + Math.sin(base) * 50 + rand(-6, 6)]], t: 0, dur: 0.12, col: '#7dfff5' }); return; } // PvP: missed
     const pts = [[mx, my]], hit = new Set();
     for (let i = 0; i <= wd.chain + multi + lvl(p, 'pierce') && cur; i++) {
       hit.add(cur); pts.push([cur.x, cur.y - 2]);
       const k = Math.atan2(cur.y - p.y, cur.x - p.x);
       hurtEnemy(cur, d, Math.cos(k), Math.sin(k), wd.kb, p);
       burst(cur.x, cur.y, ['#7dfff5', '#ffffff'], 2, 40, 0.2);
-      d *= 0.85; cur = nearestEnemy(cur.x, cur.y, 62, hit);
+      d *= 0.85; cur = nearestEnemy(cur.x, cur.y, 62, hit, p);
     }
     R.fx.push({ k: 'zap', pts, t: 0, dur: 0.14, col: '#7dfff5' });
     return;
   }
-  const kind = SHOT_KIND[p.weapon] || 'bullet', sx = SHOT_EXTRA[kind];
+  const kind = SHOT_KIND[p.weapon] || 'bullet', sx = SHOT_EXTRA[kind], ht = tgt.spot ? null : tgt; // a spot (PvP aim) can't be homed in on
+
   for (let i = 0; i < n; i++) {
     let a = base + (i - (n - 1) / 2) * wd.spread;
     if (wd.jitter) a += rand(-wd.jitter, wd.jitter);
@@ -1079,14 +1092,14 @@ function fireMain(p, tgt, wd) {
     const shot = { kind, x: mx, y: my, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
       life: wd.life, max: wd.life, dmg, pierce: lvl(p, 'pierce') + (p.weapon === 'rang' || p.weapon === 'flame' ? 99 : p.weapon === 'goldgun' ? 2 : 0), hit: new Set(), owner: p, r: wd.r + (pw >= 3 && p.weapon === 'blaster' ? 1 : 0), col, kb: wd.kb, aoe: wd.aoe, rot: 0 };
     if (kind === 'rang') { shot.ang = a; shot.sp = sp; shot.back = false; }
-    if (kind === 'rocket') { shot.tgt = tgt; shot.pierce = 0; }
+    if (kind === 'rocket') { shot.tgt = ht; shot.pierce = 0; }
     if (kind === 'saw') shot.pierce = wd.bounces + lvl(p, 'pierce');
     shot.r += lvl(p, 'bigshot'); shot.life *= reachMul(p); shot.max = shot.life; // big bullets, eagle eye
     if (kind === 'candy' || kind === 'star') shot.pierce += 1;
     if (kind === 'harpoon') shot.pierce += 3;
-    if (kind === 'bee') shot.tgt = tgt;
+    if (kind === 'bee') shot.tgt = ht;
     if (kind === 'vortex') { shot.pierce = 999; shot.tick = 0; }
-    if (sx) { shot.pierce += sx.pierce || 0; if (sx.home) shot.tgt = tgt; }
+    if (sx) { shot.pierce += sx.pierce || 0; if (sx.home) shot.tgt = ht; }
     R.shots.push(shot);
   }
   if (p.weapon === 'shotgun') burst(mx, my, ['#ffd23f', '#fff8e7'], 4, 50, 0.15);
@@ -1134,7 +1147,7 @@ function updateShots(dt) {
     b.life -= dt; b.rot += dt * 18;
     if (b.kind === 'bee') { b.vx += rand(-200, 200) * dt; b.vy += rand(-200, 200) * dt; } // bees wobble about
     if (b.kind === 'feather' || (b.kind === 'bee' && b.max - b.life > 0.3) || (SHOT_EXTRA[b.kind] && SHOT_EXTRA[b.kind].home && b.max - b.life > 0.12)) { // home in on the target (or the nearest robot once it's gone)
-      if (!b.tgt || b.tgt.dead) b.tgt = nearestEnemy(b.x, b.y, 120);
+      if (!b.tgt || b.tgt.dead) b.tgt = nearestEnemy(b.x, b.y, 120, null, b.owner);
       if (b.tgt) { const dx = b.tgt.x - b.x, dy = b.tgt.y - b.y, dl = Math.hypot(dx, dy) || 1, sp = 170; b.vx += (dx / dl * sp - b.vx) * Math.min(1, dt * 7); b.vy += (dy / dl * sp - b.vy) * Math.min(1, dt * 7); }
     }
     if (b.kind === 'rang') {
@@ -1149,7 +1162,7 @@ function updateShots(dt) {
       } else { const k = Math.max(0.15, (tLeft - 0.55) / 0.45); b.vx = Math.cos(b.ang) * b.sp * k; b.vy = Math.sin(b.ang) * b.sp * k; }
     }
     if (b.kind === 'rocket') { // speeds up and steers towards its target, leaving smoke
-      if (!b.tgt || b.tgt.dead) b.tgt = nearestEnemy(b.x, b.y, 120);
+      if (!b.tgt || b.tgt.dead) b.tgt = nearestEnemy(b.x, b.y, 120, null, b.owner);
       const sp = Math.min(300, Math.hypot(b.vx, b.vy) + 420 * dt);
       let a = Math.atan2(b.vy, b.vx);
       if (b.tgt) { let da = Math.atan2(b.tgt.y - b.y, b.tgt.x - b.x) - a; da = Math.atan2(Math.sin(da), Math.cos(da)); a += clamp(da, -dt * 4, dt * 4); }
@@ -1175,7 +1188,7 @@ function updateShots(dt) {
     b.x += b.vx * dt; b.y += b.vy * dt;
     if (b.life <= 0) { shotEnd(b); continue; }
     forNear(b.x, b.y, 18, e => {
-      if (b.hit.has(e.id) || e.bs === 'burrow') return;
+      if (b.hit.has(e.id) || e.bs === 'burrow' || e.duck === b.owner) return; // PvP: your own shots fly through you
       if (b.kind === 'mine' && b.max - b.life < 0.4) return; // not armed yet
       const rr = e.r + b.r + 1;
       if (d2(b.x, b.y, e.x, e.y) < rr * rr) {
@@ -1190,7 +1203,7 @@ function updateShots(dt) {
         if (b.pierce-- <= 0) { b.life = 0; shotEnd(b, e); return true; }
         if (b.kind === 'saw') { // bounce on to the closest robot it hasn't cut yet
           let nx = null, nd = 90 * 90;
-          for (const o of R.enemies) if (!o.dead && o.spawnT <= 0 && o.bs !== 'burrow' && !b.hit.has(o.id)) { const dd = d2(b.x, b.y, o.x, o.y); if (dd < nd) { nd = dd; nx = o; } }
+          for (const o of R.enemies) if (!o.dead && o.spawnT <= 0 && o.bs !== 'burrow' && !b.hit.has(o.id) && o.duck !== b.owner) { const dd = d2(b.x, b.y, o.x, o.y); if (dd < nd) { nd = dd; nx = o; } }
           if (nx) { const sp = Math.hypot(b.vx, b.vy) || 210, a = Math.atan2(nx.y - b.y, nx.x - b.x); b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp; b.life = Math.max(b.life, 0.5); sfx.clank(); }
           return true;
         }
@@ -1292,7 +1305,7 @@ function updateParticles(dt) {
 function updateEnemies(dt) {
   const alive = alivePlayers();
   for (const e of R.enemies) {
-    if (e.dead) continue;
+    if (e.dead || e.duck) continue;
     e.anim += dt; e.flash = Math.max(0, e.flash - dt); e.eggCd -= dt;
     if (e.spawnT > 0) { e.spawnT -= dt; if (e.spawnT <= 0) burst(e.x, e.y, ['#5ec8ff', '#fff8e7'], 5, 40, 0.3); continue; }
     let tgt = null, bd = Infinity;
@@ -1597,6 +1610,7 @@ function drawView(v) {
   const cx = Math.round(v.camX + (sh ? rand(-sh, sh) : 0)), cy = Math.round(v.camY + (sh ? rand(-sh, sh) : 0));
   ctx.translate(v.x - cx, v.y - cy);
   drawGround(cx, cy, v.w, v.h);
+  if (R.pvp) drawArena(cx, cy, v.w, v.h); // PvP: the fence round the arena
   const inV = (x, y, m = 24) => x > cx - m && x < cx + v.w + m && y > cy - m && y < cy + v.h + m;
   for (const d of R.decor) if (inV(d.x, d.y, 8)) drawSpr(d.s, d.x, d.y);
   for (const d of R.decals) {
@@ -1628,7 +1642,7 @@ function drawView(v) {
     drawSpr(ART[k.k], k.x, k.y + Math.round(Math.sin(k.t * 4) * 1.5) - 1);
   }
   // revive rings
-  for (const q of R.players) if (q.down) {
+  for (const q of R.players) if (q.down && !R.pvp) {
     pring(q.x, q.y - 2, 22, 'rgba(255,255,255,0.25)', 1, 14);
     if (q.reviveT > 0) {
       const n = Math.floor(q.reviveT / 2.5 * 40);
@@ -1647,7 +1661,7 @@ function drawView(v) {
   }
   // shadows, then y-sorted actors (robots, ducks, trees)
   const actors = [];
-  for (const e of R.enemies) if (!e.dead && inV(e.x, e.y, 40)) actors.push(e);
+  for (const e of R.enemies) if (!e.dead && !e.duck && inV(e.x, e.y, 40)) actors.push(e);
   for (const q of R.players) actors.push(q);
   for (const d of R.tall) if (inV(d.x, d.y, 24)) actors.push(d);
   for (const a of actors) {
@@ -1852,6 +1866,7 @@ function turretSpots(p) {
   return out;
 }
 function drawPlayer(p) {
+  if (p.down && R.pvp) { drawPvpDown(p); return; }
   if (p.down) {
     const set = duckSet(p.lo.skin);
     drawSprX(set.egg, p.x, p.y + Math.round(Math.sin(p.anim * 3)), { ay: 1 });
@@ -1889,6 +1904,7 @@ function drawPlayer(p) {
     pring(p.x, p.y - 7, r, PCOL[p.id]);
     ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(p.x + Math.cos(a) * r), Math.round(p.y - 7 + Math.sin(a) * r), 2, 2);
   }
+  if (R.pvp) drawAimMark(p);
   if (R.players.length > 1) text(R.online ? keep(p.name) : 'P' + (p.id + 1), p.x, p.y - 26 - (p.lo.hat === 'wizard' || p.lo.hat === 'viking' ? 6 : 0), PCOL[p.id], 1, 1);
 }
 
@@ -1909,8 +1925,7 @@ function drawHud(v, p, cx, cy) {
   p.hpG = p.hpG === undefined || p.hp >= p.hpG ? p.hp : p.hpG + (p.hp - p.hpG) * 0.05; // white "ghost" shows the hit you just took
   ghostBar(x + 7, y, hpW, 7, p.hp / p.maxHp, p.hpG / p.maxHp, p.hp / p.maxHp < 0.3 ? '#ff4d6d' : '#51cf66');
   text(Math.ceil(p.hp), x + 9, y + 1, C.white, 1, 0, null);
-  bar(x, y + 9, hpW + 7, 5, p.xp / p.xpNext, PCOL[p.id]);
-  text(fmt('LV{0}', p.level), x + hpW + 11, y + 9, PCOL[p.id], 1, 0);
+  if (!R.pvp) { bar(x, y + 9, hpW + 7, 5, p.xp / p.xpNext, PCOL[p.id]); text(fmt('LV{0}', p.level), x + hpW + 11, y + 9, PCOL[p.id], 1, 0); }
   text(fmt('{0} KO', p.kills), x, y + 17, C.white, 1, 0);
   // weapons owned
   let ix = v.x + 4;
@@ -1983,18 +1998,19 @@ function drawHud(v, p, cx, cy) {
       const dx = s.x - s.bx, dy = s.y - s.by, dl = Math.hypot(dx, dy), m = Math.min(dl, STICK_R);
       const kx = dl ? s.bx + dx / dl * m : s.bx, ky = dl ? s.by + dy / dl * m : s.by;
       pcirc(kx, ky, 8, 'rgba(255,255,255,0.55)'); pring(kx, ky, 8, PCOL[v.pid]);
-    } else if (!p.moved && R.hintT < 12) {
+    } else if (!p.moved && R.hintT < 12 && !R.pvp) {
       const hx = v.x + (db.x < v.x + v.w / 2 ? v.w * 0.7 : v.w * 0.3), hy = v.y + v.h * 0.7;
       ctx.globalAlpha = 0.6; pring(hx, hy, STICK_R, '#fff'); pcirc(hx + Math.cos(R.hintT * 3) * 10, hy + Math.sin(R.hintT * 3) * 6, 7, 'rgba(255,255,255,0.6)'); ctx.globalAlpha = 1;
       text('DRAG TO MOVE', hx, hy + STICK_R + 5, C.white, 1, 1);
     }
-  } else if (!p.moved && R.hintT < 10 && !Input.touch && R.state === 'play' && !p.choice) {
+  } else if (!p.moved && R.hintT < 10 && !Input.touch && R.state === 'play' && !p.choice && !R.pvp) {
     const hint = R.np === 1 ? 'MOVE: WASD / ARROWS / STICK   DASH: SPACE' : (p.id === 0 ? 'MOVE: WASD  DASH: SPACE' : 'MOVE: ARROWS  DASH: ENTER');
     text(hint, v.x + v.w / 2, v.y + v.h - 30, C.white, 1, 1);
     text('YOUR WEAPON AIMS ITSELF!', v.x + v.w / 2, v.y + v.h - 22, C.gold, 1, 1);
   }
 }
 function drawTopBar() {
+  if (R.pvp) { drawPvpTopBar(); return; }
   const cx = Math.floor(W / 2);
   // timer / boss countdown
   if (R.mode === 'story' && !R.bossSpawned) {

@@ -605,6 +605,7 @@ const KEYS = {
 };
 const Input = {
   held: new Set(), hit: new Set(), ptrEv: [], ptrs: new Map(), typed: [],
+  mouse: null, mouseDown: false, // where the mouse is (PvP aims at it) and whether its button is held
   pads: [], padPrev: [],
   device: (('ontouchstart' in window) || navigator.maxTouchPoints > 0) ? 'touch' : 'keys',
   get touch() { return this.device === 'touch'; },
@@ -621,13 +622,15 @@ const Input = {
       let x = gp.axes[0] || 0, y = gp.axes[1] || 0;
       if (Math.hypot(x, y) < 0.22) { x = 0; y = 0; }
       if (b(14)) x = -1; if (b(15)) x = 1; if (b(12)) y = -1; if (b(13)) y = 1;
-      const st = { x, y, a: b(0), b: b(1), dash: b(0) || b(1) || b(2) || b(4) || b(5) || b(6) || b(7), start: b(9) };
+      let rx = gp.axes[2] || 0, ry = gp.axes[3] || 0; // right stick: aims in PvP
+      if (Math.hypot(rx, ry) < 0.3) { rx = 0; ry = 0; }
+      const st = { x, y, rx, ry, a: b(0), b: b(1), dash: b(0) || b(1) || b(2) || b(4) || b(5) || b(6) || b(7), start: b(9) };
       const pv = this.padPrev[n] || {};
       st.e = {
         a: st.a && !pv.a, b: st.b && !pv.b, dash: st.dash && !pv.dash, start: st.start && !pv.start,
         left: x < -0.5 && !(pv.x < -0.5), right: x > 0.5 && !(pv.x > 0.5), up: y < -0.5 && !(pv.y < -0.5), down: y > 0.5 && !(pv.y > 0.5),
       };
-      if (st.x || st.y || st.a || st.b || st.start) this.device = 'pad';
+      if (st.x || st.y || st.rx || st.ry || st.a || st.b || st.start) this.device = 'pad';
       out.push(st); this.padPrev[n] = st;
       if (++n >= 2) break;
     }
@@ -692,6 +695,7 @@ function ptrEvent(type, e) {
   if (type === 'down') { Input.device = e.pointerType === 'touch' ? 'touch' : 'mouse'; audioInit(); }
   if (type === 'move' && e.pointerType === 'mouse' && Input.device !== 'pad' && Input.device !== 'keys') Input.device = 'mouse';
   const ev = { type, id: e.pointerId, x: p.x, y: p.y, ptype: e.pointerType };
+  if (e.pointerType === 'mouse') { Input.mouse = { x: p.x, y: p.y }; Input.mouseDown = type === 'up' ? false : type === 'down' ? true : Input.mouseDown; }
   Input.ptrEv.push(ev);
   if (type === 'down') Input.ptrs.set(e.pointerId, { x: p.x, y: p.y, sx: p.x, sy: p.y });
   else if (type === 'move') { const q = Input.ptrs.get(e.pointerId); if (q) { q.x = p.x; q.y = p.y; } }

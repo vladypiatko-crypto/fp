@@ -83,6 +83,9 @@ Each chapter has an animated intro and ending, and the map has a page per chapte
   - **Boosters** for one game: Double Coins, Head Start (2 free upgrade cards) and Extra Life. Switch them on and they're used at the start of your next game, online too.
   - **The admin decides what's in the shop** (admin tab → SHOP): pick up to 8 items as special offers with your own prices (instead of the random daily deals), and set the Admin Sale price and booster prices. Saved for every player at once.
 - **Boss Rush** (BOSS RUSH on the title screen): all 30 story bosses one after another, with only a few robots in between. After each boss you heal up and get 2 free upgrade cards. Your record is how many bosses you beat.
+- **PvP: duck vs duck** (PVP on the title screen): here you aim yourself. Two ducks on one device (split screen) or 2-4 online (host a lobby, then pick PVP). Pick one of 10 fenced arenas and first to 5, 10 or 15 KOs (or most KOs after 3 minutes). You respawn 3 seconds after a KO, hearts drop into the arena, dashing makes you dodge shots, and every duck brings their own locker weapon, tuned so all of them are fair. Coins for everyone: 10, plus 5 per KO, plus 40 for the winner.
+  - Keyboard: one duck alone (online): WASD to move, aim and shoot with the mouse or the arrow keys, Space to dash. Two ducks on one keyboard: P1 WASD + F to shoot, P2 arrows + . to shoot (you shoot where you walk).
+  - Touch: the left side of your screen moves, the right side aims and shoots. Gamepads: left stick moves, right stick aims and shoots.
 - **Pets** (new PETS tab in the locker, found in chests): little buddies that follow your duck and help: Baby Chick (bigger magnet), Piglet (finds coins), Froggy (tongue zaps), Mini Drone (lasers), Ninja Cat (ninja stars), Fairy (heals), Baby Dragon (exploding fireballs), Robo Pup (fast lasers), and the admin-only Golden Goose.
 - **Event coins**: while a holiday event runs, every game also pays purple EVENT COINS (more for winning the event level). The event chests (Pumpkin, Present, Easter, Love, Beach, Party, Lantern, Lucky) cost 30 event coins instead of normal coins.
 - **Quests** (QUESTS button on the title screen, with a red number when rewards are waiting):
@@ -114,7 +117,7 @@ Online play works in all three too, and they can play together (an Android phone
 
 ## Online play
 
-Choose **ONLINE**, then **HOST A GAME** on one device. It shows a 4-letter code. Friends choose **JOIN A FRIEND** on their own phone or PC and type that code. Up to 4 ducks, each on their own device. The host picks story or endless and starts.
+Choose **ONLINE**, then **HOST A GAME** on one device. It shows a 4-letter code. Friends choose **JOIN A FRIEND** on their own phone or PC and type that code. Up to 4 ducks, each on their own device. The host taps **MODE** to pick what to play: a story level (a page per chapter with every level's world and boss), endless, or PvP (arena and KOs to win), then starts.
 
 ### How it works
 

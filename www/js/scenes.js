@@ -209,7 +209,7 @@ class TitleScene {
     const evLv = runningEvents().filter(id => EVENTS[id].level), ev1 = evLv.length === 1 ? EVENTS[evLv[0]] : null;
     const big = [['story', 'STORY', ICON.play, '#4b3a92', () => this.openModal('story')], ['endless', 'ENDLESS', MENU_ICON.endless, '#1f5c7a', () => this.openModal('endless')],
       ['online', 'ONLINE', MENU_ICON.online, '#1f6b3a', () => ONLINE_READY ? Trans.go(() => Scenes.set(new OnlineScene())) : this.openModal('online')]];
-    const small = [['rush', 'BOSS RUSH', MENU_ICON.rush, '#7a1f24', () => this.openModal('rush')], ['locker', 'LOCKER', ICON.locker, '#5c3416', () => Trans.go(() => Scenes.push(new LockerScene({})))],
+    const small = [['rush', 'BOSS RUSH', MENU_ICON.rush, '#7a1f24', () => this.openModal('rush')], ['pvp', 'PVP', MENU_ICON.pvp, '#8a1f5c', () => Trans.go(() => Scenes.push(new PvpScene()))], ['locker', 'LOCKER', ICON.locker, '#5c3416', () => Trans.go(() => Scenes.push(new LockerScene({})))],
       ['shop', 'SHOP', MENU_ICON.shop, '#6b4a16', () => Trans.go(() => Scenes.push(new ShopScene()))], ['quests', 'QUESTS', MENU_ICON.quests, '#3a2a6b', () => Trans.go(() => Scenes.push(new QuestScene()))]];
     // running events with a level: one button (or one EVENTS button that lists them all)
     if (evLv.length) small.push(['event', ev1 ? ev1.short || ev1.name : 'EVENTS', null, ev1 ? ev1.btn : '#6b2a6b', () => this.openModal(ev1 ? 'event:' + evLv[0] : 'events')]);
